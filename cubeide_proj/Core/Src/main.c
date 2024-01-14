@@ -23,7 +23,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
-#include "../../MSP4725-lib/MCP4725.h"
+#include "../../MCP4725-lib/MCP4725.h"
+#include "../../BMI088-lib/BMI088.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -33,8 +34,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define SAMPLE_TIME_MS_USB  100
-#define SAMPLE_TIME_MS_LED  250
+#define SAMPLE_TIME_MS_USB  250
+#define SAMPLE_TIME_MS_LED  500
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -64,6 +65,10 @@ static void MX_SPI1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+#include "../../MCP4725-lib/MCP4725.c"
+#include "../../BMI088-lib/BMI088.c"
+
+MCP4725 myMCP4725;
 /* USER CODE END 0 */
 
 /**
@@ -102,14 +107,33 @@ int main(void)
   MX_USB_Device_Init();
   /* USER CODE BEGIN 2 */
 
+
   /* Timers */
-  uint32_t timerBAR = 0;
+  //uint32_t timerBAR = 0;
   uint32_t timerUSB = 0;
   uint32_t timerLED	= 0;
-  uint32_t timerATT = 0;
+  //uint32_t timerATT = 0;
 
   /* USB data buffer */
   char logBuf[128];
+
+  /*
+   * dac setup
+   */
+  myMCP4725 = MCP4725_init (&hi2c1, MCP4725A0_ADDR_A00, 3.30);
+  if (MCP4725_isConnected (&myMCP4725))
+  {
+    sprintf (logBuf, "DAC Connected\n");
+    CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
+  }
+  else
+  {
+    sprintf (logBuf, "DAC NOT Connected\n");
+    CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
+  }
+
+  // Start DAC output timer
+  //HAL_TIM_Base_Start_IT (&htim1);
 
   /* USER CODE END 2 */
 
@@ -149,12 +173,6 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_CRSInitTypeDef RCC_CRSInitStruct = {0};
-
-  /** Configure LSE Drive Capability
-  */
-  HAL_PWR_EnableBkUpAccess();
-  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_MEDIUMHIGH);
 
   /** Configure the main internal regulator output voltage
   */
@@ -166,7 +184,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE
                               |RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
+  RCC_OscInitStruct.LSEState = RCC_LSE_OFF;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
@@ -204,21 +222,6 @@ void SystemClock_Config(void)
   /** Enable MSI Auto calibration
   */
   HAL_RCCEx_EnableMSIPLLMode();
-
-  /** Enable the SYSCFG APB clock
-  */
-  __HAL_RCC_CRS_CLK_ENABLE();
-
-  /** Configures CRS
-  */
-  RCC_CRSInitStruct.Prescaler = RCC_CRS_SYNC_DIV1;
-  RCC_CRSInitStruct.Source = RCC_CRS_SYNC_SOURCE_LSE;
-  RCC_CRSInitStruct.Polarity = RCC_CRS_SYNC_POLARITY_RISING;
-  RCC_CRSInitStruct.ReloadValue = __HAL_RCC_CRS_RELOADVALUE_CALCULATE(48000000,32768);
-  RCC_CRSInitStruct.ErrorLimitValue = 34;
-  RCC_CRSInitStruct.HSI48CalibrationValue = 32;
-
-  HAL_RCCEx_CRSConfig(&RCC_CRSInitStruct);
 }
 
 /**
