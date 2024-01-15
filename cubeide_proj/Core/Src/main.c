@@ -48,6 +48,8 @@ I2C_HandleTypeDef hi2c1;
 
 SPI_HandleTypeDef hspi1;
 
+TIM_HandleTypeDef htim2;
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -58,6 +60,7 @@ void PeriphCommonClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -68,7 +71,57 @@ static void MX_SPI1_Init(void);
 #include "../../MCP4725-lib/MCP4725.c"
 #include "../../BMI088-lib/BMI088.c"
 
-MCP4725 myMCP4725;
+MCP4725 dac;
+BMI088 imu;
+
+void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin == INT_ACC_Pin)
+  {
+    BMI088_ReadAccelerometerDMA (&imu);
+  }
+  else if (GPIO_Pin == INT_GYR_Pin)
+  {
+    BMI088_ReadGyroscopeDMA (&imu);
+  }
+}
+
+#define TACHIND 0
+#define SPEEDOIND 1
+#define IDLE   0
+#define DONE   1
+#define F_CLK  64000000UL
+volatile uint8_t state[2] = {IDLE, IDLE};
+volatile uint32_t T1[2] = {0,0};
+volatile uint32_t T2[2] = {0,0};
+volatile uint32_t ticks[2] = {0,0};
+volatile uint16_t frequency[2] = {0,0};
+volatile uint16_t TIM2_OVC[2] = {0,0};
+
+void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
+{
+  int ch = (htim->Channel == 3) ? TACHIND : SPEEDOIND;
+  if (state[ch] == IDLE)
+  {
+    T1[ch] = TIM2->CCR1;
+    TIM2_OVC[ch] = 0;
+    state[ch] = DONE;
+  }
+  else if (state[ch] == DONE)
+  {
+    T2[ch] = TIM2->CCR1;
+    ticks[ch] = (T2[ch] + (TIM2_OVC[ch] * 65536)) - T1[ch];
+    frequency[ch] = (uint32_t) (F_CLK / ticks[ch]);
+    state[ch] = IDLE;
+  }
+}
+
+void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
+{
+  TIM2_OVC[0]++;
+  TIM2_OVC[1]++;
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -105,6 +158,7 @@ int main(void)
   MX_I2C1_Init();
   MX_SPI1_Init();
   MX_USB_Device_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -120,8 +174,8 @@ int main(void)
   /*
    * dac setup
    */
-  myMCP4725 = MCP4725_init (&hi2c1, MCP4725A0_ADDR_A00, 3.30);
-  if (MCP4725_isConnected (&myMCP4725))
+  dac = MCP4725_init (&hi2c1, MCP4725A0_ADDR_A00, 3.30);
+  if (MCP4725_isConnected (&dac))
   {
     sprintf (logBuf, "DAC Connected\n");
     CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
@@ -134,6 +188,17 @@ int main(void)
 
   // Start DAC output timer
   //HAL_TIM_Base_Start_IT (&htim1);
+
+  /*
+   * Acc / Gyro setup
+   */
+  BMI088_Init(&imu, NULL, &hi2c1, NULL, 0, NULL, 0);
+
+  /*
+   * tach and speedo freq measurement
+   */
+  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 
   /* USER CODE END 2 */
 
@@ -148,8 +213,7 @@ int main(void)
     /* Log data via USB */
     if ((HAL_GetTick () - timerUSB) >= SAMPLE_TIME_MS_USB)
     {
-      /* Print via USB */
-      sprintf (logBuf, "log entry\n");
+      sprintf (logBuf, "tach: %u Hz, speedo %u Hz \n", frequency[0], frequency[1]);
       CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
       timerUSB = HAL_GetTick ();
     }
@@ -263,7 +327,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x10707DBC;
+  hi2c1.Init.Timing = 0x00602173;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -336,6 +400,68 @@ static void MX_SPI1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_IC_InitTypeDef sConfigIC = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 0;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 65535;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_IC_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+  sConfigIC.ICFilter = 0;
+  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -360,11 +486,11 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8|LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2|GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_12
-                          |GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, RESET_MOTOR_Pin|DIR_TACH_Pin|DIR_SPEED_Pin|GPIO_PIN_12
+                          |STEP_TACH_Pin|STEP_SPEED_Pin|GPIO_PIN_6, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0|GPIO_PIN_1, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOD, STEP_ODO_Pin|DIR_ODO_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PC13 PC6 PC10 */
   GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_6|GPIO_PIN_10;
@@ -381,11 +507,9 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF4_I2C3;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PC2 PC3 PC4 PC5
-                           PC11 PC12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5
-                          |GPIO_PIN_11|GPIO_PIN_12;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  /*Configure GPIO pins : INT_ACC_Pin INT_GYR_Pin */
+  GPIO_InitStruct.Pin = INT_ACC_Pin|INT_GYR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
@@ -416,19 +540,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF7_USART1;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB2 PB0 PB1 PB12
-                           PB4 PB5 PB6 */
-  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_12
-                          |GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6;
+  /*Configure GPIO pins : PC4 PC5 PC11 PC12 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_11|GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : RESET_MOTOR_Pin DIR_TACH_Pin DIR_SPEED_Pin PB12
+                           STEP_TACH_Pin STEP_SPEED_Pin PB6 */
+  GPIO_InitStruct.Pin = RESET_MOTOR_Pin|DIR_TACH_Pin|DIR_SPEED_Pin|GPIO_PIN_12
+                          |STEP_TACH_Pin|STEP_SPEED_Pin|GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PB10 PB11 PB7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_7;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PE4 */
@@ -445,12 +569,18 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF5_SPI2;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PD0 PD1 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
+  /*Configure GPIO pins : STEP_ODO_Pin DIR_ODO_Pin */
+  GPIO_InitStruct.Pin = STEP_ODO_Pin|DIR_ODO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */

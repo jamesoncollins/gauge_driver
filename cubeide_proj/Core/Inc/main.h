@@ -57,8 +57,30 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define INT_ACC_Pin GPIO_PIN_2
+#define INT_ACC_GPIO_Port GPIOC
+#define INT_GYR_Pin GPIO_PIN_3
+#define INT_GYR_GPIO_Port GPIOC
+#define RESET_MOTOR_Pin GPIO_PIN_2
+#define RESET_MOTOR_GPIO_Port GPIOB
+#define SPEEDO_Pin GPIO_PIN_10
+#define SPEEDO_GPIO_Port GPIOB
+#define TACH_Pin GPIO_PIN_11
+#define TACH_GPIO_Port GPIOB
+#define DIR_TACH_Pin GPIO_PIN_0
+#define DIR_TACH_GPIO_Port GPIOB
+#define DIR_SPEED_Pin GPIO_PIN_1
+#define DIR_SPEED_GPIO_Port GPIOB
 #define LED_Pin GPIO_PIN_15
 #define LED_GPIO_Port GPIOA
+#define STEP_ODO_Pin GPIO_PIN_0
+#define STEP_ODO_GPIO_Port GPIOD
+#define DIR_ODO_Pin GPIO_PIN_1
+#define DIR_ODO_GPIO_Port GPIOD
+#define STEP_TACH_Pin GPIO_PIN_4
+#define STEP_TACH_GPIO_Port GPIOB
+#define STEP_SPEED_Pin GPIO_PIN_5
+#define STEP_SPEED_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

@@ -21,7 +21,8 @@ tx(BMI088 *imu, measureMode_e measure, uint8_t *txBuf, size_t size)
   {
     HAL_I2C_Master_Transmit (
 	imu->i2cHandle,
-	ACC_ADDR, txBuf,
+	(measure==MEASURE_MODE_ACC) ? ACC_ADDR : GYR_ADDR,
+	txBuf,
        size, 1000);
   }
   return status;
@@ -43,11 +44,13 @@ txrx (BMI088 *imu, measureMode_e measure, uint8_t *txBuf, uint8_t *rxBuf, size_t
   {
     HAL_I2C_Master_Transmit (
 	imu->i2cHandle,
-	ACC_ADDR, txBuf,
+	(measure==MEASURE_MODE_ACC) ? ACC_ADDR : GYR_ADDR,
+	txBuf,
        size, 1000);
     status = HAL_I2C_Master_Receive (
 	imu->i2cHandle,
-	ACC_ADDR, rxBuf, size, 1000);
+	(measure==MEASURE_MODE_ACC) ? ACC_ADDR : GYR_ADDR,
+	rxBuf, size, 1000);
   }
   return status;
 }
