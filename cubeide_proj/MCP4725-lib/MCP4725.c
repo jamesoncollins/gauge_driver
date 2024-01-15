@@ -37,8 +37,8 @@
  Constructor
  */
 /**************************************************************************/
-MCP4725
-MCP4725_init (I2C_HandleTypeDef *hi2c, MCP4725Ax_ADDRESS addr, float refV)
+MCP4725 MCP4725_init (I2C_HandleTypeDef *hi2c, MCP4725Ax_ADDRESS addr,
+		      float refV)
 {
   MCP4725 _MCP4725;
 
@@ -57,8 +57,7 @@ MCP4725_init (I2C_HandleTypeDef *hi2c, MCP4725Ax_ADDRESS addr, float refV)
  Check the connection
  */
 /**************************************************************************/
-uint8_t
-MCP4725_isConnected (MCP4725 *_MCP4725)
+uint8_t MCP4725_isConnected (MCP4725 *_MCP4725)
 {
   return HAL_I2C_IsDeviceReady (_MCP4725->hi2c, _MCP4725->_i2cAddress, 2, 100)
       == HAL_OK;
@@ -71,8 +70,7 @@ MCP4725_isConnected (MCP4725 *_MCP4725)
  Set reference voltage
  */
 /**************************************************************************/
-void
-MCP4725_setReferenceVoltage (MCP4725 *_MCP4725, float value)
+void MCP4725_setReferenceVoltage (MCP4725 *_MCP4725, float value)
 {
   if (value == 0)
     _MCP4725->_refVoltage = MCP4725_REFERENCE_VOLTAGE; //sanity check, avoid division by zero
@@ -89,8 +87,7 @@ MCP4725_setReferenceVoltage (MCP4725 *_MCP4725, float value)
  Return reference voltage
  */
 /**************************************************************************/
-float
-MCP4725_getReferenceVoltage (MCP4725 *_MCP4725)
+float MCP4725_getReferenceVoltage (MCP4725 *_MCP4725)
 {
   return _MCP4725->_refVoltage;
 }
@@ -118,9 +115,9 @@ MCP4725_getReferenceVoltage (MCP4725 *_MCP4725)
  - "MCP4725_POWER_DOWN_500KOHM"..power down on with 500kOhm to ground
  */
 /**************************************************************************/
-uint8_t
-MCP4725_setValue (MCP4725 *_MCP4725, uint16_t value, MCP4725_COMMAND_TYPE mode,
-		  MCP4725_POWER_DOWN_TYPE powerType)
+uint8_t MCP4725_setValue (MCP4725 *_MCP4725, uint16_t value,
+			  MCP4725_COMMAND_TYPE mode,
+			  MCP4725_POWER_DOWN_TYPE powerType)
 {
 #ifndef MCP4725_DISABLE_SANITY_CHECK
   if (value > MCP4725_MAX_VALUE) value = MCP4725_MAX_VALUE; //make sure value never exceeds threshold
@@ -136,9 +133,9 @@ MCP4725_setValue (MCP4725 *_MCP4725, uint16_t value, MCP4725_COMMAND_TYPE mode,
  Set output voltage to a fraction of Vref
  */
 /**************************************************************************/
-uint8_t
-MCP4725_setVoltage (MCP4725 *_MCP4725, float voltage, MCP4725_COMMAND_TYPE mode,
-		    MCP4725_POWER_DOWN_TYPE powerType)
+uint8_t MCP4725_setVoltage (MCP4725 *_MCP4725, float voltage,
+			    MCP4725_COMMAND_TYPE mode,
+			    MCP4725_POWER_DOWN_TYPE powerType)
 {
   uint16_t value = 0;
 
@@ -164,8 +161,7 @@ MCP4725_setVoltage (MCP4725 *_MCP4725, float voltage, MCP4725_COMMAND_TYPE mode,
  - see MCP4725 datasheet on p.20
  */
 /**************************************************************************/
-uint16_t
-MCP4725_getValue (MCP4725 *_MCP4725)
+uint16_t MCP4725_getValue (MCP4725 *_MCP4725)
 {
   uint16_t value = MCP4725_readRegister (_MCP4725, MCP4725_READ_DAC_REG); //D11,D10,D9,D8,D7,D6,D5,D4, D3,D2,D1,D0,xx,xx,xx,xx
 
@@ -181,8 +177,7 @@ MCP4725_getValue (MCP4725 *_MCP4725)
  Read current DAC value from DAC register & convert to voltage
  */
 /**************************************************************************/
-float
-MCP4725_getVoltage (MCP4725 *_MCP4725)
+float MCP4725_getVoltage (MCP4725 *_MCP4725)
 {
   float value = MCP4725_getValue (_MCP4725);
 
@@ -201,8 +196,7 @@ MCP4725_getVoltage (MCP4725 *_MCP4725)
  - see MCP4725 datasheet on p.20
  */
 /**************************************************************************/
-uint16_t
-MCP4725_getStoredValue (MCP4725 *_MCP4725)
+uint16_t MCP4725_getStoredValue (MCP4725 *_MCP4725)
 {
   uint16_t value = MCP4725_readRegister (_MCP4725, MCP4725_READ_EEPROM); //xx,PD1,PD0,xx,D11,D10,D9,D8, D7,D6,D5,D4,D3,D2,D1,D0
 
@@ -218,8 +212,7 @@ MCP4725_getStoredValue (MCP4725 *_MCP4725)
  Read stored DAC value from EEPROM & convert to voltage
  */
 /**************************************************************************/
-float
-MCP4725_getStoredVoltage (MCP4725 *_MCP4725)
+float MCP4725_getStoredVoltage (MCP4725 *_MCP4725)
 {
   float value = MCP4725_getStoredValue (_MCP4725);
 
@@ -250,8 +243,7 @@ MCP4725_getStoredVoltage (MCP4725 *_MCP4725)
  - see MCP4725 datasheet on p.20
  */
 /**************************************************************************/
-uint16_t
-MCP4725_getPowerType (MCP4725 *_MCP4725)
+uint16_t MCP4725_getPowerType (MCP4725 *_MCP4725)
 {
   uint16_t value = MCP4725_readRegister (_MCP4725, MCP4725_READ_SETTINGS); //BSY,POR,xx,xx,xx,PD1,PD0,xx
 
@@ -284,8 +276,7 @@ MCP4725_getPowerType (MCP4725 *_MCP4725)
  - see MCP4725 datasheet on p.20
  */
 /**************************************************************************/
-uint16_t
-MCP4725_getStoredPowerType (MCP4725 *_MCP4725)
+uint16_t MCP4725_getStoredPowerType (MCP4725 *_MCP4725)
 {
   uint16_t value = MCP4725_readRegister (_MCP4725, MCP4725_READ_EEPROM); //xx,PD1,PD0,xx,D11,D10,D9,D8,  D7,D6,D5,D4,D3,D2,D1,D0
 
@@ -311,8 +302,7 @@ MCP4725_getStoredPowerType (MCP4725 *_MCP4725)
  increases above Vpor device takes a reset state
  */
 /**************************************************************************/
-void
-MCP4725_reset (MCP4725 *_MCP4725)
+void MCP4725_reset (MCP4725 *_MCP4725)
 {
   //Wire.beginTransmission(MCP4725_GENERAL_CALL_ADDRESS);
   //Wire.send(MCP4725_GENERAL_CALL_RESET);
@@ -338,8 +328,7 @@ MCP4725_reset (MCP4725 *_MCP4725)
  not affected
  */
 /**************************************************************************/
-void
-MCP4725_wakeUP (MCP4725 *_MCP4725)
+void MCP4725_wakeUP (MCP4725 *_MCP4725)
 {
   //Wire.beginTransmission(MCP4725_GENERAL_CALL_ADDRESS);
   //Wire.send(MCP4725_GENERAL_WAKE_UP);
@@ -364,8 +353,7 @@ MCP4725_wakeUP (MCP4725 *_MCP4725)
  - see MCP4725 datasheet on p.20
  */
 /**************************************************************************/
-uint8_t
-MCP4725_getEepromBusyFlag (MCP4725 *_MCP4725)
+uint8_t MCP4725_getEepromBusyFlag (MCP4725 *_MCP4725)
 {
   uint16_t value = MCP4725_readRegister (_MCP4725, MCP4725_READ_SETTINGS); //BSY,POR,xx,xx,xx,PD1,PD0,xx
 
@@ -403,10 +391,9 @@ MCP4725_getEepromBusyFlag (MCP4725 *_MCP4725)
  1,  1
  */
 /**************************************************************************/
-uint8_t
-MCP4725_writeComand (MCP4725 *_MCP4725, uint16_t value,
-		     MCP4725_COMMAND_TYPE mode,
-		     MCP4725_POWER_DOWN_TYPE powerType)
+uint8_t MCP4725_writeComand (MCP4725 *_MCP4725, uint16_t value,
+			     MCP4725_COMMAND_TYPE mode,
+			     MCP4725_POWER_DOWN_TYPE powerType)
 {
   uint8_t buffer[3];
   HAL_StatusTypeDef I2C_Stat;
@@ -474,8 +461,7 @@ MCP4725_writeComand (MCP4725 *_MCP4725, uint16_t value,
  - see MCP4725 datasheet on p.20
  */
 /**************************************************************************/
-uint16_t
-MCP4725_readRegister (MCP4725 *_MCP4725, MCP4725_READ_TYPE dataType)
+uint16_t MCP4725_readRegister (MCP4725 *_MCP4725, MCP4725_READ_TYPE dataType)
 {
   uint16_t value = dataType; //convert enum to integer to avoid compiler warnings
   uint16_t ret_val = 0;
