@@ -83,11 +83,14 @@ uint8_t BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
    *
    */
 
-  /* Accelerometer requires rising edge on CSB at start-up to activate SPI */
-  HAL_GPIO_WritePin (imu->csAccPinBank, imu->csAccPin, GPIO_PIN_RESET);
-  HAL_Delay (1);
-  HAL_GPIO_WritePin (imu->csAccPinBank, imu->csAccPin, GPIO_PIN_SET);
-  HAL_Delay (50);
+  if(imu->intfMode == INTF_MODE_SPI)
+  {
+    /* Accelerometer requires rising edge on CSB at start-up to activate SPI */
+    HAL_GPIO_WritePin (imu->csAccPinBank, imu->csAccPin, GPIO_PIN_RESET);
+    HAL_Delay (1);
+    HAL_GPIO_WritePin (imu->csAccPinBank, imu->csAccPin, GPIO_PIN_SET);
+    HAL_Delay (50);
+  }
 
   /* Perform accelerometer soft reset */
   status += BMI088_WriteAccRegister (imu, BMI_ACC_SOFTRESET, 0xB6);
@@ -99,9 +102,7 @@ uint8_t BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
 
   if (chipID != 0x1E)
   {
-
     //	return 0;
-
   }
   HAL_Delay (10);
 
@@ -139,7 +140,8 @@ uint8_t BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
    *
    */
 
-  HAL_GPIO_WritePin (imu->csGyrPinBank, imu->csGyrPin, GPIO_PIN_SET);
+  if (imu->intfMode == INTF_MODE_SPI)
+    HAL_GPIO_WritePin (imu->csGyrPinBank, imu->csGyrPin, GPIO_PIN_SET);
 
   /* Perform gyro soft reset */
   status += BMI088_WriteGyrRegister (imu, BMI_GYR_SOFTRESET, 0xB6);
@@ -150,9 +152,7 @@ uint8_t BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
 
   if (chipID != 0x0F)
   {
-
     //return 0;
-
   }
   HAL_Delay (10);
 
@@ -193,17 +193,14 @@ uint8_t BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
 uint8_t BMI088_ReadAccRegister (BMI088 *imu, uint8_t regAddr, uint8_t *data)
 {
 
-  uint8_t txBuf[3] =
-  { regAddr | 0x80, 0x00, 0x00 };
+  uint8_t txBuf[3] =  { regAddr | 0x80, 0x00, 0x00 };
   uint8_t rxBuf[3];
 
   uint8_t status = (txrx (imu, MEASURE_MODE_ACC, txBuf, rxBuf, 3) == HAL_OK);
 
   if (status == 1)
   {
-
     *data = rxBuf[2];
-
   }
 
   return status;

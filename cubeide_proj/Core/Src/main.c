@@ -86,21 +86,24 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
   }
 }
 
-#define TACHIND 0
-#define SPEEDOIND 1
+#define SPEEDOIND 0
+#define TACHIND 1
 #define IDLE   0
 #define DONE   1
 #define F_CLK  64000000UL
+#define SPEED_TICKS_PER_ODO_TICK 3
 volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
 volatile uint32_t T2[2] = {0,0};
 volatile uint32_t ticks[2] = {0,0};
 volatile uint16_t frequency[2] = {0,0};
 volatile uint16_t TIM2_OVC[2] = {0,0};
+volatile uint8_t speed_tick_count = 0;
+volatile uint8_t odo_tick_flag = 0;
 
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 {
-  int ch = (htim->Channel == 3) ? TACHIND : SPEEDOIND;
+  int ch = (htim->Channel == 3) ? SPEEDOIND : TACHIND;
   if (state[ch] == IDLE)
   {
     T1[ch] = TIM2->CCR1;
@@ -114,6 +117,21 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
     frequency[ch] = (uint32_t) (F_CLK / ticks[ch]);
     state[ch] = IDLE;
   }
+
+  /*
+   * flag for an odo tick every 3 (or whatever) speedo ticks
+   * as this is a unidirectional flag we dont need a mutex
+   */
+  if(ch == SPEEDOIND && !odo_tick_flad)
+  {
+    speed_tick_count ++;
+    if(speed_tick_count >= SPEED_TICKS_PER_ODO_TICK)
+    {
+      speed_tick_count = 0;
+      odo_tick_flag = 1;
+    }
+  }
+
 }
 
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
@@ -195,10 +213,11 @@ int main(void)
   BMI088_Init(&imu, NULL, &hi2c1, NULL, 0, NULL, 0);
 
   /*
-   * tach and speedo freq measurement
+   * tach and speedo freq measurement setup
    */
   HAL_TIM_Base_Start_IT(&htim2);
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3); // speed
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4); // tach
 
   /* USER CODE END 2 */
 
