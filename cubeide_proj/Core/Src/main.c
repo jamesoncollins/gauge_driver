@@ -23,8 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
-#include "../../MCP4725-lib/MCP4725.h"
-#include "../../BMI088-lib/BMI088.h"
+#include "_main_cpp.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,8 +33,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define SAMPLE_TIME_MS_USB  250
-#define SAMPLE_TIME_MS_LED  500
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,7 +48,6 @@ SPI_HandleTypeDef hspi1;
 TIM_HandleTypeDef htim2;
 
 /* USER CODE BEGIN PV */
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -68,77 +64,6 @@ static void MX_TIM2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-#include "../../MCP4725-lib/MCP4725.c"
-#include "../../BMI088-lib/BMI088.c"
-
-MCP4725 dac;
-BMI088 imu;
-
-void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
-{
-  if (GPIO_Pin == INT_ACC_Pin)
-  {
-    BMI088_ReadAccelerometerDMA (&imu);
-  }
-  else if (GPIO_Pin == INT_GYR_Pin)
-  {
-    BMI088_ReadGyroscopeDMA (&imu);
-  }
-}
-
-#define SPEEDOIND 0
-#define TACHIND 1
-#define IDLE   0
-#define DONE   1
-#define F_CLK  64000000UL
-#define SPEED_TICKS_PER_ODO_TICK 3
-volatile uint8_t state[2] = {IDLE, IDLE};
-volatile uint32_t T1[2] = {0,0};
-volatile uint32_t T2[2] = {0,0};
-volatile uint32_t ticks[2] = {0,0};
-volatile uint16_t frequency[2] = {0,0};
-volatile uint16_t TIM2_OVC[2] = {0,0};
-volatile uint8_t speed_tick_count = 0;
-volatile uint8_t odo_tick_flag = 0;
-
-void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
-{
-  int ch = (htim->Channel == 3) ? SPEEDOIND : TACHIND;
-  if (state[ch] == IDLE)
-  {
-    T1[ch] = TIM2->CCR1;
-    TIM2_OVC[ch] = 0;
-    state[ch] = DONE;
-  }
-  else if (state[ch] == DONE)
-  {
-    T2[ch] = TIM2->CCR1;
-    ticks[ch] = (T2[ch] + (TIM2_OVC[ch] * 65536)) - T1[ch];
-    frequency[ch] = (uint32_t) (F_CLK / ticks[ch]);
-    state[ch] = IDLE;
-  }
-
-  /*
-   * flag for an odo tick every 3 (or whatever) speedo ticks
-   * as this is a unidirectional flag we dont need a mutex
-   */
-  if(ch == SPEEDOIND && !odo_tick_flad)
-  {
-    speed_tick_count ++;
-    if(speed_tick_count >= SPEED_TICKS_PER_ODO_TICK)
-    {
-      speed_tick_count = 0;
-      odo_tick_flag = 1;
-    }
-  }
-
-}
-
-void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
-{
-  TIM2_OVC[0]++;
-  TIM2_OVC[1]++;
-}
 
 /* USER CODE END 0 */
 
@@ -179,45 +104,7 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
-
-  /* Timers */
-  //uint32_t timerBAR = 0;
-  uint32_t timerUSB = 0;
-  uint32_t timerLED	= 0;
-  //uint32_t timerATT = 0;
-
-  /* USB data buffer */
-  char logBuf[128];
-
-  /*
-   * dac setup
-   */
-  dac = MCP4725_init (&hi2c1, MCP4725A0_ADDR_A00, 3.30);
-  if (MCP4725_isConnected (&dac))
-  {
-    sprintf (logBuf, "DAC Connected\n");
-    CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
-  }
-  else
-  {
-    sprintf (logBuf, "DAC NOT Connected\n");
-    CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
-  }
-
-  // Start DAC output timer
-  //HAL_TIM_Base_Start_IT (&htim1);
-
-  /*
-   * Acc / Gyro setup
-   */
-  BMI088_Init(&imu, NULL, &hi2c1, NULL, 0, NULL, 0);
-
-  /*
-   * tach and speedo freq measurement setup
-   */
-  HAL_TIM_Base_Start_IT(&htim2);
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3); // speed
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4); // tach
+  main_cpp_c();
 
   /* USER CODE END 2 */
 
@@ -229,22 +116,9 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-    /* Log data via USB */
-    if ((HAL_GetTick () - timerUSB) >= SAMPLE_TIME_MS_USB)
-    {
-      sprintf (logBuf, "tach: %u Hz, speedo %u Hz \n", frequency[0], frequency[1]);
-      CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
-      timerUSB = HAL_GetTick ();
-    }
-
-    /* Toggle LED */
-    if ((HAL_GetTick () - timerLED) >= SAMPLE_TIME_MS_LED)
-    {
-      HAL_GPIO_TogglePin ( LED_GPIO_Port, LED_Pin );
-      timerLED = HAL_GetTick ();
-    }
-
   }
+
+
   /* USER CODE END 3 */
 }
 
@@ -499,7 +373,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13|GPIO_PIN_6|GPIO_PIN_10, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13|GPIO_PIN_6|PWREN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8|LED_Pin, GPIO_PIN_RESET);
@@ -511,8 +385,8 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, STEP_ODO_Pin|DIR_ODO_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PC13 PC6 PC10 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_6|GPIO_PIN_10;
+  /*Configure GPIO pins : PC13 PC6 PWREN_Pin */
+  GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_6|PWREN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -559,11 +433,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF7_USART1;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PC4 PC5 PC11 PC12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_11|GPIO_PIN_12;
+  /*Configure GPIO pins : PC4 PC11 PC12 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_11|GPIO_PIN_12;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : IGN_Pin */
+  GPIO_InitStruct.Pin = IGN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(IGN_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : RESET_MOTOR_Pin DIR_TACH_Pin DIR_SPEED_Pin PB12
                            STEP_TACH_Pin STEP_SPEED_Pin PB6 */
@@ -606,7 +486,12 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+int __io_putchar (int ch)
+{
+  // Write character to ITM ch.0
+  ITM_SendChar (ch);
+  return (ch);
+}
 /* USER CODE END 4 */
 
 /**

@@ -6,11 +6,12 @@
 /* Register defines */
 #define BMI_ACC_CHIP_ID 		0x00
 #define BMI_ACC_DATA 			0x12
+#define BMI_ACC_INT_STAT_1		0x1D
 #define BMI_TEMP_DATA 			0x22
 #define BMI_ACC_CONF 			0x40
 #define BMI_ACC_RANGE 			0x41
 #define BMI_INT1_IO_CONF 	   	0x53
-#define BMI_INT1_INT2_MAP_DATA 	0x58
+#define BMI_INT1_INT2_MAP_DATA		0x58
 #define BMI_ACC_PWR_CONF 		0x7C
 #define BMI_ACC_PWR_CTRL 		0x7D
 #define BMI_ACC_SOFTRESET 		0x7E
@@ -26,14 +27,12 @@
 
 typedef enum
 {
-  INTF_MODE_SPI,
-  INTF_MODE_I2C
+  INTF_MODE_SPI, INTF_MODE_I2C
 } intfMode_e;
 
 typedef enum
 {
-  MEASURE_MODE_ACC,
-  MEASURE_MODE_GYR
+  MEASURE_MODE_ACC, MEASURE_MODE_GYR
 } measureMode_e;
 
 typedef struct
@@ -72,9 +71,8 @@ typedef struct
  */
 uint8_t
 BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
-	     I2C_HandleTypeDef *i2cHandle,
-	     GPIO_TypeDef *csAccPinBank, uint16_t csAccPin,
-	     GPIO_TypeDef *csGyrPinBank, uint16_t csGyrPin);
+	     I2C_HandleTypeDef *i2cHandle, GPIO_TypeDef *csAccPinBank,
+	     uint16_t csAccPin, GPIO_TypeDef *csGyrPinBank, uint16_t csGyrPin);
 
 /*
  *

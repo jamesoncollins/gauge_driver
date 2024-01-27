@@ -31,7 +31,7 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+extern void DWT_Delay_us(volatile uint32_t microseconds);
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -61,6 +61,8 @@ void Error_Handler(void);
 #define INT_ACC_GPIO_Port GPIOC
 #define INT_GYR_Pin GPIO_PIN_3
 #define INT_GYR_GPIO_Port GPIOC
+#define IGN_Pin GPIO_PIN_5
+#define IGN_GPIO_Port GPIOC
 #define RESET_MOTOR_Pin GPIO_PIN_2
 #define RESET_MOTOR_GPIO_Port GPIOB
 #define SPEEDO_Pin GPIO_PIN_10
@@ -73,6 +75,8 @@ void Error_Handler(void);
 #define DIR_SPEED_GPIO_Port GPIOB
 #define LED_Pin GPIO_PIN_15
 #define LED_GPIO_Port GPIOA
+#define PWREN_Pin GPIO_PIN_10
+#define PWREN_GPIO_Port GPIOC
 #define STEP_ODO_Pin GPIO_PIN_0
 #define STEP_ODO_GPIO_Port GPIOD
 #define DIR_ODO_Pin GPIO_PIN_1
