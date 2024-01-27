@@ -37,14 +37,16 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
 #define IDLE   0
 #define DONE   1
 #define F_CLK  64000000UL
-#define SPEED_TICKS_PER_ODO_TICK 3
+#define TICKS_PER_MILE (30)
+#define SPEED_TICKS_PER_ODO_TICK (TICKS_PER_MILE/10)
+#define HZ_PER_MPH ((float) TICKS_PER_MILE / 3600.f)
 volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
 volatile uint32_t T2[2] = {0,0};
 volatile uint32_t ticks[2] = {0,0};
-volatile uint16_t freq_Hz[2] = {0,0};
-volatile uint16_t TIM2_OVC[2] = {0,0};
-volatile uint8_t speed_tick_count = 0;
+volatile float freq_Hz[2] = {0,0};
+volatile uint32_t TIM2_OVC[2] = {0,0};
+volatile uint32_t speed_tick_count = 0;
 volatile bool odo_tick_flag = false;
 
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
@@ -60,8 +62,10 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
   {
     T2[ch] = TIM2->CCR1;
     ticks[ch] = (T2[ch] + (TIM2_OVC[ch] * 65536)) - T1[ch];
-    if(ticks[ch] <= 0 ) ticks[ch] = 1; // prevent div by 0
-    freq_Hz[ch] = (uint32_t) (F_CLK / ticks[ch]);
+    if(ticks[ch] == 0 )
+      freq_Hz[ch] = 0;
+    else
+      freq_Hz[ch] = (float)F_CLK / (float) ticks[ch];
     state[ch] = IDLE;
   }
 
@@ -69,9 +73,9 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
    * flag for an odo tick every 3 (or whatever) speedo ticks
    * as this is a unidirectional flag we dont need a mutex
    *
-   * todo: this technically could loose ticks, because we
-   * can only flag 1 and then reset.  but the man loop should
-   * be a lot faster than that, because this is a slow event
+   * todo: this is a a single threaded devies, use an odo tick
+   * count instead of a flag, and just incrment it here and decrement
+   * it elsewhere
    */
   if(ch == SPEEDOIND && !odo_tick_flag)
   {
@@ -210,11 +214,11 @@ int main_cpp(void)
     {
       float PPR = 3;
       float GR = 1; // tach gear ratio
-      float RPM = (float)freq_Hz[TACHIND]/1000*60 / PPR * GR;
-      sprintf (logBuf, "tach: %u Hz, speedo %u Hz \n", freq_Hz[0], freq_Hz[1]);
+      float RPM = (float)freq_Hz[TACHIND]*60 / PPR * GR;
+      sprintf (logBuf, "tach: %g Hz, speedo %g Hz \n", freq_Hz[0], freq_Hz[1]);
       CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
       //enable ITM Stimulus Port 0.
-      printf("SWV console %g %g %g\n", (float)freq_Hz[0] / 1000.f, (float)freq_Hz[1] / 1000.f, RPM);
+      printf("SWV console %g %g %g\n", (float)freq_Hz[0], (float)freq_Hz[1], RPM);
       timerUSB = HAL_GetTick ();
     }
 
