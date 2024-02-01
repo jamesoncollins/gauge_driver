@@ -59,8 +59,10 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define INT_ACC_Pin GPIO_PIN_2
 #define INT_ACC_GPIO_Port GPIOC
+#define INT_ACC_EXTI_IRQn EXTI2_IRQn
 #define INT_GYR_Pin GPIO_PIN_3
 #define INT_GYR_GPIO_Port GPIOC
+#define INT_GYR_EXTI_IRQn EXTI3_IRQn
 #define IGN_Pin GPIO_PIN_5
 #define IGN_GPIO_Port GPIOC
 #define RESET_MOTOR_Pin GPIO_PIN_2

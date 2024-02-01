@@ -8,10 +8,11 @@ extern "C" {
 #include "../../BMI088-lib/BMI088.h"
 }
 #include "../../SwitecX12-lib/SwitecX12.hpp"
+#include "utils.h"
 
-#define SAMPLE_TIME_MS_USB  250
-#define SAMPLE_TIME_MS_LED  500
-#define SAMPLE_TIME_MS_ATT   50
+#define SAMPLE_TIME_MS_LED    1000
+#define SAMPLE_TIME_MS_PRINT   750
+#define SAMPLE_TIME_MS_UPDATES   (1000/50)
 
 extern I2C_HandleTypeDef hi2c1;
 extern SPI_HandleTypeDef hspi1;
@@ -20,53 +21,75 @@ extern TIM_HandleTypeDef htim2;
 MCP4725 dac;
 BMI088 imu;
 
+/*
+ * disabled becuase we currently read manually, its only 100sps
+ */
+bool acc_intr_flase = false;
 void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
 {
   if (GPIO_Pin == INT_ACC_Pin)
   {
-    BMI088_ReadAccelerometerDMA (&imu);
+    //BMI088_ReadAccelerometerDMA (&imu);
+    acc_intr_flase = true;
   }
   else if (GPIO_Pin == INT_GYR_Pin)
   {
-    BMI088_ReadGyroscopeDMA (&imu);
+    //BMI088_ReadGyroscopeDMA (&imu);
   }
 }
 
+
+/*
+ * at 60Hz it takes 70 seconds to go 1 mile (4200 ticks / mile)
+ *
+ * at 70hz it takes 117 seconds to go 2 miles (4095 ticks / mile)
+ *
+ * at 100hz is takes 165 seconds to go 4 miles (4125 ticks / mile)
+ * at 100hz it takes 288 seconds to go 7 miles (4114 ticks / mile)
+ * 4114 ticks = 1 mile, 4114 hz = 1 mile per second, 4114hz/3600s = 1.143hz = 1 mph
+ */
 #define SPEEDOIND 0
 #define TACHIND 1
 #define IDLE   0
 #define DONE   1
-#define F_CLK  64000000UL
-#define TICKS_PER_MILE (30)
-#define SPEED_TICKS_PER_ODO_TICK (TICKS_PER_MILE/10)
-#define HZ_PER_MPH ((float) TICKS_PER_MILE / 3600.f)
+#define F_CLK  (SystemCoreClock)
+#define OVERFLOW_MS ((int)(1000*65536.f/(float)F_CLK))
+#define SPEED_TICKS_PER_ODO_TICK (3)
+#define MPH_PER_HZ ( 4114./3600. )
+#define RPM_PER_HZ ( 20 ) // 3 ticks per revolution
+#define DEGREES_PER_MPH   ( 20 )
+#define DEGREES_PER_RPM ( 10. / 1000.  )
 volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
 volatile uint32_t T2[2] = {0,0};
 volatile uint32_t ticks[2] = {0,0};
-volatile float freq_Hz[2] = {0,0};
+//volatile float freq_Hz[2] = {0,0}; // todo, dont calc freq in the callback, do it in the main loop
 volatile uint32_t TIM2_OVC[2] = {0,0};
 volatile uint32_t speed_tick_count = 0;
 volatile bool odo_tick_flag = false;
 
+/*
+ * rpm and speed frequency measurement
+ */
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 {
   int ch = (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) ? SPEEDOIND : TACHIND;
   if (state[ch] == IDLE)
   {
-    T1[ch] = TIM2->CCR1;
+    T1[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
     TIM2_OVC[ch] = 0;
     state[ch] = DONE;
   }
   else if (state[ch] == DONE)
   {
-    T2[ch] = TIM2->CCR1;
+    T2[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
     ticks[ch] = (T2[ch] + (TIM2_OVC[ch] * 65536)) - T1[ch];
-    if(ticks[ch] == 0 )
-      freq_Hz[ch] = 0;
-    else
-      freq_Hz[ch] = (float)F_CLK / (float) ticks[ch];
+    //if(ticks[ch] == 0 )
+    //  freq_Hz[ch] = 0;
+    //else
+    //  freq_Hz[ch] = (float)F_CLK / (float) ticks[ch];
     state[ch] = IDLE;
+    TIM2_OVC[ch] = 0;
   }
 
   /*
@@ -89,45 +112,58 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 
 }
 
+/*
+ * keep track of how many times the timer elapsed so we can use
+ * that to calc the actual time between ticks.
+ *
+ * note, if this gets too high then assume no more ticks are coming
+ * and we need to say the freq is 0
+ */
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 {
+  //static uint32_t us0 = DWT->CYCCNT * (HAL_RCC_GetHCLKFreq() / 1000000);
+  //static uint32_t us1 = DWT->CYCCNT * (HAL_RCC_GetHCLKFreq() / 1000000);
   TIM2_OVC[0]++;
   TIM2_OVC[1]++;
+  if(TIM2_OVC[0]*OVERFLOW_MS > 250)
+  {
+    TIM2_OVC[0] = 0;
+    //freq_Hz[0] = 0;
+    ticks[0] = 0;
+    state[0] = IDLE;
+  }
+  if(TIM2_OVC[1]*OVERFLOW_MS > 250)
+  {
+    TIM2_OVC[1] = 0;
+    //freq_Hz[1] = 0;
+    ticks[1] = 0;
+    state[1] = IDLE;
+  }
 }
 
-/**
- * @brief  This function provides a delay (in microseconds)
- * @param  microseconds: delay in microseconds
- */
-void DWT_Delay_us(volatile uint32_t microseconds)
-{
-  uint32_t clk_cycle_start = DWT->CYCCNT;
 
-  /* Go to number of cycles for system */
-  microseconds *= (HAL_RCC_GetHCLKFreq() / 1000000);
-
-  /* Delay till end */
-  while ((DWT->CYCCNT - clk_cycle_start) < microseconds);
-}
-
-/* USER CODE END 0 */
-
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
 int main_cpp(void)
 {
 
+  // init our 64-bit system-tick counter based on teh DWT timer
+  init_get_cycle_count ();
+
   /* Timers */
-  //uint32_t timerBAR = 0;
-  uint32_t timerUSB = 0;
+  uint32_t timerLoop = 0;
   uint32_t timerLED	= 0;
   uint32_t timerIGN = 0;
-  //uint32_t timerATT = 0;
+  uint32_t timerPrint = 0;
+  uint32_t timerUpdates = 0;
+  bool flagSlow = false;
 
   /* USB data buffer */
-  char logBuf[128];
+  const int bufLen = 256;
+  char logBuf[bufLen];
+
+  /*
+   * Turn on mcu-controlled pwr-en signal.
+   */
+  HAL_GPIO_WritePin ( PWREN_GPIO_Port, PWREN_Pin, GPIO_PIN_SET );
 
   /*
    * dac setup
@@ -137,6 +173,7 @@ int main_cpp(void)
   {
     sprintf (logBuf, "DAC Connected\n");
     CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
+    MCP4725_getValue(&dac);
   }
   else
   {
@@ -150,7 +187,7 @@ int main_cpp(void)
   /*
    * Acc / Gyro setup
    */
-  BMI088_Init(&imu, NULL, &hi2c1, NULL, 0, NULL, 0);
+  BMI088_Init(&imu, &hi2c1);
 
   /*
    * tach and speedo freq measurement setup
@@ -168,8 +205,10 @@ int main_cpp(void)
   HAL_Delay(10);
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_SET );
 
+  const int X27_STEPS = 315*12; // 315 degrees, 12 microsteps each?
+
   SwitecX12 tachX12(
-      100,
+      X27_STEPS,
       STEP_TACH_GPIO_Port,
       STEP_TACH_Pin,
       DIR_TACH_GPIO_Port,
@@ -177,7 +216,7 @@ int main_cpp(void)
       );
 
   SwitecX12 speedX12(
-      100,
+      X27_STEPS,
       STEP_SPEED_GPIO_Port,
       STEP_SPEED_Pin,
       DIR_SPEED_GPIO_Port,
@@ -185,46 +224,68 @@ int main_cpp(void)
       );
 
   SwitecX12 odoX12(
-      0xFFFFFFFE,
+      0xFFFFFFFE,  // hopefully infinite
       STEP_ODO_GPIO_Port,
       STEP_ODO_Pin,
       DIR_ODO_GPIO_Port,
       DIR_ODO_Pin
       );
 
+  // zero out the tach and speedo
+  for(int i=0; i<X27_STEPS; i++)
+  {
+    tachX12.step(-1);
+    speedX12.step(-1);
+    DWT_Delay(500);
+  }
+  //tachX12.zero();
+  //speedX12.zero();
+  tachX12.currentStep = 0; tachX12.stopped = true; tachX12.vel = 0;
+  speedX12.currentStep = 0; speedX12.stopped = true; speedX12.vel = 0;
+  HAL_Delay(200);
+
+  HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );
+  HAL_Delay(10);
+  HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_SET );
+
+  tachX12.setPosition (X27_STEPS);
+  speedX12.setPosition (X27_STEPS);
+  while (!tachX12.stopped && !speedX12.stopped)
+  {
+    tachX12.update ();
+    speedX12.update ();
+    //DWT_Delay(200);
+  }
+  HAL_Delay(200);
+
+  tachX12.setPosition (0);
+  speedX12.setPosition (0);
+  while  (!tachX12.stopped && !speedX12.stopped)
+  {
+    tachX12.update ();
+    speedX12.update ();
+    //DWT_Delay(200);
+  }
+  HAL_Delay(200);
+
+
 
   /*
-   * Turn on mcu-controlled pwr-en signal.
+   * delay to let usb come up
    */
-  HAL_GPIO_WritePin ( PWREN_GPIO_Port, PWREN_Pin, GPIO_PIN_SET );
+  HAL_Delay(250);
 
 
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
-
-    /* Log data via USB */
-    if ((HAL_GetTick () - timerUSB) >= SAMPLE_TIME_MS_USB)
-    {
-      float PPR = 3;
-      float GR = 1; // tach gear ratio
-      float RPM = (float)freq_Hz[TACHIND]*60 / PPR * GR;
-      sprintf (logBuf, "tach: %g Hz, speedo %g Hz \n", freq_Hz[0], freq_Hz[1]);
-      CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
-      //enable ITM Stimulus Port 0.
-      printf("SWV console %g %g %g\n", (float)freq_Hz[0], (float)freq_Hz[1], RPM);
-      timerUSB = HAL_GetTick ();
-    }
 
     /* Toggle LED */
     if ((HAL_GetTick () - timerLED) >= SAMPLE_TIME_MS_LED)
     {
+      // needs to be called occasionally to avoid looping
+      get_cycle_count();
+
       HAL_GPIO_TogglePin ( LED_GPIO_Port, LED_Pin );
       timerLED = HAL_GetTick ();
     }
@@ -232,31 +293,89 @@ int main_cpp(void)
     /**
      * get attitude measurements
      */
-    uint8_t data;
-    BMI088_ReadAccRegister(&imu, BMI_ACC_INT_STAT_1, &data);
-    //if ((HAL_GetTick () - timerATT) >= SAMPLE_TIME_MS_ATT)
-    if( data&0b1000000 )
+    if( acc_intr_flase )
     {
       BMI088_ReadAccelerometer(&imu);
-      sprintf(logBuf, "acc (mps): %g\t%g\t%g \n", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
-      CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
-      //timerATT = HAL_GetTick ();
+      acc_intr_flase = false;
+    }
+
+
+
+    /* Print */
+    if ((HAL_GetTick () - timerPrint) >= SAMPLE_TIME_MS_PRINT)
+    {
+#if 0
+      //float RPM = freq_Hz[TACHIND] * 60.f * 3.f / 2.f;
+      //float speed = freq_Hz[SPEEDOIND] / (float) HZ_PER_MPH;
+      int ind = 0;
+      ind += snprintf (logBuf+ind, bufLen-ind, "\033[1J");
+      ind += snprintf (logBuf+ind, bufLen-ind, "tach: %d mHz, speedo %d mHz \n", (int)(1000*freq_Hz[TACHIND]), (int)(1000*freq_Hz[SPEEDOIND]));
+      ind += snprintf (logBuf+ind, bufLen-ind, "acc (mps): %d %d %d \n", (int)imu.acc_mps2[0],(int)imu.acc_mps2[1],(int)imu.acc_mps2[2]);
+      if(flagSlow)
+      {
+	ind += snprintf (logBuf+ind, bufLen-ind, "main loop running slow \n");
+      }
+      CDC_Transmit_FS ((uint8_t*) logBuf, ind);
+#endif
+      timerPrint = HAL_GetTick ();
+    }
+
+    /*
+     * ANy updates we want presented to the user.
+     *  Currently this is 20fps
+     *
+     */
+#if 0
+    if ((HAL_GetTick () - timerUpdates) >= SAMPLE_TIME_MS_UPDATES)
+    {
+      float rpm_hz   = (ticks[TACHIND]==0) ? 0 : (float)F_CLK / (float)ticks[TACHIND];
+      float speed_hz = (ticks[SPEEDOIND]==0) ? 0 : (float)F_CLK / (float)ticks[SPEEDOIND];
+      float rpm = rpm_hz * RPM_PER_HZ;
+      float speed = speed_hz * MPH_PER_HZ;
+      tachX12.setPosition( rpm * ((float)DEGREES_PER_RPM * 12.) );
+      speedX12.setPosition( rpm * ((float)DEGREES_PER_MPH * 12.) );
+      timerUpdates = HAL_GetTick ();
     }
 
     /*
      * odometer ticks
      */
-    if(odo_tick_flag)
+    if(odo_tick_flag && odoX12.stopped)
     {
-      odoX12.step(1);
-      tachX12.step(1);
-      speedX12.step(1);
+      odoX12.setPosition(odoX12.currentStep+12);
       odo_tick_flag = false;
     }
+#else
+    /*
+     * temporarily sweep needle back and forth
+     */
+    static bool set = false;
+    if ( set && tachX12.stopped && speedX12.stopped )
+    {
+      set = !set;
+      tachX12.setPosition (X27_STEPS/12.*270);
+      speedX12.setPosition (X27_STEPS/12.*270);
+    }
+    else if ( !set && tachX12.stopped && speedX12.stopped )
+    {
+      set = !set;
+      tachX12.setPosition (0);
+      speedX12.setPosition (0);
+    }
+#endif
+
+    /*
+     * called as fast as possible, moves the motors if they need to be moved
+     */
+    speedX12.update();
+    tachX12.update();
+    odoX12.update();
+
+
 
     /*
      * check ignition signal status.  we want it low for at least 10ms
-     * before we decide the car is off.
+     * before we decide the +car is off.
      */
     GPIO_PinState ign = HAL_GPIO_ReadPin ( IGN_GPIO_Port, IGN_Pin );
     if ( !ign  )
@@ -266,19 +385,31 @@ int main_cpp(void)
       else if ( (HAL_GetTick () - timerIGN) >= 10 )
 	break; // break the main loop
     }
+
+
+    /*
+     * does nothing, just checks loop timing for diagnostics
+     */
+    uint32_t loopPeriod = (HAL_GetTick () - timerLoop);
+    if(loopPeriod>5)
+    {
+      flagSlow = true;
+    }
+    timerLoop = HAL_GetTick ();
+
   }
 
   /*
    * Power-down loop, do anything we need to in order to cleanup before
    * we power off.
    */
-  speedX12.stepTo(0);
-  tachX12.stepTo(0);
+  speedX12.setPosition(0);
+  tachX12.setPosition(0);
   while(1)
   {
     speedX12.update();
     tachX12.update();
-    if(speedX12.currentStep==0 && tachX12.currentStep==0)
+    if(speedX12.stopped && tachX12.stopped)
       break;
   }
 

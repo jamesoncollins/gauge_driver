@@ -5,6 +5,7 @@
 
 /* Register defines */
 #define BMI_ACC_CHIP_ID 		0x00
+#define BMI_ACC_STATUS			0x03
 #define BMI_ACC_DATA 			0x12
 #define BMI_ACC_INT_STAT_1		0x1D
 #define BMI_TEMP_DATA 			0x22
@@ -25,10 +26,6 @@
 #define	BMI_INT3_INT4_IO_CONF	0x16
 #define BMI_INT3_INT4_IO_MAP	0x18
 
-typedef enum
-{
-  INTF_MODE_SPI, INTF_MODE_I2C
-} intfMode_e;
 
 typedef enum
 {
@@ -37,14 +34,7 @@ typedef enum
 
 typedef struct
 {
-
-  intfMode_e intfMode;
-  SPI_HandleTypeDef *spiHandle;
   I2C_HandleTypeDef *i2cHandle;
-  GPIO_TypeDef *csAccPinBank;
-  GPIO_TypeDef *csGyrPinBank;
-  uint16_t csAccPin;
-  uint16_t csGyrPin;
 
   /* DMA */
   uint8_t readingAcc;
@@ -70,9 +60,12 @@ typedef struct
  *
  */
 uint8_t
-BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
-	     I2C_HandleTypeDef *i2cHandle, GPIO_TypeDef *csAccPinBank,
-	     uint16_t csAccPin, GPIO_TypeDef *csGyrPinBank, uint16_t csGyrPin);
+BMI088_Init (BMI088 *imu, I2C_HandleTypeDef *i2cHandle );
+
+/*
+ * get the state of the acceleromter interrupt, via i2c
+ */
+uint8_t BMI088_ReadAccIntr(BMI088 *imu);
 
 /*
  *

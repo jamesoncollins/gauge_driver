@@ -8,6 +8,7 @@
  */
 
 #include "SwitecX12.hpp"
+#include "utils.h"
 
 // This table defines the acceleration curve.
 // 1st value is the speed step, 2nd value is delay in microseconds
@@ -15,38 +16,40 @@
 // 1st value in last row should be == maxVel, must be <= maxVel
 static unsigned short defaultAccelTable[][2] =
 {
-{ 20, 800 },
-{ 50, 400 },
+{ 20, 1200 },
+{ 50, 600 },
 { 100, 200 },
-{ 150, 150 },
-{ 300, 90 } };
+//{ 150, 150 },
+//{ 300, 200 } ,
+};
+//static unsigned short defaultAccelTable[][2] =
+//{
+//{ 20, 800 },
+//{ 50, 400 },
+//{ 100, 200 },
+//{ 150, 150 },
+//{ 300, 90 } };
 
 const int stepPulseMicrosec = 1;
 const int resetStepMicrosec = 300;
 #define DEFAULT_ACCEL_TABLE_SIZE (sizeof(defaultAccelTable)/sizeof(*defaultAccelTable))
 
-#define OUTPUT 0
 #define LOW GPIO_PIN_RESET
 #define HIGH GPIO_PIN_SET
 
-void digitalWrite (GPIO_TypeDef* port, int pin, GPIO_PinState state)
+// microseconds since program exec
+inline uint64_t micros ()
 {
-  HAL_GPIO_WritePin ( port, pin, state);
+  return get_ticks_us();
+  //return DWT->CYCCNT * US_PER_SYS_TICK;
 }
 
-void delayMicroseconds (int us)
+inline void delay(uint32_t us)
 {
-  DWT_Delay_us(us);
+  DWT_Delay(us);
 }
 
-// microseconds since program exec, loops around 70 minutes on arduino
-int micros ()
-{
-  int us = DWT->CYCCNT * HAL_RCC_GetHCLKFreq() / 1000000;
-  return us;
-}
-
-SwitecX12::SwitecX12 (unsigned int steps,
+SwitecX12::SwitecX12 (uint32_t steps,
 		      GPIO_TypeDef* portStep, int pinStep,
 		      GPIO_TypeDef* portDir, int pinDir)
 {
@@ -55,10 +58,9 @@ SwitecX12::SwitecX12 (unsigned int steps,
   this->pinDir = pinDir;
   this->portStep = portStep;
   this->portDir = portDir;
-  //pinMode(portStep, pinStep, OUTPUT);
-  //pinMode(portDir, pinDir, OUTPUT);
-  digitalWrite (portStep, pinStep, LOW);
-  digitalWrite (portDir, pinDir, LOW);
+
+  HAL_GPIO_WritePin (portStep, pinStep, LOW);
+  HAL_GPIO_WritePin (portDir, pinDir, LOW);
 
   dir = 0;
   vel = 0;
@@ -72,15 +74,15 @@ SwitecX12::SwitecX12 (unsigned int steps,
 
 void SwitecX12::step (int dir)
 {
-  digitalWrite (portDir, pinDir, dir > 0 ? LOW : HIGH);
+  HAL_GPIO_WritePin (portDir, pinDir, dir > 0 ? LOW : HIGH);
   //digitalWrite(13, vel == maxVel ? HIGH : LOW);
-  digitalWrite (portStep, pinStep, HIGH);
-  delayMicroseconds (stepPulseMicrosec);
-  digitalWrite (portStep, pinStep, LOW);
+  HAL_GPIO_WritePin (portStep, pinStep, HIGH);
+  delay (stepPulseMicrosec);
+  HAL_GPIO_WritePin (portStep, pinStep, LOW);
   currentStep += dir;
 }
 
-void SwitecX12::stepTo (int position)
+void SwitecX12::stepTo (int32_t position)
 {
   int count;
   int dir;
@@ -97,7 +99,7 @@ void SwitecX12::stepTo (int position)
   for (int i = 0; i < count; i++)
   {
     step (dir);
-    delayMicroseconds (resetStepMicrosec);
+    delay (resetStepMicrosec);
   }
 }
 
@@ -170,7 +172,7 @@ void SwitecX12::advance ()
   time0 = micros ();
 }
 
-void SwitecX12::setPosition (int pos)
+void SwitecX12::setPosition (uint32_t pos)
 {
   // pos is unsigned so don't need to check for <0
   if (pos >= steps)

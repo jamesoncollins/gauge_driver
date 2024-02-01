@@ -1,75 +1,21 @@
 #include "BMI088.h"
 
-#define GYR_ADDR	0b0011000
-#define ACC_ADDR 	0b1101000
+#define ACC_ADDR	0b00110000
+#define GYR_ADDR 	0b11010000
 
-uint8_t tx (BMI088 *imu, measureMode_e measure, uint8_t *txBuf, size_t size)
-{
 
-  uint8_t status = 0;
-  if (imu->intfMode == INTF_MODE_SPI)
-  {
-    HAL_GPIO_WritePin (imu->csAccPinBank, imu->csAccPin, GPIO_PIN_RESET);
-    status = (HAL_SPI_Transmit (imu->spiHandle, txBuf, 2, HAL_MAX_DELAY)
-	== HAL_OK);
-    while (HAL_SPI_GetState (imu->spiHandle) != HAL_SPI_STATE_READY);
-    HAL_GPIO_WritePin (imu->csAccPinBank, imu->csAccPin, GPIO_PIN_SET);
-  }
-  else
-  {
-    HAL_I2C_Master_Transmit (
-	imu->i2cHandle, (measure == MEASURE_MODE_ACC) ? ACC_ADDR : GYR_ADDR,
-	txBuf, size, 1000);
-  }
-  return status;
-
-}
-
-uint8_t txrx (BMI088 *imu, measureMode_e measure, uint8_t *txBuf,
-	      uint8_t *rxBuf, size_t size)
-{
-  uint8_t status = 0;
-  if (imu->intfMode == INTF_MODE_SPI)
-  {
-    HAL_GPIO_WritePin (imu->csAccPinBank, imu->csAccPin, GPIO_PIN_RESET);
-    status = (HAL_SPI_TransmitReceive (imu->spiHandle, txBuf, rxBuf, size,
-				       HAL_MAX_DELAY) == HAL_OK);
-    HAL_GPIO_WritePin (imu->csAccPinBank, imu->csAccPin, GPIO_PIN_SET);
-  }
-  else
-  {
-    HAL_I2C_Master_Transmit (
-	imu->i2cHandle, (measure == MEASURE_MODE_ACC) ? ACC_ADDR : GYR_ADDR,
-	txBuf, size, 1000);
-    status = HAL_I2C_Master_Receive (
-	imu->i2cHandle, (measure == MEASURE_MODE_ACC) ? ACC_ADDR : GYR_ADDR,
-	rxBuf, size, 1000);
-  }
-  return status;
-}
-
+uint8_t txBuffer[2];
 /*
  *
  * INITIALISATION
  *
  */
-uint8_t BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
-		     I2C_HandleTypeDef *i2cHandle, GPIO_TypeDef *csAccPinBank,
-		     uint16_t csAccPin, GPIO_TypeDef *csGyrPinBank,
-		     uint16_t csGyrPin)
+uint8_t BMI088_Init (BMI088 *imu,  I2C_HandleTypeDef *i2cHandle)
 {
 
   /* Store interface parameters in struct */
-  imu->spiHandle = spiHandle;
+
   imu->i2cHandle = i2cHandle;
-  if (spiHandle)
-    imu->intfMode = INTF_MODE_SPI;
-  else
-    imu->intfMode = INTF_MODE_I2C;
-  imu->csAccPinBank = csAccPinBank;
-  imu->csAccPin = csAccPin;
-  imu->csGyrPinBank = csGyrPinBank;
-  imu->csGyrPin = csGyrPin;
 
   /* Clear DMA flags */
   imu->readingAcc = 0;
@@ -83,14 +29,6 @@ uint8_t BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
    *
    */
 
-  if(imu->intfMode == INTF_MODE_SPI)
-  {
-    /* Accelerometer requires rising edge on CSB at start-up to activate SPI */
-    HAL_GPIO_WritePin (imu->csAccPinBank, imu->csAccPin, GPIO_PIN_RESET);
-    HAL_Delay (1);
-    HAL_GPIO_WritePin (imu->csAccPinBank, imu->csAccPin, GPIO_PIN_SET);
-    HAL_Delay (50);
-  }
 
   /* Perform accelerometer soft reset */
   status += BMI088_WriteAccRegister (imu, BMI_ACC_SOFTRESET, 0xB6);
@@ -140,9 +78,6 @@ uint8_t BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
    *
    */
 
-  if (imu->intfMode == INTF_MODE_SPI)
-    HAL_GPIO_WritePin (imu->csGyrPinBank, imu->csGyrPin, GPIO_PIN_SET);
-
   /* Perform gyro soft reset */
   status += BMI088_WriteGyrRegister (imu, BMI_GYR_SOFTRESET, 0xB6);
   HAL_Delay (250);
@@ -183,6 +118,15 @@ uint8_t BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
 
 }
 
+uint8_t BMI088_ReadAccIntr(BMI088 *imu)
+{
+  uint8_t data = 0;
+  BMI088_ReadAccRegister(&imu, BMI_ACC_INT_STAT_1, &data);
+  if( data&0b10000000 )
+    return 1;
+  return 0;
+}
+
 /*
  *
  * LOW-LEVEL REGISTER FUNCTIONS
@@ -192,63 +136,49 @@ uint8_t BMI088_Init (BMI088 *imu, SPI_HandleTypeDef *spiHandle,
 /* ACCELEROMETER READS ARE DIFFERENT TO GYROSCOPE READS. SEND ONE BYTE ADDRESS, READ ONE DUMMY BYTE, READ TRUE DATA !!! */
 uint8_t BMI088_ReadAccRegister (BMI088 *imu, uint8_t regAddr, uint8_t *data)
 {
-
-  uint8_t txBuf[3] =  { regAddr | 0x80, 0x00, 0x00 };
-  uint8_t rxBuf[3];
-
-  uint8_t status = (txrx (imu, MEASURE_MODE_ACC, txBuf, rxBuf, 3) == HAL_OK);
-
-  if (status == 1)
-  {
-    *data = rxBuf[2];
-  }
-
+  uint8_t status = 0;
+  status |= HAL_I2C_Master_Transmit (
+	imu->i2cHandle, ACC_ADDR,
+	&regAddr, 1, 1000);
+  status |= HAL_I2C_Master_Receive (
+	imu->i2cHandle, ACC_ADDR,
+	data, 1, 1000);
   return status;
-
 }
 
 uint8_t BMI088_ReadGyrRegister (BMI088 *imu, uint8_t regAddr, uint8_t *data)
 {
-
-  uint8_t txBuf[2] =
-  { regAddr | 0x80, 0x00 };
-  uint8_t rxBuf[2];
-
-  uint8_t status = (txrx (imu, MEASURE_MODE_GYR, txBuf, rxBuf, 3) == HAL_OK);
-
-  if (status == 1)
-  {
-
-    *data = rxBuf[1];
-
-  }
-
+  uint8_t status = 0;
+  status |= HAL_I2C_Master_Transmit (
+	imu->i2cHandle, GYR_ADDR,
+	&regAddr, 1, 1000);
+  status |= HAL_I2C_Master_Receive (
+	imu->i2cHandle, GYR_ADDR,
+	data, 1, 1000);
   return status;
-
 }
 
 uint8_t BMI088_WriteAccRegister (BMI088 *imu, uint8_t regAddr, uint8_t data)
 {
-
-  uint8_t txBuf[2] =
-  { regAddr, data };
-
-  uint8_t status = tx (imu, MEASURE_MODE_ACC, txBuf, 2);
-
+  uint8_t status = 0;
+  txBuffer[0] = regAddr;
+  txBuffer[1] = data;
+  status |= HAL_I2C_Master_Transmit (
+	imu->i2cHandle, ACC_ADDR,
+	txBuffer, 2, 1000);
   return status;
 
 }
 
 uint8_t BMI088_WriteGyrRegister (BMI088 *imu, uint8_t regAddr, uint8_t data)
 {
-
-  uint8_t txBuf[2] =
-  { regAddr, data };
-
-  uint8_t status = tx (imu, MEASURE_MODE_GYR, txBuf, 2);
-
+  uint8_t status = 0;
+  txBuffer[0] = regAddr;
+  txBuffer[1] = data;
+  status |= HAL_I2C_Master_Transmit (
+	imu->i2cHandle, GYR_ADDR,
+	txBuffer, 2, 1000);
   return status;
-
 }
 
 /*
@@ -259,17 +189,20 @@ uint8_t BMI088_WriteGyrRegister (BMI088 *imu, uint8_t regAddr, uint8_t data)
 uint8_t BMI088_ReadAccelerometer (BMI088 *imu)
 {
 
-  /* Read raw accelerometer data */
-  uint8_t txBuf[8] =
-  { (BMI_ACC_DATA | 0x80), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; /* Register addr, 1 byte dummy, 6 bytes data */
   uint8_t rxBuf[8];
-
-  uint8_t status = (txrx (imu, MEASURE_MODE_ACC, txBuf, rxBuf, 8) == HAL_OK);
+  uint8_t regAddr = BMI_ACC_DATA;
+  uint8_t status = 0;
+  status |= HAL_I2C_Master_Transmit (
+	imu->i2cHandle, ACC_ADDR,
+	&regAddr, 1, 1000);
+  status |= HAL_I2C_Master_Receive (
+	imu->i2cHandle, ACC_ADDR,
+	rxBuf, 6, 1000);
 
   /* Form signed 16-bit integers */
-  int16_t accX = (int16_t) ((rxBuf[3] << 8) | rxBuf[2]);
-  int16_t accY = (int16_t) ((rxBuf[5] << 8) | rxBuf[4]);
-  int16_t accZ = (int16_t) ((rxBuf[7] << 8) | rxBuf[6]);
+  int16_t accX = (int16_t) ((rxBuf[1] << 8) | rxBuf[0]);
+  int16_t accY = (int16_t) ((rxBuf[3] << 8) | rxBuf[2]);
+  int16_t accZ = (int16_t) ((rxBuf[5] << 8) | rxBuf[4]);
 
   /* Convert to m/s^2 */
   imu->acc_mps2[0] = imu->accConversion * accX;
@@ -283,17 +216,20 @@ uint8_t BMI088_ReadAccelerometer (BMI088 *imu)
 uint8_t BMI088_ReadGyroscope (BMI088 *imu)
 {
 
-  /* Read raw gyroscope data */
-  uint8_t txBuf[7] =
-  { (BMI_GYR_DATA | 0x80), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; /* Register addr, 6 bytes data */
-  uint8_t rxBuf[7];
-
-  uint8_t status = (txrx (imu, MEASURE_MODE_GYR, txBuf, rxBuf, 7) == HAL_OK);
+  uint8_t rxBuf[8];
+  uint8_t regAddr = BMI_GYR_DATA;
+  uint8_t status = 0;
+  status |= HAL_I2C_Master_Transmit (
+	imu->i2cHandle, GYR_ADDR,
+	&regAddr, 1, 1000);
+  status |= HAL_I2C_Master_Receive (
+	imu->i2cHandle, GYR_ADDR,
+	rxBuf, 6, 1000);
 
   /* Form signed 16-bit integers */
-  int16_t gyrX = (int16_t) ((rxBuf[2] << 8) | rxBuf[1]);
-  int16_t gyrY = (int16_t) ((rxBuf[4] << 8) | rxBuf[3]);
-  int16_t gyrZ = (int16_t) ((rxBuf[6] << 8) | rxBuf[5]);
+  int16_t gyrX = (int16_t) ((rxBuf[1] << 8) | rxBuf[0]);
+  int16_t gyrY = (int16_t) ((rxBuf[3] << 8) | rxBuf[2]);
+  int16_t gyrZ = (int16_t) ((rxBuf[5] << 8) | rxBuf[4]);
 
   /* Convert to rad/s */
   imu->gyr_rps[0] = imu->gyrConversion * gyrX;
