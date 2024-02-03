@@ -20,17 +20,17 @@ extern TIM_HandleTypeDef htim2;
 
 MCP4725 dac;
 BMI088 imu;
+uint8_t regAddr;
+uint8_t buffer[8];
 
-/*
- * disabled becuase we currently read manually, its only 100sps
- */
-bool acc_intr_flase = false;
+volatile bool do_tx = false;
+volatile bool do_rx = false;
+volatile bool do_convert = false;
 void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
 {
   if (GPIO_Pin == INT_ACC_Pin)
   {
-    //BMI088_ReadAccelerometerDMA (&imu);
-    acc_intr_flase = true;
+    do_tx = true;
   }
   else if (GPIO_Pin == INT_GYR_Pin)
   {
@@ -38,6 +38,24 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
   }
 }
 
+/*
+ * call back used for BMI088 acceleromoter data
+ */
+
+void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+  do_convert = true;
+}
+
+void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+  do_rx = true;
+}
+
+void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
+{
+  bool error = true;
+}
 
 /*
  * at 60Hz it takes 70 seconds to go 1 mile (4200 ticks / mile)
@@ -47,6 +65,11 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
  * at 100hz is takes 165 seconds to go 4 miles (4125 ticks / mile)
  * at 100hz it takes 288 seconds to go 7 miles (4114 ticks / mile)
  * 4114 ticks = 1 mile, 4114 hz = 1 mile per second, 4114hz/3600s = 1.143hz = 1 mph
+ *
+ * See https://www.3si.org/threads/speed-sensor-gear-ratio.831219/#post-1056408948
+ *
+ * 27 tooth varient (trans pre feb 1993?) 1.117hz/mph
+ * 28 tooth 1.078 hz/mp
  */
 #define SPEEDOIND 0
 #define TACHIND 1
@@ -55,7 +78,7 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
 #define F_CLK  (SystemCoreClock)
 #define OVERFLOW_MS ((int)(1000*65536.f/(float)F_CLK))
 #define SPEED_TICKS_PER_ODO_TICK (3)
-#define MPH_PER_HZ ( 4114./3600. )
+#define MPH_PER_HZ ( 1.07755102 )
 #define RPM_PER_HZ ( 20 ) // 3 ticks per revolution
 #define DEGREES_PER_MPH   ( 20 )
 #define DEGREES_PER_RPM ( 10. / 1000.  )
@@ -63,7 +86,6 @@ volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
 volatile uint32_t T2[2] = {0,0};
 volatile uint32_t ticks[2] = {0,0};
-//volatile float freq_Hz[2] = {0,0}; // todo, dont calc freq in the callback, do it in the main loop
 volatile uint32_t TIM2_OVC[2] = {0,0};
 volatile uint32_t speed_tick_count = 0;
 volatile bool odo_tick_flag = false;
@@ -291,13 +313,57 @@ int main_cpp(void)
     }
 
     /**
-     * get attitude measurements
+     * bmi088 triggered us that data is available, start reading it
      */
-    if( acc_intr_flase )
+#if 1
+    if( do_tx )
     {
-      BMI088_ReadAccelerometer(&imu);
-      acc_intr_flase = false;
+      uint8_t status = BMI088_ReadAccelerometer(&imu);
+      if(status)
+	do_tx = false;
+      do_tx = false;
     }
+#else
+
+    if( do_convert )
+    {
+      BMI088_ConvertAccData(&imu); // converts raw buffered data to accel floats
+      do_convert = false;
+    }
+
+    if( do_rx )
+    {
+      //HAL_Delay(5);
+      uint8_t status = 1;
+      while(status)
+	status = HAL_I2C_Master_Receive_IT(
+	    &hi2c1,
+	    ACC_ADDR,
+	    buffer,
+	    1);
+      do_rx = false;
+    }
+
+    if( do_tx )
+    {
+      //HAL_Delay(5);
+      regAddr = BMI_ACC_DATA;
+      uint8_t status = 1;
+      while(status)
+      {
+	status = HAL_I2C_Master_Transmit_IT (
+	  &hi2c1, ACC_ADDR,
+	  &regAddr, 1);
+	 if (HAL_I2C_GetError(&hi2c1) != HAL_I2C_ERROR_AF)
+	 {
+
+	 }
+      }
+      do_tx = false;
+    }
+
+
+#endif
 
 
 
@@ -309,7 +375,7 @@ int main_cpp(void)
       //float speed = freq_Hz[SPEEDOIND] / (float) HZ_PER_MPH;
       int ind = 0;
       ind += snprintf (logBuf+ind, bufLen-ind, "\033[1J");
-      ind += snprintf (logBuf+ind, bufLen-ind, "tach: %d mHz, speedo %d mHz \n", (int)(1000*freq_Hz[TACHIND]), (int)(1000*freq_Hz[SPEEDOIND]));
+      //ind += snprintf (logBuf+ind, bufLen-ind, "tach: %d mHz, speedo %d mHz \n", (int)(1000*freq_Hz[TACHIND]), (int)(1000*freq_Hz[SPEEDOIND]));
       ind += snprintf (logBuf+ind, bufLen-ind, "acc (mps): %d %d %d \n", (int)imu.acc_mps2[0],(int)imu.acc_mps2[1],(int)imu.acc_mps2[2]);
       if(flagSlow)
       {

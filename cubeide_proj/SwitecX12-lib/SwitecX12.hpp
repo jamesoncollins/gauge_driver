@@ -37,7 +37,7 @@ public:
   /*
    * step to position, right now
    */
-  void stepTo (int32_t position);
+  void stepTo (uint32_t position);
 
   /*
    * set desired position, every call to update() will

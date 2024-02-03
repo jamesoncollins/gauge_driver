@@ -3,6 +3,10 @@
 
 //#include "stm32f4xx_hal.h"
 
+// i2c addresses
+#define ACC_ADDR	0b00110000
+#define GYR_ADDR 	0b11010000
+
 /* Register defines */
 #define BMI_ACC_CHIP_ID 		0x00
 #define BMI_ACC_STATUS			0x03
@@ -41,8 +45,8 @@ typedef struct
   uint8_t readingGyr;
   uint8_t accTxBuf[8];
   uint8_t gyrTxBuf[7];
-  volatile uint8_t accRxBuf[8];
-  volatile uint8_t gyrRxBuf[7];
+  uint8_t accRxBuf[8];
+  uint8_t gyrRxBuf[7];
 
   /* Conversion constants (raw to m/s^2 and raw to rad/s) */
   float accConversion;
@@ -81,6 +85,10 @@ uint8_t
 BMI088_WriteAccRegister (BMI088 *imu, uint8_t regAddr, uint8_t data);
 uint8_t
 BMI088_WriteGyrRegister (BMI088 *imu, uint8_t regAddr, uint8_t data);
+
+
+void BMI088_ConvertAccData( BMI088 *imu );
+void BMI088_ConvertGyrData( BMI088 *imu );
 
 /*
  *

@@ -82,7 +82,7 @@ void SwitecX12::step (int dir)
   currentStep += dir;
 }
 
-void SwitecX12::stepTo (int32_t position)
+void SwitecX12::stepTo (uint32_t position)
 {
   int count;
   int dir;

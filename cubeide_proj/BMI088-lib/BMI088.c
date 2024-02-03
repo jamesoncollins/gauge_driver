@@ -1,7 +1,6 @@
 #include "BMI088.h"
 
-#define ACC_ADDR	0b00110000
-#define GYR_ADDR 	0b11010000
+
 
 
 uint8_t txBuffer[2];
@@ -121,7 +120,7 @@ uint8_t BMI088_Init (BMI088 *imu,  I2C_HandleTypeDef *i2cHandle)
 uint8_t BMI088_ReadAccIntr(BMI088 *imu)
 {
   uint8_t data = 0;
-  BMI088_ReadAccRegister(&imu, BMI_ACC_INT_STAT_1, &data);
+  BMI088_ReadAccRegister(imu, BMI_ACC_INT_STAT_1, &data);
   if( data&0b10000000 )
     return 1;
   return 0;
@@ -181,6 +180,36 @@ uint8_t BMI088_WriteGyrRegister (BMI088 *imu, uint8_t regAddr, uint8_t data)
   return status;
 }
 
+
+/*
+ * convert received bytes to acc measurements
+ */
+void BMI088_ConvertAccData( BMI088 *imu )
+{
+  /* Form signed 16-bit integers */
+  int16_t accX = (int16_t) ((imu->accRxBuf[1] << 8) | imu->accRxBuf[0]);
+  int16_t accY = (int16_t) ((imu->accRxBuf[3] << 8) | imu->accRxBuf[2]);
+  int16_t accZ = (int16_t) ((imu->accRxBuf[5] << 8) | imu->accRxBuf[4]);
+
+  /* Convert to m/s^2 */
+  imu->acc_mps2[0] = imu->accConversion * accX;
+  imu->acc_mps2[1] = imu->accConversion * accY;
+  imu->acc_mps2[2] = imu->accConversion * accZ;
+}
+
+void BMI088_ConvertGyrData( BMI088 *imu )
+{
+  /* Form signed 16-bit integers */
+  int16_t gyrX = (int16_t) ((imu->gyrRxBuf[1] << 8) | imu->gyrRxBuf[0]);
+  int16_t gyrY = (int16_t) ((imu->gyrRxBuf[3] << 8) | imu->gyrRxBuf[2]);
+  int16_t gyrZ = (int16_t) ((imu->gyrRxBuf[5] << 8) | imu->gyrRxBuf[4]);
+
+  /* Convert to rad/s */
+  imu->gyr_rps[0] = imu->gyrConversion * gyrX;
+  imu->gyr_rps[1] = imu->gyrConversion * gyrY;
+  imu->gyr_rps[2] = imu->gyrConversion * gyrZ;
+}
+
 /*
  *
  * POLLING
@@ -188,8 +217,6 @@ uint8_t BMI088_WriteGyrRegister (BMI088 *imu, uint8_t regAddr, uint8_t data)
  */
 uint8_t BMI088_ReadAccelerometer (BMI088 *imu)
 {
-
-  uint8_t rxBuf[8];
   uint8_t regAddr = BMI_ACC_DATA;
   uint8_t status = 0;
   status |= HAL_I2C_Master_Transmit (
@@ -197,17 +224,9 @@ uint8_t BMI088_ReadAccelerometer (BMI088 *imu)
 	&regAddr, 1, 1000);
   status |= HAL_I2C_Master_Receive (
 	imu->i2cHandle, ACC_ADDR,
-	rxBuf, 6, 1000);
+	imu->accRxBuf, 6, 1000);
 
-  /* Form signed 16-bit integers */
-  int16_t accX = (int16_t) ((rxBuf[1] << 8) | rxBuf[0]);
-  int16_t accY = (int16_t) ((rxBuf[3] << 8) | rxBuf[2]);
-  int16_t accZ = (int16_t) ((rxBuf[5] << 8) | rxBuf[4]);
-
-  /* Convert to m/s^2 */
-  imu->acc_mps2[0] = imu->accConversion * accX;
-  imu->acc_mps2[1] = imu->accConversion * accY;
-  imu->acc_mps2[2] = imu->accConversion * accZ;
+  BMI088_ConvertAccData(imu);
 
   return status;
 
@@ -215,8 +234,6 @@ uint8_t BMI088_ReadAccelerometer (BMI088 *imu)
 
 uint8_t BMI088_ReadGyroscope (BMI088 *imu)
 {
-
-  uint8_t rxBuf[8];
   uint8_t regAddr = BMI_GYR_DATA;
   uint8_t status = 0;
   status |= HAL_I2C_Master_Transmit (
@@ -224,17 +241,9 @@ uint8_t BMI088_ReadGyroscope (BMI088 *imu)
 	&regAddr, 1, 1000);
   status |= HAL_I2C_Master_Receive (
 	imu->i2cHandle, GYR_ADDR,
-	rxBuf, 6, 1000);
+	imu->gyrRxBuf, 6, 1000);
 
-  /* Form signed 16-bit integers */
-  int16_t gyrX = (int16_t) ((rxBuf[1] << 8) | rxBuf[0]);
-  int16_t gyrY = (int16_t) ((rxBuf[3] << 8) | rxBuf[2]);
-  int16_t gyrZ = (int16_t) ((rxBuf[5] << 8) | rxBuf[4]);
-
-  /* Convert to rad/s */
-  imu->gyr_rps[0] = imu->gyrConversion * gyrX;
-  imu->gyr_rps[1] = imu->gyrConversion * gyrY;
-  imu->gyr_rps[2] = imu->gyrConversion * gyrZ;
+  BMI088_ConvertGyrData(imu);
 
   return status;
 
