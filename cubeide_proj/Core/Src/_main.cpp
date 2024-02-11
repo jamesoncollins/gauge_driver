@@ -10,9 +10,30 @@ extern "C" {
 #include "../../SwitecX12-lib/SwitecX12.hpp"
 #include "utils.h"
 
+
+/*
+ * Milisecond timers, controlled by the main while loop, for various
+ * slow functions
+ */
 #define SAMPLE_TIME_MS_LED    1000
 #define SAMPLE_TIME_MS_PRINT   750
 #define SAMPLE_TIME_MS_UPDATES   (1000/50)
+
+
+
+/*
+ * #defines used to control what happens in teh main loop
+ */
+//#define PRINT_TO_USB
+
+//#define SWEEP_GAUGES  // sweep needles forever
+#define SIM_GAUGES       // generate simulated rpm and mph
+
+// enable one of these to get acceleromter data
+//#define ACC_USE_BLOCK   // use blocking calls
+#define ACC_USE_IT    // use interrupt calls (not wokring)
+
+
 
 extern I2C_HandleTypeDef hi2c1;
 extern SPI_HandleTypeDef hspi1;
@@ -21,11 +42,20 @@ extern TIM_HandleTypeDef htim2;
 MCP4725 dac;
 BMI088 imu;
 uint8_t regAddr;
-uint8_t buffer[8];
 
-volatile bool do_tx = false;
-volatile bool do_rx = false;
-volatile bool do_convert = false;
+float rpm, speed;
+
+extern "C" {
+
+// flags used by accelerometer in IT mode
+volatile bool do_tx = false;	// we got exti saying data ready
+volatile bool do_rx = false;	// we sent the register address
+volatile bool do_convert = false;	// we received the raw data
+volatile bool i2c_error = false;
+
+/*
+ * exti interrupts from IMU
+ */
 void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
 {
   if (GPIO_Pin == INT_ACC_Pin)
@@ -39,8 +69,12 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
 }
 
 /*
- * call back used for BMI088 acceleromoter data
+ * call back used for BMI088 accelerometer data
  */
+void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+  do_convert = true;
+}
 
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
@@ -54,22 +88,21 @@ void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
 
 void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 {
-  bool error = true;
+  i2c_error = true;
 }
 
 /*
- * at 60Hz it takes 70 seconds to go 1 mile (4200 ticks / mile)
  *
- * at 70hz it takes 117 seconds to go 2 miles (4095 ticks / mile)
+ * Speed and Tach exti
  *
- * at 100hz is takes 165 seconds to go 4 miles (4125 ticks / mile)
  * at 100hz it takes 288 seconds to go 7 miles (4114 ticks / mile)
  * 4114 ticks = 1 mile, 4114 hz = 1 mile per second, 4114hz/3600s = 1.143hz = 1 mph
  *
  * See https://www.3si.org/threads/speed-sensor-gear-ratio.831219/#post-1056408948
  *
- * 27 tooth varient (trans pre feb 1993?) 1.117hz/mph
+ * 27 tooth variant (trans pre feb 1993?) 1.117hz/mph
  * 28 tooth 1.078 hz/mp
+ *
  */
 #define SPEEDOIND 0
 #define TACHIND 1
@@ -80,8 +113,6 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 #define SPEED_TICKS_PER_ODO_TICK (3)
 #define MPH_PER_HZ ( 1.07755102 )
 #define RPM_PER_HZ ( 20 ) // 3 ticks per revolution
-#define DEGREES_PER_MPH   ( 20 )
-#define DEGREES_PER_RPM ( 10. / 1000.  )
 volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
 volatile uint32_t T2[2] = {0,0};
@@ -90,9 +121,6 @@ volatile uint32_t TIM2_OVC[2] = {0,0};
 volatile uint32_t speed_tick_count = 0;
 volatile bool odo_tick_flag = false;
 
-/*
- * rpm and speed frequency measurement
- */
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 {
   int ch = (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) ? SPEEDOIND : TACHIND;
@@ -106,10 +134,6 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
   {
     T2[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
     ticks[ch] = (T2[ch] + (TIM2_OVC[ch] * 65536)) - T1[ch];
-    //if(ticks[ch] == 0 )
-    //  freq_Hz[ch] = 0;
-    //else
-    //  freq_Hz[ch] = (float)F_CLK / (float) ticks[ch];
     state[ch] = IDLE;
     TIM2_OVC[ch] = 0;
   }
@@ -143,29 +167,110 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
  */
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 {
-  //static uint32_t us0 = DWT->CYCCNT * (HAL_RCC_GetHCLKFreq() / 1000000);
-  //static uint32_t us1 = DWT->CYCCNT * (HAL_RCC_GetHCLKFreq() / 1000000);
   TIM2_OVC[0]++;
   TIM2_OVC[1]++;
   if(TIM2_OVC[0]*OVERFLOW_MS > 250)
   {
     TIM2_OVC[0] = 0;
-    //freq_Hz[0] = 0;
     ticks[0] = 0;
     state[0] = IDLE;
   }
   if(TIM2_OVC[1]*OVERFLOW_MS > 250)
   {
     TIM2_OVC[1] = 0;
-    //freq_Hz[1] = 0;
     ticks[1] = 0;
     state[1] = IDLE;
   }
 }
 
+} // extern C
+
+
+int get_x12_ticks_rpm( float rpm )
+{
+  const float MIN_RPM = 500;
+  const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
+  const float MIN_RPM_ANGLE = 3; // degrees from zero to MIN_RPM
+  const float DEGREES_PER_RPM_MIN = MIN_RPM_ANGLE / MIN_RPM;
+  const float DEGREES_PER_RPM = ( 10. / 1000.  );
+
+  if( rpm<MIN_RPM )
+    return (rpm * DEGREES_PER_RPM_MIN + ZERO_ANGLE) * 12.;
+  else
+    return ((rpm * DEGREES_PER_RPM + ZERO_ANGLE) - MIN_RPM_ANGLE ) * 12.;
+}
+
+int get_x12_ticks_speed( float speed )
+{
+  const float MIN_MPH = 10;
+  const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
+  const float MIN_MPH_ANGLE = 3; // degrees from zero to MIN_RPM
+  const float DEGREES_PER_MPH_MIN = MIN_MPH_ANGLE / MIN_MPH;
+  const float DEGREES_PER_MPH = ( 1 );
+
+  if( speed<MIN_MPH )
+    return (speed * DEGREES_PER_MPH_MIN + ZERO_ANGLE) * 12.;
+  else
+    return ((speed * DEGREES_PER_MPH + ZERO_ANGLE) - MIN_MPH_ANGLE ) * 12.;
+}
+
+
+/*
+ * reads the two ports, sets one of them to have pull up resistors,
+ * then reads again
+ */
+int io_exp_init()
+{
+  uint8_t status = 0;
+  uint8_t buffer[2];
+  status |= HAL_I2C_Mem_Read(
+            &hi2c1,
+            0b01000000,
+            0, 1,
+            buffer,
+            2,
+            1000);
+
+  buffer[0] = 0xff; buffer[1] = 0xff;
+  status |= HAL_I2C_Mem_Write(
+            &hi2c1,
+            0b01000000,
+            0x46, 1,
+            buffer,
+            2,
+            1000);
+
+  buffer[0] = 0xff; buffer[1] = 0xaa;
+  status |= HAL_I2C_Mem_Write(
+            &hi2c1,
+            0b01000000,
+            0x48, 1,
+            buffer,
+            2,
+            1000);
+
+  buffer[0] = 0x00; buffer[1] = 0x00;
+  status |= HAL_I2C_Mem_Read(
+            &hi2c1,
+            0b01000000,
+            0, 1,
+            buffer,
+            2,
+            1000);
+
+  return (buffer[0]!=0xFF) | (buffer[1]!=0xAA) | status;
+}
+
+int calcEMA(float timePeriod_, float currentStock_, float lastEMA_)
+{
+   return lastEMA_ + 0.5 * (currentStock_ - lastEMA_);
+}
+
 
 int main_cpp(void)
 {
+
+
 
   // init our 64-bit system-tick counter based on teh DWT timer
   init_get_cycle_count ();
@@ -190,26 +295,59 @@ int main_cpp(void)
   /*
    * dac setup
    */
-  dac = MCP4725_init (&hi2c1, MCP4725A0_ADDR_A00, 3.30);
-  if (MCP4725_isConnected (&dac))
-  {
-    sprintf (logBuf, "DAC Connected\n");
-    CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
-    MCP4725_getValue(&dac);
-  }
-  else
-  {
-    sprintf (logBuf, "DAC NOT Connected\n");
-    CDC_Transmit_FS ((uint8_t*) logBuf, strlen (logBuf));
-  }
+  MCP4725_init (&dac, &hi2c1, MCP4725A0_ADDR_A00, 3.30);
+  if (!MCP4725_isConnected (&dac))
+    exit(-1);
+  if( MCP4725_setVoltage(&dac, 0, MCP4725_REGISTER_MODE, MCP4725_POWER_DOWN_100KOHM) )
+    exit(-1);
 
-  // Start DAC output timer
-  //HAL_TIM_Base_Start_IT (&htim1);
+#if 0
+#define lowByte(x)            ((uint8_t)(x%256))
+#define highByte(x)             ((uint8_t)(x/256))
+
+  int n = 0;
+  uint16_t val;
+  int16_t valarr[] =
+  { 0, 383, 707, 924, 1000, 924, 707, 383, 0, -383, -707, -924, -1000, -924,
+      -707, -383 };
+  int valarrsz = sizeof(valarr) / sizeof(valarr[0]);
+  uint8_t mode = 0;
+  uint8_t powerType = 0;
+  uint8_t buffer[4];
+  my_transfer (dac.hi2c, dac._i2cAddress,  NULL, 0, 1000);
+  while (1)
+  {
+    val = 2048 + (valarr[n] >> 2);
+    n += 2;
+    if (n >= valarrsz)
+      n = 0;
+
+    //MCP4725_setValue(&dac, val, MCP4725_FAST_MODE, MCP4725_POWER_DOWN_OFF);
+
+    buffer[0] = mode | (powerType << 4) | highByte(val);
+    buffer[1] = lowByte(val);
+
+    my_transfer (dac.hi2c, dac._i2cAddress, buffer, 2, 1000);
+
+    DWT_Delay(50);
+
+  }
+  my_transfer (dac.hi2c, dac._i2cAddress, buffer, -2, 1000);
+#endif
+
+
+  /*
+   * io expander
+   */
+  if(io_exp_init())
+    exit(-1);
 
   /*
    * Acc / Gyro setup
    */
-  BMI088_Init(&imu, &hi2c1);
+  if(BMI088_Init(&imu, &hi2c1))
+    exit(-1);
+
 
   /*
    * tach and speedo freq measurement setup
@@ -253,6 +391,10 @@ int main_cpp(void)
       DIR_ODO_Pin
       );
 
+  HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );
+  HAL_Delay(10);
+  HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_SET );
+
   // zero out the tach and speedo
   for(int i=0; i<X27_STEPS; i++)
   {
@@ -260,8 +402,6 @@ int main_cpp(void)
     speedX12.step(-1);
     DWT_Delay(500);
   }
-  //tachX12.zero();
-  //speedX12.zero();
   tachX12.currentStep = 0; tachX12.stopped = true; tachX12.vel = 0;
   speedX12.currentStep = 0; speedX12.stopped = true; speedX12.vel = 0;
   HAL_Delay(200);
@@ -276,7 +416,6 @@ int main_cpp(void)
   {
     tachX12.update ();
     speedX12.update ();
-    //DWT_Delay(200);
   }
   HAL_Delay(200);
 
@@ -286,21 +425,11 @@ int main_cpp(void)
   {
     tachX12.update ();
     speedX12.update ();
-    //DWT_Delay(200);
   }
   HAL_Delay(200);
 
-
-
-  /*
-   * delay to let usb come up
-   */
-  HAL_Delay(250);
-
-
   while (1)
   {
-
 
     /* Toggle LED */
     if ((HAL_GetTick () - timerLED) >= SAMPLE_TIME_MS_LED)
@@ -315,16 +444,13 @@ int main_cpp(void)
     /**
      * bmi088 triggered us that data is available, start reading it
      */
-#if 1
+#ifdef ACC_USE_BLOCK
     if( do_tx )
     {
-      uint8_t status = BMI088_ReadAccelerometer(&imu);
-      if(status)
-	do_tx = false;
-      do_tx = false;
+      // ~245us
+      BMI088_ReadAccelerometer(&imu);
     }
-#else
-
+#elif defined ACC_USE_IT
     if( do_convert )
     {
       BMI088_ConvertAccData(&imu); // converts raw buffered data to accel floats
@@ -333,36 +459,24 @@ int main_cpp(void)
 
     if( do_rx )
     {
-      //HAL_Delay(5);
-      uint8_t status = 1;
-      while(status)
-	status = HAL_I2C_Master_Receive_IT(
-	    &hi2c1,
-	    ACC_ADDR,
-	    buffer,
-	    1);
-      do_rx = false;
+
     }
 
-    if( do_tx )
+    if( do_tx  )
     {
-      //HAL_Delay(5);
       regAddr = BMI_ACC_DATA;
       uint8_t status = 1;
       while(status)
       {
-	status = HAL_I2C_Master_Transmit_IT (
-	  &hi2c1, ACC_ADDR,
-	  &regAddr, 1);
-	 if (HAL_I2C_GetError(&hi2c1) != HAL_I2C_ERROR_AF)
-	 {
-
-	 }
+	status = HAL_I2C_Mem_Read_IT(
+	  &hi2c1,
+	  ACC_ADDR,
+	  BMI_ACC_DATA, 1,
+	  imu.accRxBuf, 6);
       }
+      do_rx = true;
       do_tx = false;
     }
-
-
 #endif
 
 
@@ -370,7 +484,7 @@ int main_cpp(void)
     /* Print */
     if ((HAL_GetTick () - timerPrint) >= SAMPLE_TIME_MS_PRINT)
     {
-#if 0
+#ifdef PRINT_TO_USB
       //float RPM = freq_Hz[TACHIND] * 60.f * 3.f / 2.f;
       //float speed = freq_Hz[SPEEDOIND] / (float) HZ_PER_MPH;
       int ind = 0;
@@ -383,23 +497,41 @@ int main_cpp(void)
       }
       CDC_Transmit_FS ((uint8_t*) logBuf, ind);
 #endif
+
       timerPrint = HAL_GetTick ();
     }
 
     /*
-     * ANy updates we want presented to the user.
+     * Any updates we want presented to the user.
      *  Currently this is 20fps
      *
      */
-#if 0
+#ifndef SWEEP_GAUGES
     if ((HAL_GetTick () - timerUpdates) >= SAMPLE_TIME_MS_UPDATES)
     {
-      float rpm_hz   = (ticks[TACHIND]==0) ? 0 : (float)F_CLK / (float)ticks[TACHIND];
-      float speed_hz = (ticks[SPEEDOIND]==0) ? 0 : (float)F_CLK / (float)ticks[SPEEDOIND];
-      float rpm = rpm_hz * RPM_PER_HZ;
-      float speed = speed_hz * MPH_PER_HZ;
-      tachX12.setPosition( rpm * ((float)DEGREES_PER_RPM * 12.) );
-      speedX12.setPosition( rpm * ((float)DEGREES_PER_MPH * 12.) );
+#ifdef SIM_GAUGES
+      rpm += (float)SAMPLE_TIME_MS_UPDATES / 1000. * 1000;
+      if(rpm>7000)
+        rpm = 0;
+//      speed += (float)SAMPLE_TIME_MS_UPDATES / 1000. * 20;
+//      if(speed>100)
+//        speed = 0;
+      speed = (imu.acc_mps2[2] / 9.8) * 50 + 50;
+      if(speed > 100)
+        speed = 100;
+      if(speed < 10)
+        speed = 10;
+#else
+      /*
+       * convert ticks, to Hz, to RPM and Speed
+       */
+      rpm   = (ticks[TACHIND]==0) ? 0 : (float)F_CLK / (float)ticks[TACHIND];   // Actually this is Hz
+      speed = (ticks[SPEEDOIND]==0) ? 0 : (float)F_CLK / (float)ticks[SPEEDOIND]; // Actually, this is Hz
+      rpm = rpm * RPM_PER_HZ;
+      speed = speed * MPH_PER_HZ;
+#endif
+      tachX12.setPosition( get_x12_ticks_rpm(rpm) );
+      speedX12.setPosition( get_x12_ticks_speed(speed) );
       timerUpdates = HAL_GetTick ();
     }
 
@@ -436,7 +568,6 @@ int main_cpp(void)
     speedX12.update();
     tachX12.update();
     odoX12.update();
-
 
 
     /*

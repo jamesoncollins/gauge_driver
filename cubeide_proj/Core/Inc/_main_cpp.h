@@ -8,6 +8,8 @@
 #ifndef SRC__MAIN_CPP_H_
 #define SRC__MAIN_CPP_H_
 
+#include "main.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

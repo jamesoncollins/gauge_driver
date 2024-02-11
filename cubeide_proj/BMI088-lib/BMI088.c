@@ -30,39 +30,40 @@ uint8_t BMI088_Init (BMI088 *imu,  I2C_HandleTypeDef *i2cHandle)
 
 
   /* Perform accelerometer soft reset */
-  status += BMI088_WriteAccRegister (imu, BMI_ACC_SOFTRESET, 0xB6);
+  status |= BMI088_WriteAccRegister (imu, BMI_ACC_SOFTRESET, 0xB6);
   HAL_Delay (50);
 
   /* Check chip ID */
   uint8_t chipID;
-  status += BMI088_ReadAccRegister (imu, BMI_ACC_CHIP_ID, &chipID);
+  status |= BMI088_ReadAccRegister (imu, BMI_ACC_CHIP_ID, &chipID);
 
   if (chipID != 0x1E)
   {
-    //	return 0;
+    return 1;
   }
   HAL_Delay (10);
 
   /* Configure accelerometer  */
-  status += BMI088_WriteAccRegister (imu, BMI_ACC_CONF, 0xA8); /* (no oversampling, ODR = 100 Hz, BW = 40 Hz) */
+  //status |= BMI088_WriteAccRegister (imu, BMI_ACC_CONF, 0xA8); /* (no oversampling, ODR = 100 Hz, BW = 40 Hz) */
+  status |= BMI088_WriteAccRegister (imu, BMI_ACC_CONF, 0xA7); /* (no oversampling, ODR = 50 Hz, BW = 20 Hz) */
   HAL_Delay (10);
 
-  status += BMI088_WriteAccRegister (imu, BMI_ACC_RANGE, 0x00); /* +- 3g range */
+  status |= BMI088_WriteAccRegister (imu, BMI_ACC_RANGE, 0x00); /* +- 3g range */
   HAL_Delay (10);
 
   /* Enable accelerometer data ready interrupt */
-  status += BMI088_WriteAccRegister (imu, BMI_INT1_IO_CONF, 0x0A); /* INT1 = push-pull output, active high */
+  status |= BMI088_WriteAccRegister (imu, BMI_INT1_IO_CONF, 0x0A); /* INT1 = push-pull output, active high */
   HAL_Delay (10);
 
-  status += BMI088_WriteAccRegister (imu, BMI_INT1_INT2_MAP_DATA, 0x04);
+  status |= BMI088_WriteAccRegister (imu, BMI_INT1_INT2_MAP_DATA, 0x04);
   HAL_Delay (10);
 
   /* Put accelerometer into active mode */
-  status += BMI088_WriteAccRegister (imu, BMI_ACC_PWR_CONF, 0x00);
+  status |= BMI088_WriteAccRegister (imu, BMI_ACC_PWR_CONF, 0x00);
   HAL_Delay (10);
 
   /* Turn accelerometer on */
-  status += BMI088_WriteAccRegister (imu, BMI_ACC_PWR_CTRL, 0x04);
+  status |= BMI088_WriteAccRegister (imu, BMI_ACC_PWR_CTRL, 0x04);
   HAL_Delay (10);
 
   /* Pre-compute accelerometer conversion constant (raw to m/s^2) */
@@ -77,41 +78,41 @@ uint8_t BMI088_Init (BMI088 *imu,  I2C_HandleTypeDef *i2cHandle)
    *
    */
 
-  /* Perform gyro soft reset */
-  status += BMI088_WriteGyrRegister (imu, BMI_GYR_SOFTRESET, 0xB6);
-  HAL_Delay (250);
-
-  /* Check chip ID */
-  status += BMI088_ReadGyrRegister (imu, BMI_GYR_CHIP_ID, &chipID);
-
-  if (chipID != 0x0F)
-  {
-    //return 0;
-  }
-  HAL_Delay (10);
-
-  /* Configure gyroscope */
-  status += BMI088_WriteGyrRegister (imu, BMI_GYR_RANGE, 0x01); /* +- 1000 deg/s */
-  HAL_Delay (10);
-
-  status += BMI088_WriteGyrRegister (imu, BMI_GYR_BANDWIDTH, 0x07); /* ODR = 100 Hz, Filter bandwidth = 32 Hz */
-  HAL_Delay (10);
-
-  /* Enable gyroscope data ready interrupt */
-  status += BMI088_WriteGyrRegister (imu, BMI_GYR_INT_CTRL, 0x80); /* New data interrupt enabled */
-  HAL_Delay (10);
-
-  status += BMI088_WriteGyrRegister (imu, BMI_INT3_INT4_IO_CONF, 0x01); /* INT3 = push-pull, active high */
-  HAL_Delay (10);
-
-  status += BMI088_WriteGyrRegister (imu, BMI_INT3_INT4_IO_MAP, 0x01); /* Data ready interrupt mapped to INT3 pin */
-  HAL_Delay (10);
-
-  /* Pre-compute gyroscope conversion constant (raw to rad/s) */
-  imu->gyrConversion = 0.01745329251f * 1000.0f / 32768.0f; /* Datasheet page 39 */
-
-  /* Set gyroscope TX buffer for DMA */
-  imu->gyrTxBuf[0] = BMI_GYR_DATA | 0x80;
+//  /* Perform gyro soft reset */
+//  status |= BMI088_WriteGyrRegister (imu, BMI_GYR_SOFTRESET, 0xB6);
+//  HAL_Delay (250);
+//
+//  /* Check chip ID */
+//  status |= BMI088_ReadGyrRegister (imu, BMI_GYR_CHIP_ID, &chipID);
+//
+//  if (chipID != 0x0F)
+//  {
+//    return 1;
+//  }
+//  HAL_Delay (10);
+//
+//  /* Configure gyroscope */
+//  status |= BMI088_WriteGyrRegister (imu, BMI_GYR_RANGE, 0x01); /* +- 1000 deg/s */
+//  HAL_Delay (10);
+//
+//  status |= BMI088_WriteGyrRegister (imu, BMI_GYR_BANDWIDTH, 0x07); /* ODR = 100 Hz, Filter bandwidth = 32 Hz */
+//  HAL_Delay (10);
+//
+//  /* Enable gyroscope data ready interrupt */
+//  status |= BMI088_WriteGyrRegister (imu, BMI_GYR_INT_CTRL, 0x80); /* New data interrupt enabled */
+//  HAL_Delay (10);
+//
+//  status |= BMI088_WriteGyrRegister (imu, BMI_INT3_INT4_IO_CONF, 0x01); /* INT3 = push-pull, active high */
+//  HAL_Delay (10);
+//
+//  status |= BMI088_WriteGyrRegister (imu, BMI_INT3_INT4_IO_MAP, 0x01); /* Data ready interrupt mapped to INT3 pin */
+//  HAL_Delay (10);
+//
+//  /* Pre-compute gyroscope conversion constant (raw to rad/s) */
+//  imu->gyrConversion = 0.01745329251f * 1000.0f / 32768.0f; /* Datasheet page 39 */
+//
+//  /* Set gyroscope TX buffer for DMA */
+//  imu->gyrTxBuf[0] = BMI_GYR_DATA | 0x80;
 
   return status;
 
@@ -217,14 +218,22 @@ void BMI088_ConvertGyrData( BMI088 *imu )
  */
 uint8_t BMI088_ReadAccelerometer (BMI088 *imu)
 {
-  uint8_t regAddr = BMI_ACC_DATA;
+//  uint8_t regAddr = BMI_ACC_DATA;
   uint8_t status = 0;
-  status |= HAL_I2C_Master_Transmit (
-	imu->i2cHandle, ACC_ADDR,
-	&regAddr, 1, 1000);
-  status |= HAL_I2C_Master_Receive (
-	imu->i2cHandle, ACC_ADDR,
-	imu->accRxBuf, 6, 1000);
+
+//  status |= HAL_I2C_Master_Transmit (
+//	imu->i2cHandle, ACC_ADDR,
+//	&regAddr, 1, 1000);
+//  status |= HAL_I2C_Master_Receive (
+//	imu->i2cHandle, ACC_ADDR,
+//	imu->accRxBuf, 6, 1000);
+
+  status |= HAL_I2C_Mem_Read(
+     imu->i2cHandle,
+     ACC_ADDR,
+     BMI_ACC_DATA, 1,
+     imu->accRxBuf, 6,
+     1000);
 
   BMI088_ConvertAccData(imu);
 

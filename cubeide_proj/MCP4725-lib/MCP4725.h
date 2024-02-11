@@ -100,8 +100,8 @@ typedef struct MCP
 } MCP4725;
 
 // Publics:
-MCP4725
-MCP4725_init (I2C_HandleTypeDef *hi2c, MCP4725Ax_ADDRESS addr, float refV);
+int MCP4725_init (MCP4725 *dev, I2C_HandleTypeDef *hi2c, MCP4725Ax_ADDRESS addr,
+                      float refV);
 
 uint8_t
 MCP4725_isConnected (MCP4725 *_MCP4725);

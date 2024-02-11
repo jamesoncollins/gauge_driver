@@ -37,17 +37,16 @@
  Constructor
  */
 /**************************************************************************/
-MCP4725 MCP4725_init (I2C_HandleTypeDef *hi2c, MCP4725Ax_ADDRESS addr,
+int MCP4725_init (MCP4725 *dev, I2C_HandleTypeDef *hi2c, MCP4725Ax_ADDRESS addr,
 		      float refV)
 {
-  MCP4725 _MCP4725;
 
-  _MCP4725._i2cAddress = (uint16_t) (addr << 1);
-  _MCP4725.hi2c = hi2c;
+  dev->_i2cAddress = (uint16_t) (addr << 1);
+  dev->hi2c = hi2c;
 
-  MCP4725_setReferenceVoltage (&_MCP4725, refV); //set _refVoltage & _bitsPerVolt variables
+  MCP4725_setReferenceVoltage (dev, refV); //set _refVoltage & _bitsPerVolt variables
 
-  return _MCP4725;
+  return 0;
 }
 
 /**************************************************************************/
@@ -391,6 +390,10 @@ uint8_t MCP4725_getEepromBusyFlag (MCP4725 *_MCP4725)
  1,  1
  */
 /**************************************************************************/
+
+//extern int my_transfer(I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *pData,
+//                  int16_t Size, uint32_t Timeout);
+
 uint8_t MCP4725_writeComand (MCP4725 *_MCP4725, uint16_t value,
 			     MCP4725_COMMAND_TYPE mode,
 			     MCP4725_POWER_DOWN_TYPE powerType)
@@ -410,7 +413,7 @@ uint8_t MCP4725_writeComand (MCP4725 *_MCP4725, uint16_t value,
       buffer[1] = lowByte(value);
 
       I2C_Stat = HAL_I2C_Master_Transmit (_MCP4725->hi2c, _MCP4725->_i2cAddress,
-					  buffer, 2, 1000);
+					  buffer, 0, 1000);
 
       break;
 
@@ -432,19 +435,19 @@ uint8_t MCP4725_writeComand (MCP4725 *_MCP4725, uint16_t value,
   }
 
   if (I2C_Stat != HAL_OK)
-    return 0;              //send data over i2c & check for collision on i2c bus
+    return 1;              //send data over i2c & check for collision on i2c bus
 
   if (mode == MCP4725_EEPROM_MODE)
   {
     if (MCP4725_getEepromBusyFlag (_MCP4725) == 1)
-      return 1;                      //write completed, success!!!
+      return 0;                      //write completed, success!!!
     HAL_Delay (MCP4725_EEPROM_WRITE_TIME); //typical EEPROM write time 25 msec
     if (MCP4725_getEepromBusyFlag (_MCP4725) == 1)
-      return 1;                      //write completed, success!!!
+      return 0;                      //write completed, success!!!
     HAL_Delay (MCP4725_EEPROM_WRITE_TIME); //maximum EEPROM write time 25 + 25 = 50 msec
   }
 
-  return 1;                                                         //success!!!
+  return 0;                                                         //success!!!
 }
 
 /**************************************************************************/
