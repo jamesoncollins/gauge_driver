@@ -45,9 +45,8 @@ I2C_HandleTypeDef hi2c1;
 
 SPI_HandleTypeDef hspi1;
 
-TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
-DMA_HandleTypeDef hdma_tim1_up;
+TIM_HandleTypeDef htim16;
 
 /* USER CODE BEGIN PV */
 /* USER CODE END PV */
@@ -56,11 +55,10 @@ DMA_HandleTypeDef hdma_tim1_up;
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_TIM1_Init(void);
+static void MX_TIM16_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -98,73 +96,16 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 
-//  /*
-//   * put i2c pins into known state
-//   */
-//  GPIO_InitTypeDef GPIO_InitStruct = {0};
-//
-//  __HAL_RCC_GPIOB_CLK_ENABLE();
-//  GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9;
-//  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-//  GPIO_InitStruct.Pull = GPIO_NOPULL;
-//  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-//  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-//
-//  // setting the pin states above defaults to low, give it enough time to register with slaves
-//  HAL_Delay(1);
-//
-//  // generate stop condition (clock high then data high)
-//  HAL_GPIO_WritePin ( GPIOB, GPIO_PIN_8, GPIO_PIN_SET );  HAL_Delay(1);// clock high
-//  HAL_GPIO_WritePin ( GPIOB, GPIO_PIN_9, GPIO_PIN_SET );  HAL_Delay(1);// data high
-//
-//  while( HAL_GPIO_ReadPin( GPIOB, GPIO_PIN_9 )==GPIO_PIN_RESET )
-//  {
-//    HAL_GPIO_WritePin ( GPIOB, GPIO_PIN_8, GPIO_PIN_SET );  HAL_Delay(1);
-//    HAL_GPIO_WritePin ( GPIOB, GPIO_PIN_8, GPIO_PIN_RESET );  HAL_Delay(1);
-//    HAL_GPIO_WritePin ( GPIOB, GPIO_PIN_8, GPIO_PIN_SET );  HAL_Delay(1);
-//  }
-//
-//  // generate stop condition (clock high then data high)
-//  if( HAL_GPIO_ReadPin( GPIOB, GPIO_PIN_9 )==GPIO_PIN_RESET )
-//  {
-//    HAL_GPIO_WritePin ( GPIOB, GPIO_PIN_8, GPIO_PIN_SET );  HAL_Delay(1); // clock high
-//    HAL_GPIO_WritePin ( GPIOB, GPIO_PIN_9, GPIO_PIN_SET );  HAL_Delay(1); // data high
-//  }
-
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_I2C1_Init();
   MX_SPI1_Init();
   MX_USB_Device_Init();
   MX_TIM2_Init();
-  MX_TIM1_Init();
+  MX_TIM16_Init();
   /* USER CODE BEGIN 2 */
-
-
-
-//  BMI088 imu;
-//  uint8_t buffer[8];
-//  BMI088_Init(&imu, &hi2c1);
-//  HAL_Delay(1000);
-//
-//  uint8_t regAddr = BMI_ACC_DATA;
-//  uint8_t status = 1;
-//  status = HAL_I2C_Master_Transmit (
-//      &hi2c1, ACC_ADDR,
-//      &regAddr, 1, 1000);
-//  //hi2c1.Instance->CR2 = 0x00<<I2C_CR2_NBYTES_Pos; //reset NBYTES when switching slave address
-//  status = HAL_I2C_Master_Receive_IT(
-//      &hi2c1,
-//      ACC_ADDR,
-//      buffer,
-//      6);
-//  while(1)
-//  {
-//    //uint8_t temp = hi2c1.Instance->RXDR;
-//  }
 
   main_cpp_c();
 
@@ -355,53 +296,6 @@ static void MX_SPI1_Init(void)
 }
 
 /**
-  * @brief TIM1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM1_Init(void)
-{
-
-  /* USER CODE BEGIN TIM1_Init 0 */
-
-  /* USER CODE END TIM1_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM1_Init 1 */
-
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 640;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 19;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
-
-  /* USER CODE END TIM1_Init 2 */
-
-}
-
-/**
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -464,19 +358,34 @@ static void MX_TIM2_Init(void)
 }
 
 /**
-  * Enable DMA controller clock
+  * @brief TIM16 Initialization Function
+  * @param None
+  * @retval None
   */
-static void MX_DMA_Init(void)
+static void MX_TIM16_Init(void)
 {
 
-  /* DMA controller clock enable */
-  __HAL_RCC_DMAMUX1_CLK_ENABLE();
-  __HAL_RCC_DMA1_CLK_ENABLE();
+  /* USER CODE BEGIN TIM16_Init 0 */
 
-  /* DMA interrupt init */
-  /* DMA1_Channel2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+  /* USER CODE END TIM16_Init 0 */
+
+  /* USER CODE BEGIN TIM16_Init 1 */
+
+  /* USER CODE END TIM16_Init 1 */
+  htim16.Instance = TIM16;
+  htim16.Init.Prescaler = 0;
+  htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim16.Init.Period = 9999;
+  htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim16.Init.RepetitionCounter = 0;
+  htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM16_Init 2 */
+
+  /* USER CODE END TIM16_Init 2 */
 
 }
 

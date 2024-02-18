@@ -99,14 +99,18 @@ uint64_t get_ticks_us ()
 bool lock_mutex (volatile unsigned *lock)
 {
   static unsigned compare = 0, exchange = 1;
-  return __atomic_compare_exchange_n (lock, &compare, exchange, 0,
-  __ATOMIC_SEQ_CST,
-				      __ATOMIC_SEQ_CST);
+  if(*lock==1)
+    compare = 0;
+  return __atomic_compare_exchange_n (lock, &compare, exchange, false,
+                                      __ATOMIC_SEQ_CST,
+                                      __ATOMIC_SEQ_CST);
 }
 
 void unlock_mutex (volatile unsigned *lock)
 {
   static unsigned compare = 1, exchange = 0;
+  if (*lock == 0)
+    compare = 1;
   assert(
-      __atomic_compare_exchange_n(lock, &compare, exchange, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)!=0);
+      __atomic_compare_exchange_n(lock, &compare, exchange, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)!=0);
 }

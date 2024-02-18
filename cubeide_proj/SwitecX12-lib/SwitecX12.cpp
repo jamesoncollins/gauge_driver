@@ -14,14 +14,20 @@
 // 1st value is the speed step, 2nd value is delay in microseconds
 // 1st value in each row must be > 1st value in subsequent row
 // 1st value in last row should be == maxVel, must be <= maxVel
+//static unsigned short defaultAccelTable[][2] =
+//{
+//{ 20, 1200 },
+//{ 50, 700 },
+//{ 100, 400 },
+//};
 static unsigned short defaultAccelTable[][2] =
 {
-{ 20, 1200 },
-{ 50, 600 },
-{ 100, 200 },
-//{ 150, 150 },
-//{ 300, 200 } ,
-};
+{ 20, 1400 },
+{ 50, 700 },
+{ 100, 400 },
+{ 150, 300 },
+{ 300, 200 } };
+
 //static unsigned short defaultAccelTable[][2] =
 //{
 //{ 20, 800 },

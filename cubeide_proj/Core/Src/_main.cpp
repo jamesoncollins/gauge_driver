@@ -26,8 +26,8 @@ extern "C" {
  */
 //#define PRINT_TO_USB
 
-//#define SWEEP_GAUGES  // sweep needles forever
-#define SIM_GAUGES       // generate simulated rpm and mph
+#define SWEEP_GAUGES  // sweep needles forever
+//#define SIM_GAUGES       // generate simulated rpm and mph
 
 // enable one of these to get acceleromter data
 //#define ACC_USE_BLOCK   // use blocking calls
@@ -38,6 +38,7 @@ extern "C" {
 extern I2C_HandleTypeDef hi2c1;
 extern SPI_HandleTypeDef hspi1;
 extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim16;
 
 MCP4725 dac;
 BMI088 imu;
@@ -47,11 +48,17 @@ float rpm, speed;
 
 extern "C" {
 
+
+
 // flags used by accelerometer in IT mode
-volatile bool do_tx = false;	// we got exti saying data ready
-volatile bool do_rx = false;	// we sent the register address
+volatile bool acc_int_rdy = false;	// we got exti saying data ready
 volatile bool do_convert = false;	// we received the raw data
 volatile bool i2c_error = false;
+
+bool rpm_alert = false;
+bool rpm_alert_has_lock = false;
+bool acc_has_lock = false;
+volatile unsigned i2c_lock = 0;
 
 /*
  * exti interrupts from IMU
@@ -60,7 +67,7 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
 {
   if (GPIO_Pin == INT_ACC_Pin)
   {
-    do_tx = true;
+    acc_int_rdy = true;
   }
   else if (GPIO_Pin == INT_GYR_Pin)
   {
@@ -68,22 +75,36 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
   }
 }
 
+
 /*
- * call back used for BMI088 accelerometer data
+ * this callback fires when the acceleromter read finishs,
+ * its currently the only thing using IT mem reads
  */
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
   do_convert = true;
+
+  bool was_locked = acc_has_lock;
+  acc_has_lock = false;
+  if(was_locked)
+    unlock_mutex(&i2c_lock);
 }
 
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-  do_convert = true;
+
 }
 
+/*
+ * fires when DAC write finishes.  currently the only thing using
+ * master transmits
+ */
 void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-  do_rx = true;
+  bool was_locked = rpm_alert_has_lock;
+  rpm_alert_has_lock = false;
+  if(was_locked)
+    unlock_mutex(&i2c_lock);
 }
 
 void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
@@ -98,6 +119,8 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
  * at 100hz it takes 288 seconds to go 7 miles (4114 ticks / mile)
  * 4114 ticks = 1 mile, 4114 hz = 1 mile per second, 4114hz/3600s = 1.143hz = 1 mph
  *
+ * the gauge face says 1025rev=1mile, so that would be 4100 ticks, that would be 1.38888hz/mph
+ *
  * See https://www.3si.org/threads/speed-sensor-gear-ratio.831219/#post-1056408948
  *
  * 27 tooth variant (trans pre feb 1993?) 1.117hz/mph
@@ -110,8 +133,7 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 #define DONE   1
 #define F_CLK  (SystemCoreClock)
 #define OVERFLOW_MS ((int)(1000*65536.f/(float)F_CLK))
-#define SPEED_TICKS_PER_ODO_TICK (3)
-#define MPH_PER_HZ ( 1.07755102 )
+#define MPH_PER_HZ (1.38888) //(1.11746031667) //( 1.07755102 )
 #define RPM_PER_HZ ( 20 ) // 3 ticks per revolution
 volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
@@ -119,10 +141,21 @@ volatile uint32_t T2[2] = {0,0};
 volatile uint32_t ticks[2] = {0,0};
 volatile uint32_t TIM2_OVC[2] = {0,0};
 volatile uint32_t speed_tick_count = 0;
+
+/* i originally measured that every 3 ticks of the speedo, the odo was stepped once.
+ * and with our stepper i think a full step is actually 12 micro steps.
+ * so the numbers below should be 3 and 12.  but those aren't looking right.
+ * so i tweaked it.  well, i will tweak it once i get some measurements again.
+ */
+#define SPEED_TICKS_PER_ODO_TICK (3)
+#define ODO_STEPS_PER_TICK (12)
 volatile bool odo_tick_flag = false;
 
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 {
+  if(htim->Instance != TIM2)
+    return;
+
   int ch = (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) ? SPEEDOIND : TACHIND;
   if (state[ch] == IDLE)
   {
@@ -158,6 +191,8 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 
 }
 
+
+
 /*
  * keep track of how many times the timer elapsed so we can use
  * that to calc the actual time between ticks.
@@ -167,21 +202,53 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
  */
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 {
-  TIM2_OVC[0]++;
-  TIM2_OVC[1]++;
-  if(TIM2_OVC[0]*OVERFLOW_MS > 250)
+  if(htim->Instance == TIM2)
   {
-    TIM2_OVC[0] = 0;
-    ticks[0] = 0;
-    state[0] = IDLE;
+    TIM2_OVC[0]++;
+    TIM2_OVC[1]++;
+    if(TIM2_OVC[0]*OVERFLOW_MS > 250)
+    {
+      TIM2_OVC[0] = 0;
+      ticks[0] = 0;
+      state[0] = IDLE;
+    }
+    if(TIM2_OVC[1]*OVERFLOW_MS > 250)
+    {
+      TIM2_OVC[1] = 0;
+      ticks[1] = 0;
+      state[1] = IDLE;
+    }
   }
-  if(TIM2_OVC[1]*OVERFLOW_MS > 250)
+  else if(rpm_alert && rpm_alert_has_lock && htim->Instance == TIM16)
   {
-    TIM2_OVC[1] = 0;
-    ticks[1] = 0;
-    state[1] = IDLE;
+    // tim16?
+//    static uint16_t valarr[16] =
+//    { 0+2048, 383+2048, 707+2048, 924+2048, 1000+2048, 924+2048, 707+2048, 383+2048, 0+2048, -383+2048, -707+2048, -924+2048, -1000+2048, -924+2048,
+//        -707+2048, -383+2048 };
+//    static int16_t valarr[16] =
+//    { -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000,  };
+    static int16_t valarr[16] =
+    { 0, 707, 1000, 707, 0, -707, -1000, -707,  0, 707, 1000, 707, 0, -707, -1000, -707, };
+    static uint16_t valarr_ctr = 0;
+    int16_t val = ( valarr[valarr_ctr & 0xf]  * 2 + 2048 ) & 0x0fff;
+    valarr_ctr++;
+#define lowByte(x)            ((uint8_t)(x%256))
+#define highByte(x)             ((uint8_t)(x/256))
+    static uint8_t arr[2];
+    arr[1] = lowByte(val);
+    arr[0] = highByte(val);
+    HAL_I2C_Master_Transmit_IT(
+      &hi2c1,
+      dac._i2cAddress,
+      arr,
+      2);
   }
 }
+
+
+
+
+
 
 } // extern C
 
@@ -189,10 +256,10 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 int get_x12_ticks_rpm( float rpm )
 {
   const float MIN_RPM = 500;
-  const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
+  const float ZERO_ANGLE = 5;    // degrees beyond the stopper to get to 0
   const float MIN_RPM_ANGLE = 3; // degrees from zero to MIN_RPM
   const float DEGREES_PER_RPM_MIN = MIN_RPM_ANGLE / MIN_RPM;
-  const float DEGREES_PER_RPM = ( 10. / 1000.  );
+  const float DEGREES_PER_RPM = ( 21.5 / 1000.  );
 
   if( rpm<MIN_RPM )
     return (rpm * DEGREES_PER_RPM_MIN + ZERO_ANGLE) * 12.;
@@ -203,10 +270,10 @@ int get_x12_ticks_rpm( float rpm )
 int get_x12_ticks_speed( float speed )
 {
   const float MIN_MPH = 10;
-  const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
+  const float ZERO_ANGLE = 5;    // degrees beyond the stopper to get to 0
   const float MIN_MPH_ANGLE = 3; // degrees from zero to MIN_RPM
   const float DEGREES_PER_MPH_MIN = MIN_MPH_ANGLE / MIN_MPH;
-  const float DEGREES_PER_MPH = ( 1 );
+  const float DEGREES_PER_MPH = ( 1.31 );
 
   if( speed<MIN_MPH )
     return (speed * DEGREES_PER_MPH_MIN + ZERO_ANGLE) * 12.;
@@ -261,11 +328,21 @@ int io_exp_init()
   return (buffer[0]!=0xFF) | (buffer[1]!=0xAA) | status;
 }
 
-int calcEMA(float timePeriod_, float currentStock_, float lastEMA_)
-{
-   return lastEMA_ + 0.5 * (currentStock_ - lastEMA_);
-}
 
+int movingAvg(int *ptrArrNumbers, long *ptrSum, int *pos, int len, int nextNum)
+{
+  //Subtract the oldest number from the prev sum, add the new number
+  *ptrSum = *ptrSum - ptrArrNumbers[*pos] + nextNum;
+  //Assign the nextNum to the position in the array
+  ptrArrNumbers[*pos] = nextNum;
+
+  (*pos)++;
+  if((*pos)>=len)
+    (*pos) = 0;
+
+  //return the average
+  return *ptrSum / len;
+}
 
 int main_cpp(void)
 {
@@ -300,6 +377,12 @@ int main_cpp(void)
     exit(-1);
   if( MCP4725_setVoltage(&dac, 0, MCP4725_REGISTER_MODE, MCP4725_POWER_DOWN_100KOHM) )
     exit(-1);
+
+
+  /*
+   * dac output timer
+   */
+  HAL_TIM_Base_Start_IT(&htim16);
 
 #if 0
 #define lowByte(x)            ((uint8_t)(x%256))
@@ -365,7 +448,8 @@ int main_cpp(void)
   HAL_Delay(10);
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_SET );
 
-  const int X27_STEPS = 315*12; // 315 degrees, 12 microsteps each?
+  //const int X27_STEPS = 315*12; // 315 degrees, 12 microsteps each?
+  const int X27_STEPS = 240*12;
 
   SwitecX12 tachX12(
       X27_STEPS,
@@ -445,7 +529,7 @@ int main_cpp(void)
      * bmi088 triggered us that data is available, start reading it
      */
 #ifdef ACC_USE_BLOCK
-    if( do_tx )
+    if( acc_int_rdy )
     {
       // ~245us
       BMI088_ReadAccelerometer(&imu);
@@ -457,25 +541,24 @@ int main_cpp(void)
       do_convert = false;
     }
 
-    if( do_rx )
+    if( acc_int_rdy  )
     {
-
-    }
-
-    if( do_tx  )
-    {
-      regAddr = BMI_ACC_DATA;
-      uint8_t status = 1;
-      while(status)
+      if (!acc_has_lock)
+        acc_has_lock = lock_mutex (&i2c_lock);
+      if (acc_has_lock)
       {
-	status = HAL_I2C_Mem_Read_IT(
-	  &hi2c1,
-	  ACC_ADDR,
-	  BMI_ACC_DATA, 1,
-	  imu.accRxBuf, 6);
+        regAddr = BMI_ACC_DATA;
+        uint8_t status = 1;
+        while(status)
+        {
+          status = HAL_I2C_Mem_Read_IT(
+            &hi2c1,
+            ACC_ADDR,
+            BMI_ACC_DATA, 1,
+            imu.accRxBuf, 6);
+        }
+        acc_int_rdy = false;
       }
-      do_rx = true;
-      do_tx = false;
     }
 #endif
 
@@ -489,7 +572,7 @@ int main_cpp(void)
       //float speed = freq_Hz[SPEEDOIND] / (float) HZ_PER_MPH;
       int ind = 0;
       ind += snprintf (logBuf+ind, bufLen-ind, "\033[1J");
-      //ind += snprintf (logBuf+ind, bufLen-ind, "tach: %d mHz, speedo %d mHz \n", (int)(1000*freq_Hz[TACHIND]), (int)(1000*freq_Hz[SPEEDOIND]));
+      ind += snprintf (logBuf+ind, bufLen-ind, "tach: %d , speedo %d  \n", (int) rpm, (int) speed);
       ind += snprintf (logBuf+ind, bufLen-ind, "acc (mps): %d %d %d \n", (int)imu.acc_mps2[0],(int)imu.acc_mps2[1],(int)imu.acc_mps2[2]);
       if(flagSlow)
       {
@@ -510,13 +593,13 @@ int main_cpp(void)
     if ((HAL_GetTick () - timerUpdates) >= SAMPLE_TIME_MS_UPDATES)
     {
 #ifdef SIM_GAUGES
-      rpm += (float)SAMPLE_TIME_MS_UPDATES / 1000. * 1000;
+      rpm += (float)SAMPLE_TIME_MS_UPDATES / 1000. * 3000;
       if(rpm>7000)
         rpm = 0;
-//      speed += (float)SAMPLE_TIME_MS_UPDATES / 1000. * 20;
-//      if(speed>100)
-//        speed = 0;
-      speed = (imu.acc_mps2[2] / 9.8) * 50 + 50;
+      speed += (float)SAMPLE_TIME_MS_UPDATES / 1000. * 40;
+      if(speed>100)
+        speed = 0;
+      //speed = (imu.acc_mps2[2] / 9.8) * 50 + 50;
       if(speed > 100)
         speed = 100;
       if(speed < 10)
@@ -528,7 +611,11 @@ int main_cpp(void)
       rpm   = (ticks[TACHIND]==0) ? 0 : (float)F_CLK / (float)ticks[TACHIND];   // Actually this is Hz
       speed = (ticks[SPEEDOIND]==0) ? 0 : (float)F_CLK / (float)ticks[SPEEDOIND]; // Actually, this is Hz
       rpm = rpm * RPM_PER_HZ;
+      if(rpm < 0) rpm = 0;
+      else if(rpm > 9000) rpm = 9000;
       speed = speed * MPH_PER_HZ;
+      if(speed < 0) speed = 0;
+      else if(speed > 180) speed = 180;
 #endif
       tachX12.setPosition( get_x12_ticks_rpm(rpm) );
       speedX12.setPosition( get_x12_ticks_speed(speed) );
@@ -540,7 +627,7 @@ int main_cpp(void)
      */
     if(odo_tick_flag && odoX12.stopped)
     {
-      odoX12.setPosition(odoX12.currentStep+12);
+      odoX12.setPosition(odoX12.targetStep+ODO_STEPS_PER_TICK);
       odo_tick_flag = false;
     }
 #else
@@ -551,8 +638,8 @@ int main_cpp(void)
     if ( set && tachX12.stopped && speedX12.stopped )
     {
       set = !set;
-      tachX12.setPosition (X27_STEPS/12.*270);
-      speedX12.setPosition (X27_STEPS/12.*270);
+      tachX12.setPosition (get_x12_ticks_rpm(7000));
+      speedX12.setPosition (get_x12_ticks_speed(180) );
     }
     else if ( !set && tachX12.stopped && speedX12.stopped )
     {
@@ -568,6 +655,22 @@ int main_cpp(void)
     speedX12.update();
     tachX12.update();
     odoX12.update();
+
+
+    /*
+     * shift alert
+     */
+    if( rpm > 6500  && (!rpm_alert || !rpm_alert_has_lock))
+    {
+      rpm_alert = true;
+      if(!rpm_alert_has_lock)
+        rpm_alert_has_lock = lock_mutex(&i2c_lock);
+    }
+
+    if( rpm < 6400 && rpm_alert )
+    {
+      rpm_alert = false;
+    }
 
 
     /*
