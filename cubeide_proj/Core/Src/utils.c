@@ -1,6 +1,6 @@
 #include "utils.h"
 #include "common.h"
-//#include "gfx.h"
+#include "gfx.h"
 #include "stm32wbxx_hal.h"
 #include "main.h"
 #include "assert.h"
@@ -86,15 +86,15 @@ uint64_t get_ticks_us ()
   return get_cycle_count () * US_PER_SYS_TICK ;
 }
 
-//gTicks gfxSystemTicks(void)
-//{
-//    return HAL_GetTick();
-//}
-//
-//gTicks gfxMillisecondsToTicks(gDelay ms)
-//{
-//    return ms;
-//}
+gTicks gfxSystemTicks(void)
+{
+    return HAL_GetTick();
+}
+
+gTicks gfxMillisecondsToTicks(gDelay ms)
+{
+    return ms;
+}
 
 bool lock_mutex (volatile unsigned *lock)
 {

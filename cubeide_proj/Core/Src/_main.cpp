@@ -9,7 +9,7 @@ extern "C" {
 }
 #include "../../SwitecX12-lib/SwitecX12.hpp"
 #include "utils.h"
-
+#include "gfx.h"
 
 /*
  * Milisecond timers, controlled by the main while loop, for various
@@ -17,7 +17,7 @@ extern "C" {
  */
 #define SAMPLE_TIME_MS_LED    1000
 #define SAMPLE_TIME_MS_PRINT   750
-#define SAMPLE_TIME_MS_UPDATES   (1000/50)
+#define SAMPLE_TIME_MS_UPDATES   (1000/24)
 
 
 
@@ -26,7 +26,7 @@ extern "C" {
  */
 //#define PRINT_TO_USB
 
-#define SWEEP_GAUGES  // sweep needles forever
+//#define SWEEP_GAUGES  // sweep needles forever
 //#define SIM_GAUGES       // generate simulated rpm and mph
 
 // enable one of these to get acceleromter data
@@ -245,12 +245,39 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
   }
 }
 
-
-
-
-
+/*
+ * override the _weak definition in the hal
+ * this code is used for printf and puts to do trhough teh jtag interface
+ */
+int _write(int32_t file, uint8_t *ptr, int32_t len)
+{
+    int i = 0;
+    for (i = 0; i < len; i++)
+    {
+        ITM_SendChar((*ptr++));
+    }
+    return len;
+}
 
 } // extern C
+
+void vert_bar(int x, int y, int width, int height, float max, float min, float val)
+{
+    int b = 1; // boarder gap
+    int t = 1; // border thickness
+    int g = b+t; //half the total gap to inside bar
+    val = val>max ? max : val;
+    val = val<min ? min : val;
+    float percent = (val-min)/(max-min);
+
+    for(int i = 0; i<t; i++)
+        gdispDrawBox(x+i,y+i,width-i*2,height-i*2,GFX_YELLOW);
+
+    int barMax = height - 2*g;
+    int barHeight = round(barMax * percent);
+
+    gdispFillArea(x+g, y+g+(barMax-barHeight), width-2*g, barHeight, GFX_YELLOW);
+}
 
 
 int get_x12_ticks_rpm( float rpm )
@@ -368,6 +395,14 @@ int main_cpp(void)
    * Turn on mcu-controlled pwr-en signal.
    */
   HAL_GPIO_WritePin ( PWREN_GPIO_Port, PWREN_Pin, GPIO_PIN_SET );
+
+
+  /*
+   * init graphics library
+   */
+  gfxInit();
+  font_t font = gdispOpenFont("DejaVuSans10");
+
 
   /*
    * dac setup
@@ -567,20 +602,19 @@ int main_cpp(void)
     /* Print */
     if ((HAL_GetTick () - timerPrint) >= SAMPLE_TIME_MS_PRINT)
     {
-#ifdef PRINT_TO_USB
-      //float RPM = freq_Hz[TACHIND] * 60.f * 3.f / 2.f;
-      //float speed = freq_Hz[SPEEDOIND] / (float) HZ_PER_MPH;
       int ind = 0;
       ind += snprintf (logBuf+ind, bufLen-ind, "\033[1J");
-      ind += snprintf (logBuf+ind, bufLen-ind, "tach: %d , speedo %d  \n", (int) rpm, (int) speed);
-      ind += snprintf (logBuf+ind, bufLen-ind, "acc (mps): %d %d %d \n", (int)imu.acc_mps2[0],(int)imu.acc_mps2[1],(int)imu.acc_mps2[2]);
+      ind += snprintf (logBuf+ind, bufLen-ind, "tach: %.1f , speedo %.1f  \n",  rpm,  speed);
+      ind += snprintf (logBuf+ind, bufLen-ind, "acc: %.1f, %.1f, %.1f", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
       if(flagSlow)
       {
 	ind += snprintf (logBuf+ind, bufLen-ind, "main loop running slow \n");
       }
+#ifdef PRINT_TO_USB
       CDC_Transmit_FS ((uint8_t*) logBuf, ind);
+#else
+      printf("%s", logBuf);
 #endif
-
       timerPrint = HAL_GetTick ();
     }
 
@@ -620,6 +654,30 @@ int main_cpp(void)
       tachX12.setPosition( get_x12_ticks_rpm(rpm) );
       speedX12.setPosition( get_x12_ticks_speed(speed) );
       timerUpdates = HAL_GetTick ();
+
+
+      /*
+       * OLED display updates
+       */
+      snprintf(logBuf, bufLen, "acc:%.1f,%.1f,%.1f", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
+      gdispFillString(1, 15, logBuf, font, GFX_YELLOW, GFX_BLACK);
+      vert_bar(90, 16, 7, 45, 10, 0, imu.acc_mps2[2]);
+
+      snprintf(logBuf, bufLen, "rpm: %.1f", rpm);
+      gdispFillString(1, 25, logBuf, font, GFX_YELLOW, GFX_BLACK);
+      vert_bar(99, 16, 7, 45, 30, 0, rpm);
+
+      snprintf(logBuf, bufLen, "spd: %.1f", speed);
+      gdispFillString(1, 35, logBuf, font, GFX_YELLOW, GFX_BLACK);
+      vert_bar(109, 16, 7, 45, 30, 0, speed);
+
+      // this box is exactly the size of the top yellow area on the
+      // common amazon ssd1306, 0.96" displays
+      gdispDrawBox(0,0,128,16,GFX_YELLOW);
+
+      gdispFlush();
+      gdispClear(GFX_BLACK);
+
     }
 
     /*

@@ -1,4 +1,7 @@
 
+/*
+ * a c-externed wrapped for cpp functions
+ */
 
 #include "_main_cpp.h"
 
