@@ -41,13 +41,19 @@
 #define GFX_USE_GDISP			GFXON
 
 /* Features for the GDISP sub-system. */
-#define GDISP_NEED_VALIDATION                        TRUE
-#define GDISP_NEED_CLIP                              TRUE
-#define GDISP_NEED_TEXT                          TRUE
-#define GDISP_INCLUDE_FONT_DEJAVUSANS10          TRUE
-#define GDISP_INCLUDE_FONT_DEJAVUSANS12          TRUE
+#define GDISP_NEED_VALIDATION                        GFXON
+#define GDISP_NEED_CLIP                              GFXON
+#define GDISP_NEED_TEXT                          GFXON
+#define GDISP_INCLUDE_FONT_DEJAVUSANS10          GFXON
+#define GDISP_INCLUDE_FONT_DEJAVUSANS12          GFXON
+#define GDISP_INCLUDE_FONT_BITSUMIS20 GFXON
 
-#define GDISP_NEED_STARTUP_LOGO                      GFXON
+#define GFX_USE_GFILE GFXON
+#define GFILE_NEED_MEMFS GFXON
+#define GDISP_NEED_IMAGE GFXON
+#define GDISP_NEED_IMAGE_PNG GFXON
+
+#define GDISP_NEED_STARTUP_LOGO                      GFXOFF
 
 
 #endif /* _GFXCONF_H */
