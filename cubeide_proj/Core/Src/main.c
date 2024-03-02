@@ -66,7 +66,6 @@ static void MX_SPI2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-#include "../../BMI088-lib/BMI088.h"
 /* USER CODE END 0 */
 
 /**

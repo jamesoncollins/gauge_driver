@@ -1,7 +1,8 @@
 #ifndef BMI088_IMU_H
 #define BMI088_IMU_H
 
-//#include "stm32f4xx_hal.h"
+#include "stm32wbxx_hal.h"
+#include "stdint.h"
 
 // i2c addresses
 #define ACC_ADDR	0b00110000

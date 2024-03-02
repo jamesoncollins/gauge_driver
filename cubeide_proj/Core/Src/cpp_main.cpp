@@ -4,10 +4,10 @@
 
 #include "usbd_cdc_if.h"
 extern "C" {
-#include "../../MCP4725-lib/MCP4725.h"
-#include "../../BMI088-lib/BMI088.h"
+#include "../Core/MCP4725-lib/MCP4725.h"
+#include "../Core/BMI088-lib/BMI088.h"
 }
-#include "../../SwitecX12-lib/SwitecX12.hpp"
+#include "../Core/SwitecX12-lib/SwitecX12.hpp"
 #include "utils.h"
 #include "gfx.h"
 #include "ugfx_widgets.h"
