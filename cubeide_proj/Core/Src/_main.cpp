@@ -10,6 +10,7 @@ extern "C" {
 #include "../../SwitecX12-lib/SwitecX12.hpp"
 #include "utils.h"
 #include "gfx.h"
+#include "ugfx_widgets.h"
 
 /*
  * Milisecond timers, controlled by the main while loop, for various
@@ -261,24 +262,6 @@ int _write(int32_t file, uint8_t *ptr, int32_t len)
 
 } // extern C
 
-void vert_bar(int x, int y, int width, int height, float max, float min, float val)
-{
-    int b = 1; // boarder gap
-    int t = 1; // border thickness
-    int g = b+t; //half the total gap to inside bar
-    val = val>max ? max : val;
-    val = val<min ? min : val;
-    float percent = (val-min)/(max-min);
-
-    for(int i = 0; i<t; i++)
-        gdispDrawBox(x+i,y+i,width-i*2,height-i*2,GFX_YELLOW);
-
-    int barMax = height - 2*g;
-    int barHeight = round(barMax * percent);
-
-    gdispFillArea(x+g, y+g+(barMax-barHeight), width-2*g, barHeight, GFX_YELLOW);
-}
-
 
 int get_x12_ticks_rpm( float rpm )
 {
@@ -409,7 +392,7 @@ int main_cpp(void)
   };
   gdispImageOpenMemory(&myImage,data);
   gdispImageDraw(&myImage, 0, 17, 128, 52, 0, 0);
-  gdispFillString(50, 40, "3000GT", fontMits20, GFX_YELLOW, GFX_BLACK);
+  gdispFillString(1, 1, "3000GT", fontMits20, GFX_YELLOW, GFX_BLACK);
   gdispFlush();
 
 
@@ -670,15 +653,15 @@ int main_cpp(void)
        */
       snprintf(logBuf, bufLen, "acc:%.1f,%.1f,%.1f", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
       gdispFillString(1, 15, logBuf, font, GFX_YELLOW, GFX_BLACK);
-      vert_bar(90, 16, 7, 45, 10, 0, imu.acc_mps2[2]);
+      drawVertBarGraph(90, 16, 7, 45, 10, 0, imu.acc_mps2[2]);
 
       snprintf(logBuf, bufLen, "rpm: %.1f", rpm);
       gdispFillString(1, 25, logBuf, font, GFX_YELLOW, GFX_BLACK);
-      vert_bar(99, 16, 7, 45, 30, 0, rpm);
+      drawVertBarGraph(99, 16, 7, 45, 30, 0, rpm);
 
       snprintf(logBuf, bufLen, "spd: %.1f", speed);
       gdispFillString(1, 35, logBuf, font, GFX_YELLOW, GFX_BLACK);
-      vert_bar(109, 16, 7, 45, 30, 0, speed);
+      drawVertBarGraph(109, 16, 7, 45, 30, 0, speed);
 
       // this box is exactly the size of the top yellow area on the
       // common amazon ssd1306, 0.96" displays
