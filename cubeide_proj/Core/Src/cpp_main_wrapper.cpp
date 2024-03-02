@@ -3,7 +3,7 @@
  * a c-externed wrapped for cpp functions
  */
 
-#include "_main_cpp.h"
+#include "main_cpp_wrapper.h"
 
 extern int main_cpp();
 

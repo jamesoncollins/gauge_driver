@@ -1,14 +1,7 @@
-/*
- * _main_cpp.h
- *
- *  Created on: Jan 27, 2024
- *      Author: user
- */
 
 #ifndef SRC__MAIN_CPP_H_
 #define SRC__MAIN_CPP_H_
 
-#include "main.h"
 
 #ifdef __cplusplus
 extern "C" {
