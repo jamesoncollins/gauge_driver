@@ -155,8 +155,11 @@ LLDSPEC void gdisp_lld_flush(GDisplay *g) {
         ram = RAM(g);
         pages = GDISP_SCREEN_HEIGHT;
 
+#if 0
+        /*
+         * in this mode we do one line at a time
+         */
         acquire_bus(g);
-
         int cnt = 0;
         while (pages--) {
 
@@ -173,6 +176,24 @@ LLDSPEC void gdisp_lld_flush(GDisplay *g) {
                 ram += GDISP_SCREEN_WIDTH;
         }
         release_bus(g);
+#else
+        /*
+         * transfer the entire screen at once
+         *
+         * TODO: the screen supports clipped regions for this type of
+         * transfer
+         */
+        acquire_bus(g);
+        write_cmd(g, SSD1351_SET_COLUMN_ADDRESS);
+        write_data_one(g, 0);
+        write_data_one(g, GDISP_SCREEN_WIDTH-1);
+        write_cmd(g, SSD1351_SET_ROW_ADDRESS);
+        write_data_one(g, 0);
+        write_data_one(g, GDISP_SCREEN_HEIGHT-1);
+        write_cmd(g, SSD1351_WRITE_RAM);
+        write_data(g, (gU8 *)ram, GDISP_SCREEN_WIDTH*GDISP_SCREEN_HEIGHT*sizeof(*RAM(g)));
+        release_bus(g);
+#endif
 
         g->flags &= ~GDISP_FLG_NEEDFLUSH;
 }

@@ -39,8 +39,7 @@ static GFXINLINE void init_board(GDisplay *g) {
 
   //while(HAL_ERROR==HAL_SPI_RegisterCallback(&SPIDEV, HAL_SPI_TX_COMPLETE_CB_ID, &clear_cs));
 
-  GPIO_InitTypeDef GPIO_InitStruct =
-  {   0};
+  GPIO_InitTypeDef GPIO_InitStruct = { 0 };
 
   GPIO_InitStruct.Pin = CS_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -54,7 +53,6 @@ static GFXINLINE void init_board(GDisplay *g) {
 
   GPIO_InitStruct.Pin = DC_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  //GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(DC_PORT, &GPIO_InitStruct);
 
@@ -69,7 +67,6 @@ static GFXINLINE void post_init_board(GDisplay *g) {
 
 static GFXINLINE void setpin_reset(GDisplay *g, gBool state) {
   (void) g;
-  (void) state;
   if(state)
       CLR_RST;
   else
@@ -93,8 +90,6 @@ static GFXINLINE void write_cmd(GDisplay *g, gU8 index) {
   (void) g;
 
   while (HAL_SPI_GetState(&SPIDEV) != HAL_SPI_STATE_READY);
-  //while (HAL_DMA_GetState(&hdma_spi2_tx) != HAL_DMA_STATE_READY);
-  //while ( !GET_CS );
   CLR_DC;
   CLR_CS;
   HAL_SPI_Transmit(&SPIDEV, (uint8_t *)&index, 1, HAL_MAX_DELAY);
@@ -103,11 +98,7 @@ static GFXINLINE void write_cmd(GDisplay *g, gU8 index) {
 
 static GFXINLINE void write_data_one(GDisplay *g, gU8 data) {
   (void) g;
-  (void) data;
-
   while (HAL_SPI_GetState(&SPIDEV) != HAL_SPI_STATE_READY);
-  //while (HAL_DMA_GetState(&hdma_spi2_tx) != HAL_DMA_STATE_READY);
- // while ( !GET_CS );
   SET_DC;
   CLR_CS;
   HAL_SPI_Transmit(
@@ -121,13 +112,7 @@ static GFXINLINE void write_data_one(GDisplay *g, gU8 data) {
 static GFXINLINE void write_data(GDisplay *g, gU8* data, gU16 length)
 {
     (void) g;
-    (void) data;
-    (void) length;
-
-
     while (HAL_SPI_GetState(&SPIDEV) != HAL_SPI_STATE_READY);
-    //while (HAL_DMA_GetState(&hdma_spi2_tx) != HAL_DMA_STATE_READY);
-   // while ( !GET_CS );
     SET_DC;
     CLR_CS;
     HAL_SPI_Transmit(
