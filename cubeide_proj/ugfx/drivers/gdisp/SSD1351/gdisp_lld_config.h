@@ -1,4 +1,3 @@
-
 /*
  * This file is subject to the terms of the GFX License. If a copy of
  * the license was not distributed with this file, you can obtain one at:
@@ -19,8 +18,8 @@
 #define GDISP_HARDWARE_FLUSH                    GFXON           // This controller requires flushing
 #define GDISP_HARDWARE_DRAWPIXEL                GFXON
 #define GDISP_HARDWARE_PIXELREAD                GFXON
-#define GDISP_HARDWARE_CONTROL          GFXON
-#define GDISP_HARDWARE_FILLS            GFXON
+#define GDISP_HARDWARE_CONTROL                  GFXON
+#define GDISP_HARDWARE_FILLS                    GFXON
 
 #define GDISP_LLD_PIXELFORMAT                   GDISP_PIXELFORMAT_RGB565
 
