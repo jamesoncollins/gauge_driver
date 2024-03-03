@@ -393,7 +393,7 @@ int main_cpp(void)
   };
   gdispImageOpenMemory(&myImage,data);
   gdispImageDraw(&myImage, 0, 17, 128, 52, 0, 0);
-  gdispFillString(1, 1, "3000GT", fontMits20, GFX_YELLOW, GFX_BLACK);
+  gdispFillString(50, 40, "3000GT", fontMits20, GFX_AMBER, GFX_BLACK);
   gdispFlush();
 
 
@@ -671,28 +671,32 @@ int main_cpp(void)
       /*
        * OLED display updates
        */
+      gdispClear(GFX_BLACK);  // if the device doesnt support flushing, then this is immediate
+
       snprintf(logBuf, bufLen, "acc:%.1f,%.1f,%.1f", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
-      gdispFillString(1, 15, logBuf, font, GFX_YELLOW, GFX_BLACK);
-      drawVertBarGraph(90, 16, 7, 45, 10, 0, imu.acc_mps2[2]);
+      gdispFillString(1, 16, logBuf, font, GFX_AMBER, GFX_BLACK);
+      drawVertBarGraph(90, 17, 7, 45, 9.7, 0, imu.acc_mps2[0]);
       //drawHorzBarGraph(5, 50, 45, 7, 10, 0, imu.acc_mps2[2]);
 
       snprintf(logBuf, bufLen, "rpm: %.1f", rpm);
-      gdispFillString(1, 25, logBuf, font, GFX_YELLOW, GFX_BLACK);
-      drawVertBarGraph(99, 16, 7, 45, 30, 0, rpm);
+      gdispFillString(1, 25, logBuf, font, GFX_AMBER, GFX_BLACK);
+      drawVertBarGraph(99, 17, 7, 45, 30, 0, rpm);
 
       snprintf(logBuf, bufLen, "spd: %.1f", speed);
-      gdispFillString(1, 35, logBuf, font, GFX_YELLOW, GFX_BLACK);
-      drawVertBarGraph(109, 16, 7, 45, 30, 0, speed);
+      gdispFillString(1, 35, logBuf, font, GFX_AMBER, GFX_BLACK);
+      drawVertBarGraph(109, 17, 7, 45, 30, 0, speed);
 
       // make x be -x, flip x and y
       drawGimball( 65, 45, 20, -imu.acc_mps2[1]/9.8*20, imu.acc_mps2[0]/9.8*20);
 
       // this box is exactly the size of the top yellow area on the
       // common amazon ssd1306, 0.96" displays
-      gdispDrawBox(0,0,128,16,GFX_YELLOW);
+      gdispDrawBox(0,0,128,16,GFX_AMBER);
 
+      // some devices dont support this and instead they draw whenever you call a drawing function
+      // but its always safe to call it
       gdispFlush();
-      gdispClear(GFX_BLACK);
+
 
     }
 
