@@ -8,6 +8,21 @@
 #ifndef INC_UGFX_WIDGETS_H_
 #define INC_UGFX_WIDGETS_H_
 
+
+#include "gfx.h"
+
+#ifndef COLOR_PRIMARY
+#define COLOR_PRIMARY GFX_AMBER
+#endif
+
+#ifndef COLOR_SECONDARY
+#define COLOR_SECONDARY GFX_RED
+#endif
+
+#ifndef COLOR_BACKGROUND
+#define COLOR_BACKGROUND GFX_BLACK
+#endif
+
 /*
  *
  * TODO: detect GDISP_HARDWARE_FILLS and fill boxes isntead of drawing lines

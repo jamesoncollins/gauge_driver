@@ -1,4 +1,5 @@
 
+#include "ugfx_widgets.h"
 #include "gfx.h"
 #include "math.h"
 
@@ -17,6 +18,7 @@ void drawBarGraph (
   int b = 1; // boarder gap
   int t = 1; // border thickness
   int g = b + t; // the gap from the outer edge of the box to the edge of the bar
+  bool alert = val>=max ? true : false;
   val = val > max ? max : val;
   val = val < min ? min : val;
   float percent = (val - min) / (max - min);
@@ -30,7 +32,7 @@ void drawBarGraph (
         y + i,
         width - i * 2,
         height - i * 2,
-        GFX_YELLOW);
+        COLOR_PRIMARY);
 
   if(vert)
   {
@@ -39,7 +41,7 @@ void drawBarGraph (
         y + g + (barMax - barMag),
         width - 2 * g,
         barMag,
-        GFX_YELLOW);
+        alert ? COLOR_SECONDARY : COLOR_PRIMARY );
   }
   else
   {
@@ -48,7 +50,7 @@ void drawBarGraph (
         y + g,
         barMag,
         height - 2 * g,
-        GFX_YELLOW);
+        alert ? COLOR_SECONDARY : COLOR_PRIMARY );
   }
 }
 
@@ -72,16 +74,16 @@ void drawHorzBarGraph (
   drawBarGraph(x,y,width,height,max,min,val,false);
 }
 
-bool dissolve(int x, int y, int width, int height, int iter)
-{
-  for(int i=0; i<width; i+=iter)
-  {
-    for(int j=0; j<height; j+=iter)
-    {
-      gdispFillArea(x+i, y+j, iter, iter, GFX_BLACK);
-    }
-  }
-}
+//bool dissolve(int x, int y, int width, int height, int iter)
+//{
+//  for(int i=0; i<width; i+=iter)
+//  {
+//    for(int j=0; j<height; j+=iter)
+//    {
+//      gdispFillArea(x+i, y+j, iter, iter, GFX_BLACK);
+//    }
+//  }
+//}
 
 
 /*
@@ -92,16 +94,16 @@ bool dissolve(int x, int y, int width, int height, int iter)
 void drawGimball (int x, int y, int r, int xv, int yv)
 {
   const int w = 1;
-  gdispDrawThickLine( x, y, x+r, y+0, GFX_YELLOW, w, false);
-  gdispDrawThickLine( x, y, x+0, y+r, GFX_YELLOW, w, false);
-  gdispDrawThickLine( x, y, x-r, y+0, GFX_YELLOW, w, false);
-  gdispDrawThickLine( x, y, x-0, y-r, GFX_YELLOW, w, false);
+  gdispDrawThickLine( x, y, x+r, y+0, COLOR_PRIMARY, w, false);
+  gdispDrawThickLine( x, y, x+0, y+r, COLOR_PRIMARY, w, false);
+  gdispDrawThickLine( x, y, x-r, y+0, COLOR_PRIMARY, w, false);
+  gdispDrawThickLine( x, y, x-0, y-r, COLOR_PRIMARY, w, false);
   while(r>(w<<2))
   {
-    gdispDrawCircle (x, y, r, GFX_YELLOW);
+    gdispDrawCircle (x, y, r, COLOR_PRIMARY);
     r = r>>1;
   }
-  gdispFillCircle (x+xv, y+yv, w<<2, GFX_YELLOW);
+  gdispFillCircle (x+xv, y+yv, w<<2, COLOR_SECONDARY);
 
 }
 
