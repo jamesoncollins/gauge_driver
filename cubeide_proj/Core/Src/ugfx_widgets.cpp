@@ -21,7 +21,7 @@ void drawBarGraph (
   val = val < min ? min : val;
   float percent = (val - min) / (max - min);
 
-  int barMax = true ? height - 2 * g : width - 2 * g;
+  int barMax = vert ? height - 2 * g : width - 2 * g;
   int barMag = round (barMax * percent);
 
   for (int i = 0; i < t; i++)
@@ -32,7 +32,7 @@ void drawBarGraph (
         height - i * 2,
         GFX_YELLOW);
 
-  if(true)
+  if(vert)
   {
     gdispFillArea(
         x + g,
@@ -81,6 +81,28 @@ bool dissolve(int x, int y, int width, int height, int iter)
       gdispFillArea(x+i, y+j, iter, iter, GFX_BLACK);
     }
   }
+}
+
+
+/*
+ * xy, coordinates of center
+ * r, radius of outtermost ring
+ * xy and yv, wher ethe gimbal is
+ */
+void drawGimball (int x, int y, int r, int xv, int yv)
+{
+  const int w = 1;
+  gdispDrawThickLine( x, y, x+r, y+0, GFX_YELLOW, w, false);
+  gdispDrawThickLine( x, y, x+0, y+r, GFX_YELLOW, w, false);
+  gdispDrawThickLine( x, y, x-r, y+0, GFX_YELLOW, w, false);
+  gdispDrawThickLine( x, y, x-0, y-r, GFX_YELLOW, w, false);
+  while(r>(w<<2))
+  {
+    gdispDrawCircle (x, y, r, GFX_YELLOW);
+    r = r>>1;
+  }
+  gdispFillCircle (x+xv, y+yv, w<<2, GFX_YELLOW);
+
 }
 
 

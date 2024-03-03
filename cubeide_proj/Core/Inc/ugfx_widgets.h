@@ -36,4 +36,6 @@ void drawHorzBarGraph (
 
 bool dissolve(int x, int y, int width, int height, int iter);
 
+void drawGimball (int x, int y, int r, int xv, int yv);
+
 #endif /* INC_UGFX_WIDGETS_H_ */
