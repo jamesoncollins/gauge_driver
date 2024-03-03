@@ -11,6 +11,7 @@ extern "C" {
 #include "utils.h"
 #include "gfx.h"
 #include "ugfx_widgets.h"
+#include "../Quaternion/Quaternion.hpp"
 
 /*
  * Milisecond timers, controlled by the main while loop, for various
@@ -539,6 +540,20 @@ int main_cpp(void)
   }
   HAL_Delay(200);
 
+
+  /*
+   * assume that the board is mounted with a known pitch angle, but that there is no yaw or roll
+   */
+  constexpr float pitch = 0. * M_PI / 180.0;
+  constexpr float cosPitch = cos(pitch), sinPitch = sin(pitch);
+
+
+  /*
+   * Main while loop.
+   *
+   * We stay here until the ignition turns off.
+   */
+  bool firstAcc = false;
   while (1)
   {
 
@@ -566,6 +581,11 @@ int main_cpp(void)
     {
       BMI088_ConvertAccData(&imu); // converts raw buffered data to accel floats
       do_convert = false;
+      rotateVectorKnownPitch(imu.acc_mps2, cosPitch, sinPitch);
+      if(!firstAcc)
+      {
+        firstAcc = true;
+      }
     }
 
     if( acc_int_rdy  )
@@ -654,6 +674,7 @@ int main_cpp(void)
       snprintf(logBuf, bufLen, "acc:%.1f,%.1f,%.1f", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
       gdispFillString(1, 15, logBuf, font, GFX_YELLOW, GFX_BLACK);
       drawVertBarGraph(90, 16, 7, 45, 10, 0, imu.acc_mps2[2]);
+      //drawHorzBarGraph(5, 50, 45, 7, 10, 0, imu.acc_mps2[2]);
 
       snprintf(logBuf, bufLen, "rpm: %.1f", rpm);
       gdispFillString(1, 25, logBuf, font, GFX_YELLOW, GFX_BLACK);
@@ -662,6 +683,9 @@ int main_cpp(void)
       snprintf(logBuf, bufLen, "spd: %.1f", speed);
       gdispFillString(1, 35, logBuf, font, GFX_YELLOW, GFX_BLACK);
       drawVertBarGraph(109, 16, 7, 45, 30, 0, speed);
+
+      // make x be -x, flip x and y
+      drawGimball( 65, 45, 20, -imu.acc_mps2[1]/9.8*20, imu.acc_mps2[0]/9.8*20);
 
       // this box is exactly the size of the top yellow area on the
       // common amazon ssd1306, 0.96" displays
