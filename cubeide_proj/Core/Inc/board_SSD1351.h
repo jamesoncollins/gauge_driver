@@ -11,6 +11,7 @@
 #define GDISP_SCREEN_WIDTH              128
 
 extern SPI_HandleTypeDef hspi2;
+extern DMA_HandleTypeDef hdma_spi2_tx;
 
 #define SPIDEV     hspi2
 
@@ -109,18 +110,35 @@ static GFXINLINE void write_data_one(GDisplay *g, gU8 data) {
   SET_CS;
 }
 
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+  if(hspi->Instance==hspi2.Instance)
+    SET_CS;
+}
+
+
+/*
+ * WARNING: This is a DMA transfer. It will not set CS, that gets done in the
+ * callback.  DOn't use this for anything you need to do in a loop in the
+ * driver.
+ */
 static GFXINLINE void write_data(GDisplay *g, gU8* data, gU16 length)
 {
     (void) g;
     while (HAL_SPI_GetState(&SPIDEV) != HAL_SPI_STATE_READY);
+    while (HAL_DMA_GetState(&hdma_spi2_tx) != HAL_DMA_STATE_READY);
     SET_DC;
     CLR_CS;
-    HAL_SPI_Transmit(
+//    HAL_SPI_Transmit(
+//            &SPIDEV,
+//            (uint8_t *)data,
+//            length ,
+//            HAL_MAX_DELAY);
+//    SET_CS;
+    HAL_SPI_Transmit_DMA(
             &SPIDEV,
             (uint8_t *)data,
-            length ,
-            HAL_MAX_DELAY);
-    SET_CS;
+            length );
 
 }
 

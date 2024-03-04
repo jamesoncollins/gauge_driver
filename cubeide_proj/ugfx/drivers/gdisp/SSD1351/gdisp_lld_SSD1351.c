@@ -147,19 +147,19 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
 #if GDISP_HARDWARE_FLUSH
 LLDSPEC void gdisp_lld_flush(GDisplay *g) {
         gU16 * ram;
-        unsigned pages;
 
         // Don't flush if we don't need it.
         if (!(g->flags & GDISP_FLG_NEEDFLUSH))
                 return;
         ram = RAM(g);
-        pages = GDISP_SCREEN_HEIGHT;
 
 #if 0
         /*
          * in this mode we do one line at a time
          */
         acquire_bus(g);
+        unsigned pages;
+        pages = GDISP_SCREEN_HEIGHT;
         int cnt = 0;
         while (pages--) {
 
