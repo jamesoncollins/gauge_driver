@@ -14,11 +14,23 @@
 /* Driver hardware support.                                                  */
 /*===========================================================================*/
 
-#define GDISP_HARDWARE_STREAM_WRITE		GFXON
-//#define GDISP_HARDWARE_STREAM_READ		GFXON
-#define GDISP_HARDWARE_CONTROL			GFXON
+//#define GDISP_HARDWARE_STREAM_WRITE		GFXON
+////#define GDISP_HARDWARE_STREAM_READ		GFXON
+//#define GDISP_HARDWARE_CONTROL			GFXON
+//
+//#define GDISP_LLD_PIXELFORMAT			GDISP_PIXELFORMAT_RGB565
 
-#define GDISP_LLD_PIXELFORMAT			GDISP_PIXELFORMAT_RGB565
+
+
+#define GDISP_HARDWARE_FLUSH                    GFXON           // This controller requires flushing
+#define GDISP_HARDWARE_DRAWPIXEL                GFXON
+#define GDISP_HARDWARE_PIXELREAD                GFXON
+#define GDISP_HARDWARE_CONTROL                  GFXON
+#define GDISP_HARDWARE_FILLS                    GFXON
+
+#define GDISP_LLD_PIXELFORMAT                   GDISP_PIXELFORMAT_RGB565
+
+#define GDISP_CONTROL_INVERSE                   (GDISP_CONTROL_LLD+0)
 
 #endif	/* GFX_USE_GDISP */
 
