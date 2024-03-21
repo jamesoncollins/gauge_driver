@@ -63,7 +63,8 @@
 #define write_cmd2(g, cmd1, cmd2)               { write_cmd(g, cmd1); write_cmd(g, cmd2); }
 #define write_cmd3(g, cmd1, cmd2, cmd3) { write_cmd(g, cmd1); write_cmd(g, cmd2); write_cmd(g, cmd3); }
 #define xyaddr(x, y)            (((x) + (y)*GDISP_SCREEN_WIDTH))
-#define map_color(color) ((color>>8)&0xff) | ((color<<8)&0xff)
+//#define map_color(color) (((color & 0xff) >> 8) | (color << 8))
+#define map_color(color) ((color>>8) | (color<<8))
 
 static void set_viewport (GDisplay *g)
 {
@@ -116,7 +117,7 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
   write_index (g, 0x28); // Turn off display
   write_index (g, 0x11); // Exit sleep mode
   write_index (g, 0x36);
-  write_data_one (g, 0x88); // MADCTL: memory data access control Old: 0x88
+  write_data_one (g, 0x00); // MADCTL: memory data access control, top to bottom left to right
 
   write_index (g, 0x3A);
   write_data_one (g, 0x55); // COLMOD: Interface Pixel format (16-bits per pixel @ 65K colors)
