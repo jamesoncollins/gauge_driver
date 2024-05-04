@@ -80,6 +80,8 @@ SwitecX12::SwitecX12 (uint32_t steps,
 
 void SwitecX12::step (int dir)
 {
+  // the chip is actually active-high = CW as the pin is labeled CW-/CCW
+  // but its flipped here becuase the schematic is flipped
   HAL_GPIO_WritePin (portDir, pinDir, dir > 0 ? LOW : HIGH);
   //digitalWrite(13, vel == maxVel ? HIGH : LOW);
   HAL_GPIO_WritePin (portStep, pinStep, HIGH);

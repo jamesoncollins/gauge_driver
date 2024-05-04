@@ -39,7 +39,7 @@ int screenHeight;
 
 
 
-extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef hi2c1, hi2c3;
 extern SPI_HandleTypeDef hspi1;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim16;
@@ -357,9 +357,6 @@ int movingAvg(int *ptrArrNumbers, long *ptrSum, int *pos, int len, int nextNum)
 
 int main_cpp(void)
 {
-
-
-
   // init our 64-bit system-tick counter based on teh DWT timer
   init_get_cycle_count ();
 
@@ -382,12 +379,83 @@ int main_cpp(void)
 
 
   /*
+   * configure the off-board programable regulator for an oled display
+   * to be +4.6V and -4.4V
+   */
+  const uint8_t PWR_ADDR = 0x3E<<1;
+  uint8_t data_desired[4] =
+  {
+      0b00110,  // 0x00, Vpos,  4.6v
+      0b00100,  // 0x01, Vneg, -4.4v
+      0x00,     // 0x02, DLYx
+      0x43,     // 0x03, 80mA
+  };
+  uint8_t data_have[4];
+  HAL_I2C_Mem_Read(
+      &hi2c3,
+      PWR_ADDR,
+      0x00, 1,
+      data_have, 4,
+      1000
+      );
+  bool isSame = true;
+  for(int i=0; i<4; i++)
+  {
+    isSame &= (data_desired[i] == data_have[i]);
+  }
+
+  if(!isSame)
+  {
+    /*
+     * load the values we want and flash eeprom
+     */
+    HAL_I2C_Mem_Write(
+        &hi2c3,
+        PWR_ADDR,
+        0x00, 1,
+        data_desired, 4,
+        1000
+        );
+
+    /*
+     * flash them to eeprom
+     */
+    uint8_t val = 0b10000000;
+    HAL_I2C_Mem_Write(
+        &hi2c3,
+        PWR_ADDR,
+        0xFF, 1,
+        &val, 1,
+        1000
+        );
+
+    /*
+     * need to wait 50ms
+     */
+    HAL_Delay(50);
+
+    /*
+     * verify
+     */
+    HAL_I2C_Mem_Read(
+        &hi2c3,
+        PWR_ADDR,
+        0x00, 1,
+        data_have, 4,
+        1000
+        );
+  }
+
+
+  /*
    * init graphics library
    */
   gfxInit();
   gdispClear(GFX_BLACK);
+  gdispFlush();
   screenWidth = gdispGetWidth();
   screenHeight = gdispGetHeight();
+
   font_t font = gdispOpenFont("DejaVuSans10");
 //  font_t fontMits20 = gdispOpenFont("BITSUMIS20");
 //  font_t fontMits40 = gdispOpenFont("BITSUMIS40");
@@ -406,8 +474,6 @@ int main_cpp(void)
     gfxSleepMilliseconds(delay);
   }
   gdispImageClose (&myImage);
-  gdispFlush();
-  gdispFlush();
 
 
   /*

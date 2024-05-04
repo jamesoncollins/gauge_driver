@@ -21,10 +21,10 @@ extern DMA_HandleTypeDef hdma_spi2_tx;
 #define CS_PIN     GPIO_PIN_6
 #define CS_PORT    GPIOB
 
-#define RST_PIN    GPIO_PIN_0 // labeled scl on connector
+#define RST_PIN    GPIO_PIN_12
 #define RST_PORT   GPIOC
 
-#define DC_PIN     GPIO_PIN_1 // labeled sda on connector
+#define DC_PIN     GPIO_PIN_4
 #define DC_PORT    GPIOC
 
 #define CLR_RST CLEAR_BIT(RST_PORT->ODR, RST_PIN)
