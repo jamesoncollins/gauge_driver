@@ -22,10 +22,10 @@
 #define GDISP_FLG_NEEDFLUSH                     (GDISP_FLG_DRIVER<<0)
 
 #ifndef GDISP_SCREEN_HEIGHT
-#define GDISP_SCREEN_HEIGHT		200
+#define GDISP_SCREEN_HEIGHT		320
 #endif
 #ifndef GDISP_SCREEN_WIDTH
-#define GDISP_SCREEN_WIDTH		200
+#define GDISP_SCREEN_WIDTH		240
 #endif
 #ifndef GDISP_INITIAL_CONTRAST
 #define GDISP_INITIAL_CONTRAST	50
@@ -147,7 +147,7 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
 //  write_data_one(g, 0x2720);
 //  write_index(g, 0x78);
 //  write_data_one(g, 0x2517);
-//
+
 //  write_index(g, 0x02);
 //  write_data_one(g, 0x0002);
 //  write_index(g, 0x03);
@@ -244,9 +244,9 @@ LLDSPEC void gdisp_lld_flush (GDisplay *g)
   acquire_bus (g);
   set_viewport (g, H_start_address, H_end_address, V_start_address, V_end_address);
   write_index (g, 0x22);        // start data
-  write_data (g, (gU8*) ram,  GDISP_SCREEN_WIDTH * GDISP_SCREEN_HEIGHT * sizeof(*RAM(g)));
+  //write_data (g, (gU8*) ram,  GDISP_SCREEN_WIDTH * GDISP_SCREEN_HEIGHT * sizeof(*RAM(g)));
   int i;
-  for(i=0; i<GDISP_SCREEN_WIDTH * GDISP_SCREEN_HEIGHT-1; i++)
+  for(i=0; i<GDISP_SCREEN_WIDTH * GDISP_SCREEN_HEIGHT - 1; i++)
     write_data_one(g, ram[i].color);
   write_data_one(g, ram[i].color);
   write_index (g, 0x00);        // end data

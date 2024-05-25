@@ -125,13 +125,20 @@ static void send_word (uint8_t rs, uint16_t word, int leavelow)
    * RS is 0 for index or 1 for data, and R/W is 0 for write.
    */
   uint32_t id = 0;
-  uint32_t buf8 = 0x70 | id | (rs & 2);
-  uint32_t buf16 =  ((word>>8) | (word<<8)); // byteswap
+//  uint32_t buf8 = 0x70 | id | (rs & 2);
+//  uint32_t buf16 =  ((word>>8) | (word<<8)); // byteswap
+
+  uint8_t buffer[3];
+  buffer[0] = 0x70 | id | (rs & 2);
+  buffer[1] = ((word&0xff00)>>8);
+  buffer[2] = ((word&0x00ff)>>0);
 
   CLR_CS;
-  HAL_SPI_Transmit (&SPIDEV, (uint8_t*) &buf8, 1, HAL_MAX_DELAY);
-  HAL_SPI_Transmit (&SPIDEV, (uint8_t*) &buf16, 2, HAL_MAX_DELAY);
-  if(!leavelow) SET_CS;
+  //HAL_SPI_Transmit (&SPIDEV, (uint8_t*) &buf8, 1, HAL_MAX_DELAY);
+  //HAL_SPI_Transmit (&SPIDEV, (uint8_t*) &buf16, 2, HAL_MAX_DELAY);
+  HAL_SPI_Transmit (&SPIDEV, buffer, 3, HAL_MAX_DELAY);
+  if(!leavelow)
+    SET_CS;
 }
 
 
