@@ -119,24 +119,23 @@ static void send_word (uint8_t rs, uint16_t word, int leavelow)
 
   while (busy);
   while (HAL_SPI_GetState (&SPIDEV) != HAL_SPI_STATE_READY);
+
   /*
    * The start byte looks like (binary):
    * 01110<ID><RS><R/W>
    * RS is 0 for index or 1 for data, and R/W is 0 for write.
    */
   uint32_t id = 0;
-//  uint32_t buf8 = 0x70 | id | (rs & 2);
-//  uint32_t buf16 =  ((word>>8) | (word<<8)); // byteswap
-
   uint8_t buffer[3];
-  buffer[0] = 0x70 | id | (rs & 2);
+  buffer[0] = 0x70 | id | (rs<<1);
   buffer[1] = ((word&0xff00)>>8);
   buffer[2] = ((word&0x00ff)>>0);
 
   CLR_CS;
-  //HAL_SPI_Transmit (&SPIDEV, (uint8_t*) &buf8, 1, HAL_MAX_DELAY);
-  //HAL_SPI_Transmit (&SPIDEV, (uint8_t*) &buf16, 2, HAL_MAX_DELAY);
-  HAL_SPI_Transmit (&SPIDEV, buffer, 3, HAL_MAX_DELAY);
+  if( rs<=1 )
+    HAL_SPI_Transmit (&SPIDEV, buffer, 3, HAL_MAX_DELAY);
+  else
+    HAL_SPI_Transmit (&SPIDEV, &buffer[1], 2, HAL_MAX_DELAY);
   if(!leavelow)
     SET_CS;
 }
@@ -151,13 +150,16 @@ static GFXINLINE void write_index (GDisplay *g, uint8_t idx)
 static GFXINLINE void write_data_one (GDisplay *g, uint16_t param)
 {
   (void) g;
-  send_word(2, param, false);
+  send_word(1, param, false);
 }
 
-static GFXINLINE void write_data_one_leave (GDisplay *g, uint16_t param)
+static GFXINLINE void write_data_one_leave_low (GDisplay *g, uint16_t param, bool first, bool leaveLow)
 {
   (void) g;
-  send_word(2, param, true);
+  if(first)
+    send_word(1, param, leaveLow);
+  else
+    send_word(2, param, leaveLow);
 }
 
 /*
@@ -165,7 +167,7 @@ static GFXINLINE void write_data_one_leave (GDisplay *g, uint16_t param)
  * callback.  DOn't use this for anything you need to do in a loop in the
  * driver.
  */
-static GFXINLINE void write_data (GDisplay *g, gU8 *data, unsigned int length)
+static GFXINLINE void write_data (GDisplay *g, uint8_t *data, unsigned int length)
 {
   (void) g;
   busy = true;
@@ -179,7 +181,7 @@ static GFXINLINE void write_data (GDisplay *g, gU8 *data, unsigned int length)
     size_left = 0;
   uint16_t xfer_len = (length > 65535) ? 65535 : length;
   data_ptr = data + xfer_len;
-  HAL_SPI_Transmit_DMA (&SPIDEV, (uint8_t*) data, xfer_len);
+  HAL_SPI_Transmit_DMA (&SPIDEV, data, xfer_len);
 
 }
 

@@ -36,7 +36,7 @@
 //#define GFX_USE_OS_LINUX		GFXOFF
 //#define GFX_USE_OS_OSX		GFXOFF
 #define GFX_USE_OS_RAW32 GFXON
-#define GFX_OS_HEAP_SIZE 2000
+#define GFX_OS_HEAP_SIZE 30000
 
 /* GFX sub-systems to turn on */
 #define GFX_USE_GDISP			GFXON

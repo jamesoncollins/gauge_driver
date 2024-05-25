@@ -36,15 +36,9 @@
 
 #include "s6e63d6.h"
 
-#pragma pack(push, 1)
-typedef struct
-{
-  //uint8_t cmd;
-  uint16_t color;
-}
-s6e63d6_pixel;
-s6e63d6_pixel ramBuffer[GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH];
-#pragma pack(pop)
+
+uint16_t ramBuffer[GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH];
+
 
 /*===========================================================================*/
 /* Driver local functions.                                                   */
@@ -58,10 +52,10 @@ s6e63d6_pixel ramBuffer[GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH];
 #define delayms(ms)					gfxSleepMilliseconds(ms)
 
 // Some common routines and macros
-#define RAM(g)                                                  ((s6e63d6_pixel*)g->priv)
+#define RAM(g)                                                  ((uint16_t*)g->priv)
 #define xyaddr(x, y)            (((x) + (y)*GDISP_SCREEN_WIDTH))
-//#define map_color(color) ((color>>8) | (color<<8))
-#define map_color(color) (color)
+#define map_color(color) ((color>>8) | (color<<8))
+//#define map_color(color) (color)
 
 #define H_start_address 0x00
 #define H_end_address ((GDISP_SCREEN_WIDTH-1) + H_start_address)
@@ -104,11 +98,11 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
   //g->priv = gfxAlloc (  GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH * sizeof(*RAM(g)));
   g->priv = ramBuffer;
 
-  // init ram buffer with the special code this display needs with every pixel
-  for(int i=0; i<GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH; i++)
-  {
-    //ramBuffer[i].cmd = 0x70 | 0 | (2 & 2);
-  }
+//  // init ram buffer with the special code this display needs with every pixel
+//  for(int i=0; i<GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH; i++)
+//  {
+//    ramBuffer[i].cmd = 0x70 | 0 | (2 & 2);
+//  }
 
   // Initialise the board interface
   init_board (g);
@@ -229,7 +223,7 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
 #if GDISP_HARDWARE_FLUSH
 LLDSPEC void gdisp_lld_flush (GDisplay *g)
 {
-  s6e63d6_pixel *ram;
+  uint16_t *ram;
 
   // Don't flush if we don't need it.
   if (!(g->flags & GDISP_FLG_NEEDFLUSH))
@@ -244,12 +238,10 @@ LLDSPEC void gdisp_lld_flush (GDisplay *g)
   acquire_bus (g);
   set_viewport (g, H_start_address, H_end_address, V_start_address, V_end_address);
   write_index (g, 0x22);        // start data
-  //write_data (g, (gU8*) ram,  GDISP_SCREEN_WIDTH * GDISP_SCREEN_HEIGHT * sizeof(*RAM(g)));
-  int i;
-  for(i=0; i<GDISP_SCREEN_WIDTH * GDISP_SCREEN_HEIGHT - 1; i++)
-    write_data_one(g, ram[i].color);
-  write_data_one(g, ram[i].color);
-  write_index (g, 0x00);        // end data
+
+  write_data_one_leave_low(g, ram[0], true, true);
+  write_data (g, (uint8_t*)&ram[1],  GDISP_SCREEN_WIDTH * GDISP_SCREEN_HEIGHT * sizeof(*RAM(g)) - 1);
+
   release_bus (g);
 
   g->flags &= ~GDISP_FLG_NEEDFLUSH;
@@ -263,7 +255,7 @@ LLDSPEC void gdisp_lld_fill_area (GDisplay *g)
   gCoord sx, ex;
   gCoord col;
   unsigned spage, zpages;
-  s6e63d6_pixel* base;
+  uint16_t* base;
 
   switch (g->g.Orientation)
   {
@@ -302,7 +294,7 @@ LLDSPEC void gdisp_lld_fill_area (GDisplay *g)
   while (zpages--)
   {
     for (col = sx; col <= ex; col++)
-      base[col].color = map_color(gdispColor2Native(g->p.color));
+      base[col] = map_color(gdispColor2Native(g->p.color));
     base += GDISP_SCREEN_WIDTH;
   }
 
@@ -337,7 +329,7 @@ LLDSPEC void gdisp_lld_draw_pixel (GDisplay *g)
   }
 
   while (bus_busy ());
-  RAM(g)[xyaddr(x, y)].color = map_color(gdispColor2Native(g->p.color));
+  RAM(g)[xyaddr(x, y)] = map_color(gdispColor2Native(g->p.color));
   g->flags |= GDISP_FLG_NEEDFLUSH;
 }
 #endif
@@ -367,7 +359,7 @@ LLDSPEC gColor gdisp_lld_get_pixel_color (GDisplay *g)
       y = g->p.x;
       break;
   }
-  return (RAM(g)[xyaddr(x, y)]).color;
+  return (RAM(g)[xyaddr(x, y)]);
 }
 #endif
 
