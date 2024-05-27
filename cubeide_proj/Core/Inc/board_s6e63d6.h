@@ -14,6 +14,7 @@
 #include "gfx.h"
 
 extern SPI_HandleTypeDef hspi2;
+extern I2C_HandleTypeDef hi2c3;
 extern DMA_HandleTypeDef hdma_spi2_tx;
 
 #define SPIDEV     hspi2
@@ -27,6 +28,9 @@ extern DMA_HandleTypeDef hdma_spi2_tx;
 #define DC_PIN     GPIO_PIN_4
 #define DC_PORT    GPIOC
 
+#define PWR_EN_PIN     GPIO_PIN_4
+#define PWR_EN_PORT    GPIOA
+
 #define CLR_RST CLEAR_BIT(RST_PORT->ODR, RST_PIN)
 #define SET_RST SET_BIT(RST_PORT->ODR, RST_PIN)
 
@@ -38,6 +42,10 @@ extern DMA_HandleTypeDef hdma_spi2_tx;
 #define SET_CS SET_BIT(CS_PORT->ODR, CS_PIN)
 #define GET_CS READ_BIT(CS_PORT->IDR, CS_PIN)
 
+#define CLR_PWR_EN CLEAR_BIT(PWR_EN_PORT->ODR, PWR_EN_PIN)
+#define SET_PWR_EN SET_BIT(PWR_EN_PORT->ODR, PWR_EN_PIN)
+#define GET_PWR_EN READ_BIT(PWR_EN_PORT->IDR, PWR_EN_PIN)
+
 bool busy = false;
 uint8_t *data_ptr;
 uint32_t size_left = 0;
@@ -47,14 +55,87 @@ bool bus_busy ()
   return busy;
 }
 
+static void setup_regulator()
+{
+
+  /*
+   * configure the off-board programable regulator for an oled display
+   * to be +4.6V and -4.4V
+   */
+  const uint8_t PWR_ADDR = 0x3E<<1;
+  uint8_t data_desired[4] =
+  {
+      0b00110, // 4.6v
+      0b00100, // -4.4v
+      0b00000000,
+      0b01000011,
+  };
+  uint8_t data_have[4];
+  HAL_I2C_Mem_Read(
+      &hi2c3,
+      PWR_ADDR,
+      0x00, 1,
+      data_have, 4,
+      1000
+      );
+  bool isSame = true;
+  for(int i=0; i<4; i++)
+  {
+    isSame &= (data_desired[i] == data_have[i]);
+  }
+
+  if(!isSame)
+  {
+    /*
+     * load the values we want and flash eeprom
+     */
+    HAL_I2C_Mem_Write(
+        &hi2c3,
+        PWR_ADDR,
+        0x00, 1,
+        data_desired, 4,
+        1000
+        );
+
+    /*
+     * flash them to eeprom
+     */
+    uint8_t val = 0b10000000;
+    HAL_I2C_Mem_Write(
+        &hi2c3,
+        PWR_ADDR,
+        0xFF, 1,
+        &val, 1,
+        1000
+        );
+
+    /*
+     * need to wait 50ms
+     */
+    HAL_Delay(50);
+
+    /*
+     * verify
+     */
+    HAL_I2C_Mem_Read(
+        &hi2c3,
+        PWR_ADDR,
+        0x00, 1,
+        data_have, 4,
+        1000
+        );
+  }
+}
+
 static GFXINLINE void init_board (GDisplay *g)
 {
   (void) g;
 
   //while(HAL_ERROR==HAL_SPI_RegisterCallback(&SPIDEV, HAL_SPI_TX_COMPLETE_CB_ID, &clear_cs));
 
-  GPIO_InitTypeDef GPIO_InitStruct =
-  { 0 };
+  setup_regulator();
+
+  GPIO_InitTypeDef GPIO_InitStruct =  { 0 };
 
   GPIO_InitStruct.Pin = CS_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -71,9 +152,31 @@ static GFXINLINE void init_board (GDisplay *g)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init (DC_PORT, &GPIO_InitStruct);
 
+  GPIO_InitStruct.Pin = PWR_EN_PIN;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init (PWR_EN_PORT, &GPIO_InitStruct);
+
   SET_DC; // defaults to 'data'
+  CLR_PWR_EN;
   CLR_RST;
   SET_CS;
+
+  // dummy transmit, makes MOSI idle high.  seems to be required
+  // in order for the display to pick the SPI interface.
+  // without this the screen starts pink
+  uint8_t dat = 0xff;
+  HAL_SPI_Transmit (&SPIDEV, &dat, 1, HAL_MAX_DELAY);
+}
+
+static GFXINLINE void pwr_en(bool on)
+{
+  // in this board rev we are using DC to both set the screen data mode and turn on
+  // on the adjustable regulator.  is this a good idea?  probably not
+  if(on)
+    SET_PWR_EN;
+  else
+    CLR_PWR_EN;
 }
 
 static GFXINLINE void post_init_board (GDisplay *g)
@@ -106,6 +209,44 @@ static GFXINLINE void release_bus (GDisplay *g)
   (void) g;
 }
 
+static uint16_t read_index (uint16_t index)
+{
+
+  while (busy);
+  while (HAL_SPI_GetState (&SPIDEV) != HAL_SPI_STATE_READY);
+
+  uint32_t id = 0;
+  uint8_t buffer[3], buffer_rx[3];
+
+  buffer[1] = ((index & 0xff00) >> 8);
+  buffer[2] = ((index & 0x00ff) >> 0);
+
+  // send start byte and register
+  CLR_CS;
+  buffer[0] = 0x70 | id | (0 << 1) | 0; // set index register
+  HAL_SPI_Transmit (&SPIDEV, buffer, 3, HAL_MAX_DELAY);
+  SET_CS;
+  //HAL_Delay (1);
+
+  // send start byte, but with the data bit and read bit
+  CLR_CS;
+  buffer[0] = 0x70 | id | (1 << 1) | 1; // read register data
+  HAL_SPI_Transmit (&SPIDEV, buffer, 1, HAL_MAX_DELAY);
+  SET_CS;
+  //HAL_Delay (1);
+
+
+  // get teh read data, including a dummy byte
+  // this is only a requirement in this version of the manual: http://www.avr-developers.com/liquidwaredocs/pdfs/S6E63D6-320x240-OLEDcontroller.pdf
+  CLR_CS;
+  HAL_SPI_Receive (&SPIDEV, buffer_rx, 3, HAL_MAX_DELAY);
+  SET_CS;
+ // HAL_Delay (1);
+
+  return (uint16_t) (buffer_rx[1]<<8 | buffer_rx[2]);
+
+}
+
 
 /*
  * Each transfer is performed as:
@@ -127,7 +268,7 @@ static void send_word (uint8_t rs, uint16_t word, int leavelow)
    */
   uint32_t id = 0;
   uint8_t buffer[3];
-  buffer[0] = 0x70 | id | (rs<<1);
+  buffer[0] = 0x70 | id | (rs<<1) | 0;
   buffer[1] = ((word&0xff00)>>8);
   buffer[2] = ((word&0x00ff)>>0);
 

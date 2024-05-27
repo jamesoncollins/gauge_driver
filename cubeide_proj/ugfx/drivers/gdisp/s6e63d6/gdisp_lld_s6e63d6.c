@@ -84,7 +84,6 @@ static void set_viewport (GDisplay *g, uint16_t hstart,uint16_t hend, uint16_t v
   write_index(g, 0x21);
   write_data_one(g, vstart);
 
-
 }
 
 /*===========================================================================*/
@@ -97,12 +96,6 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
   // The private area is the display surface.
   //g->priv = gfxAlloc (  GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH * sizeof(*RAM(g)));
   g->priv = ramBuffer;
-
-//  // init ram buffer with the special code this display needs with every pixel
-//  for(int i=0; i<GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH; i++)
-//  {
-//    ramBuffer[i].cmd = 0x70 | 0 | (2 & 2);
-//  }
 
   // Initialise the board interface
   init_board (g);
@@ -122,50 +115,63 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
   write_index(g, 0x10);
   write_data_one(g, 0x0000);
 
+  // device code read
+  if( read_index(0x0f) != 0x63D6 )
+  {
+    while(1){};
+  }
+
+  // 16-bit mode
+  write_index(g, 0x03);
+  write_data_one(g, 0x0030);
+
 //  // gama
 //  write_index(g, 0x70);
-//  write_data_one(g, 0x2300);
+//  write_data_one(g, 0x1f00);
 //  write_index(g, 0x71);
-//  write_data_one(g, 0x2280);
+//  write_data_one(g, 0x2380);
 //  write_index(g, 0x72);
-//  write_data_one(g, 0x2800);
+//  write_data_one(g, 0x2a80);
 //  write_index(g, 0x73);
-//  write_data_one(g, 0x241B);
+//  write_data_one(g, 0x1511);
 //  write_index(g, 0x74);
-//  write_data_one(g, 0x2315);
+//  write_data_one(g, 0x1c11);
 //  write_index(g, 0x75);
-//  write_data_one(g, 0x241C);
+//  write_data_one(g, 0x1b15);
 //  write_index(g, 0x76);
-//  write_data_one(g, 0x1E17);
+//  write_data_one(g, 0x1a15);
 //  write_index(g, 0x77);
-//  write_data_one(g, 0x2720);
+//  write_data_one(g, 0x1c18);
 //  write_index(g, 0x78);
-//  write_data_one(g, 0x2517);
-
-//  write_index(g, 0x02);
-//  write_data_one(g, 0x0002);
-//  write_index(g, 0x03);
-//  write_data_one(g, 0x0030);
+//  write_data_one(g, 0x2115);
+//
+//  //write_index(g, 0x02);
+//  //write_data_one(g, 0x0002);
+//  //write_index(g, 0x03);
+//  //write_data_one(g, 0x0030);
 //  write_index(g, 0x18);
 //  write_data_one(g, 0x0028);
 //  write_index(g, 0xF8);
-//  write_data_one(g, 0x000F);
+//  write_data_one(g, 0x000F);    // VGH +5V
 //  write_index(g, 0xF9);
-//  write_data_one(g, 0x0019);
+//  write_data_one(g, 0x000F);    // VGL -5V
 
   set_viewport(g, 0, 239, 0, 319);
-
   write_index(g, 0x22);
   for(int i=0; i<320*240; i++)
   {
-    write_data_one(g, 0x0000);
+    write_data_one(g, 0);
   }
 
   // display on
-  write_index(g, 5);
+  write_index(g, 0x05);
   write_data_one(g, 0x0001);
 
   gfxSleepMilliseconds (100);
+
+  // enable the negative rail of the regulator, this should
+  // let the screen actually display something
+  pwr_en(true);
 
   // Finish Init
   post_init_board (g);
