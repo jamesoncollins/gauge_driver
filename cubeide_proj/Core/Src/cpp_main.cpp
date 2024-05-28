@@ -13,6 +13,7 @@ extern "C" {
 #include "ugfx_widgets.h"
 #include "../Quaternion/Quaternion.hpp"
 #include "../../res/mitslogoanim_128.c"
+#include "../Core/PI4IOE5V6416/PI4IOE5V6416.hpp"
 
 /*
  * Milisecond timers, controlled by the main while loop, for various
@@ -292,54 +293,6 @@ int get_x12_ticks_speed( float speed )
     return ((speed * DEGREES_PER_MPH + ZERO_ANGLE) - MIN_MPH_ANGLE ) * 12.;
 }
 
-
-/*
- * reads the two ports, sets one of them to have pull up resistors,
- * then reads again
- */
-int io_exp_init()
-{
-  uint8_t status = 0;
-  uint8_t buffer[2];
-  status |= HAL_I2C_Mem_Read(
-            &hi2c1,
-            0b01000000,
-            0, 1,
-            buffer,
-            2,
-            1000);
-
-  buffer[0] = 0xff; buffer[1] = 0xff;
-  status |= HAL_I2C_Mem_Write(
-            &hi2c1,
-            0b01000000,
-            0x46, 1,
-            buffer,
-            2,
-            1000);
-
-  buffer[0] = 0xff; buffer[1] = 0xaa;
-  status |= HAL_I2C_Mem_Write(
-            &hi2c1,
-            0b01000000,
-            0x48, 1,
-            buffer,
-            2,
-            1000);
-
-  buffer[0] = 0x00; buffer[1] = 0x00;
-  status |= HAL_I2C_Mem_Read(
-            &hi2c1,
-            0b01000000,
-            0, 1,
-            buffer,
-            2,
-            1000);
-
-  return (buffer[0]!=0xFF) | (buffer[1]!=0xAA) | status;
-}
-
-
 int movingAvg(int *ptrArrNumbers, long *ptrSum, int *pos, int len, int nextNum)
 {
   //Subtract the oldest number from the prev sum, add the new number
@@ -457,9 +410,17 @@ int main_cpp(void)
 
 
   /*
-   * io expander
+   * onboard io expander
    */
-  if(io_exp_init())
+  PI4IOE5V6416 ioexp_onboard(&hi2c1);
+  if(ioexp_onboard.init(0x0000))
+    exit(-1);
+
+  /*
+   * screen pcb io expander
+   */
+  PI4IOE5V6416 ioexp_screen(&hi2c3);
+  if(ioexp_screen.init(0x0000))
     exit(-1);
 
   /*
