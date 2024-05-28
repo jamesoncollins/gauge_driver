@@ -122,8 +122,13 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
   }
 
   // 16-bit mode
+  // address counter go from top left to bottom right
+  // FIXME: this properly flipped the screen left-right but made it so that
+  // i cant draw to pixel 0,0.  it maps to the other side of the screen.
+  // seems like either this setting was wrong, or set_viewport is still wrong
   write_index(g, 0x03);
-  write_data_one(g, 0x0030);
+  write_data_one(g, 0x0020);
+
 
 //  // gama
 //  write_index(g, 0x70);

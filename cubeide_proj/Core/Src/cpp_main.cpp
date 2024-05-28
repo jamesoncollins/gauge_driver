@@ -635,7 +635,7 @@ int main_cpp(void)
 
       // this box is exactly the size of the top yellow area on the
       // common amazon ssd1306, 0.96" displays
-      gdispDrawBox(0, 0, 128, 16, GFX_AMBER);
+      //gdispDrawBox(0, 0, 128, 16, GFX_AMBER);
 
 
       // some devices dont support this and instead they draw whenever you call a drawing function
