@@ -334,17 +334,23 @@ int main_cpp(void)
    * init graphics library
    */
   gfxInit();
+
   gdispClear(GFX_BLACK);
   gdispFlush();
   screenWidth = gdispGetWidth();
   screenHeight = gdispGetHeight();
 
   font_t font = gdispOpenFont("DejaVuSans10");
-//  font_t fontMits20 = gdispOpenFont("BITSUMIS20");
-//  font_t fontMits40 = gdispOpenFont("BITSUMIS40");
+  //font_t fontMits20 = gdispOpenFont("BITSUMIS20");
+  font_t fontMits40 = gdispOpenFont("BITSUMIS40");
+
+  // widget settings
+  //gwinSetDefaultStyle(&WhiteWidgetStyle, FALSE);
+  //gwinSetDefaultFont(font);
+
   gImage myImage;
   gdispImageOpenMemory(&myImage,mitslogoanim_128);
-//  gdispFillString(80, 200, "3000GT", fontMits40, GFX_AMBER, GFX_BLACK);
+  gdispFillString(80, 200, "3000GT", fontMits40, GFX_AMBER, GFX_BLACK);
   gdispFlush();
   gDelay delay;
   int displayLogo = 45; // number of logo frames
@@ -373,40 +379,6 @@ int main_cpp(void)
    * dac output timer
    */
   HAL_TIM_Base_Start_IT(&htim16);
-
-#if 0
-#define lowByte(x)            ((uint8_t)(x%256))
-#define highByte(x)             ((uint8_t)(x/256))
-
-  int n = 0;
-  uint16_t val;
-  int16_t valarr[] =
-  { 0, 383, 707, 924, 1000, 924, 707, 383, 0, -383, -707, -924, -1000, -924,
-      -707, -383 };
-  int valarrsz = sizeof(valarr) / sizeof(valarr[0]);
-  uint8_t mode = 0;
-  uint8_t powerType = 0;
-  uint8_t buffer[4];
-  my_transfer (dac.hi2c, dac._i2cAddress,  NULL, 0, 1000);
-  while (1)
-  {
-    val = 2048 + (valarr[n] >> 2);
-    n += 2;
-    if (n >= valarrsz)
-      n = 0;
-
-    //MCP4725_setValue(&dac, val, MCP4725_FAST_MODE, MCP4725_POWER_DOWN_OFF);
-
-    buffer[0] = mode | (powerType << 4) | highByte(val);
-    buffer[1] = lowByte(val);
-
-    my_transfer (dac.hi2c, dac._i2cAddress, buffer, 2, 1000);
-
-    DWT_Delay(50);
-
-  }
-  my_transfer (dac.hi2c, dac._i2cAddress, buffer, -2, 1000);
-#endif
 
 
   /*
