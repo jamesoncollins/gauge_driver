@@ -14,6 +14,7 @@
 #include "../../../src/gdisp/gdisp_driver.h"
 
 #include "board_s6e63d6.h"
+#include <stdlib.h>
 
 /*===========================================================================*/
 /* Driver local definitions.                                                 */
@@ -118,7 +119,7 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
   // device code read
   if( read_index(0x0f) != 0x63D6 )
   {
-    while(1){};
+    exit(-1);
   }
 
   // 16-bit mode
@@ -161,12 +162,12 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
 //  write_index(g, 0xF9);
 //  write_data_one(g, 0x000F);    // VGL -5V
 
-  set_viewport(g, 0, 239, 0, 319);
-  write_index(g, 0x22);
-  for(int i=0; i<320*240; i++)
-  {
-    write_data_one(g, 0);
-  }
+//  set_viewport(g, 0, 239, 0, 319);
+//  write_index(g, 0x22);
+//  for(int i=0; i<320*240; i++)
+//  {
+//    write_data_one(g, 0);
+//  }
 
   // display on
   write_index(g, 0x05);
@@ -249,10 +250,8 @@ LLDSPEC void gdisp_lld_flush (GDisplay *g)
   acquire_bus (g);
   set_viewport (g, H_start_address, H_end_address, V_start_address, V_end_address);
   write_index (g, 0x22);        // start data
-
-  write_data_one_leave_low(g, ram[0], true, true);
+  write_data_one_leave_low(g, ram[0], true, true); // sends start byte and leaves CS low
   write_data (g, (uint8_t*)&ram[1],  GDISP_SCREEN_WIDTH * GDISP_SCREEN_HEIGHT * sizeof(*RAM(g)) - 1);
-
   release_bus (g);
 
   g->flags &= ~GDISP_FLG_NEEDFLUSH;
