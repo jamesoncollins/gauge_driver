@@ -41,8 +41,8 @@
 
 uint16_t ramBuffer[GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH];
 const int ramSize = sizeof(ramBuffer);
-int *ramBufferInt = (int*)ramBuffer;
-const int ramSizeInt = ramSize / 4;
+uint32_t *ramBufferInt = (uint32_t*)ramBuffer;
+const int ramSizeInt = sizeof(ramBuffer) / 4;
 
 /*===========================================================================*/
 /* Driver local functions.                                                   */
@@ -318,6 +318,10 @@ LLDSPEC void gdisp_lld_fill_area (GDisplay *g)
 #if GDISP_HARDWARE_CLEARS
 LLDSPEC void gdisp_lld_clear (GDisplay *g)
 {
+
+  // dont restroy the ram if we're still reading it for the spi transfer
+  while (bus_busy ());
+
 //  // TODO: implement faster clear of memory
 //  if(g->p.color != GFX_BLACK)
 //  {
@@ -330,8 +334,11 @@ LLDSPEC void gdisp_lld_clear (GDisplay *g)
 //  else
   {
     //memset( ramBuffer, 0x00, ramSize );
+    uint16_t color = map_color(gdispColor2Native(g->p.color));
+    uint32_t color2 = color | color<<16;
     for(int i=0; i<ramSizeInt; i++)
-      ramBufferInt[i] = g->p.color | (int)g->p.color<<16;
+      ramBufferInt[i] = color2;
+    g->flags |= GDISP_FLG_NEEDFLUSH;
   }
 }
 #endif
