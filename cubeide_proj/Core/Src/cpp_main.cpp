@@ -25,6 +25,8 @@ extern "C" {
 
 int screenWidth;
 int screenHeight;
+const int DPI = 240. / 1.4456693; //166
+const int DPMM = 240. / 36.72; // 6.53 dots per mm
 
 /*
  * #defines used to control what happens in teh main loop
@@ -451,8 +453,9 @@ int main_cpp(void)
   screenHeight = gdispGetHeight();
 
   font_t font = gdispOpenFont("DejaVuSans10");
+  font_t fontLCD = gdispOpenFont("lcddot_tr80");
   //font_t fontMits20 = gdispOpenFont("BITSUMIS20");
-  font_t fontMits40 = gdispOpenFont("BITSUMIS40");
+  //font_t fontMits40 = gdispOpenFont("BITSUMIS40");
 
   // widget settings
   //gwinSetDefaultStyle(&WhiteWidgetStyle, FALSE);
@@ -460,7 +463,7 @@ int main_cpp(void)
 
   gImage myImage;
   gdispImageOpenMemory(&myImage,mitslogoanim_128);
-  gdispFillString(80, 200, "3000GT", fontMits40, GFX_AMBER, GFX_BLACK);
+  gdispFillString(23, 200, "3000GT", fontLCD, GFX_AMBER, GFX_BLACK);
   gdispFlush();
   gDelay delay;
   int displayLogo = 45; // number of logo frames
@@ -837,7 +840,7 @@ int main_cpp(void)
       case ECU_RESET:
         My_MX_USART1_UART_DeInit();
         timerECU = HAL_GetTick();
-        CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9);
+        SET_BIT(GPIOA->ODR, GPIO_PIN_9);
         ecuState = ECU_5_BAUD;
         ecuTxDone = false;
         ecuRxDone = false;
