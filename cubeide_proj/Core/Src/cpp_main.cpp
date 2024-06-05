@@ -44,6 +44,7 @@ extern I2C_HandleTypeDef hi2c1, hi2c3;
 extern SPI_HandleTypeDef hspi1;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim16;
+extern UART_HandleTypeDef huart1;
 
 MCP4725 dac;
 BMI088 imu;
@@ -262,8 +263,116 @@ int _write(int32_t file, uint8_t *ptr, int32_t len)
     return len;
 }
 
+/*
+ * uart and ecu handling
+ */
+
+typedef enum
+{
+  ECU_RESET = 0,
+
+  ECU_5_BAUD,
+  ECU_5_BAUD_VERIFY,
+  ECU_5_BAUD_REPLY,
+  ECU_5_BAUD_TX_KW_NOT,
+
+  ECU_SEND_REQUEST,
+  ECU_PROCESS_REPLY,
+
+  ECU_DELAY
+}
+ecuState_e;
+
+ecuState_e ecuState = ECU_RESET;
+ecuState_e ecuStateNext = ECU_RESET;
+int ecuDelayFor_ms = 0;
+bool ecuTxDone = false;
+bool ecuRxDone = false;
+
+void HAL_UART_AbortCpltCallback(UART_HandleTypeDef *huart)
+{
+
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  ecuRxDone = true;
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+  ecuTxDone = true;
+}
+
+
 } // extern C
 
+typedef struct
+{
+  char name[16];
+  char units[16];
+  uint8_t PID;
+  uint8_t responseLen;
+  float scale, offset;
+  float val;
+  int lastTime_ms;
+}
+ecuParam_t;
+
+ecuParam_t ecuParams[] = {
+    {
+        .name = "Speed",
+        .units = "mph",
+        .PID = 0x2F,
+        .responseLen = 1,
+        .scale = 1.2427424,
+        .offset = 0,
+        .val = 0,
+        .lastTime_ms = -1,
+    },
+    {
+        .name = "RPM",
+        .units = "rpm",
+        .PID = 0x21,
+        .responseLen = 1,
+        .scale = 31.25,
+        .offset = 0,
+        .val = 0,
+        .lastTime_ms = -1,
+    },
+};
+
+const int numEcuParams = sizeof(ecuParams) / sizeof(ecuParams[0]);
+int ecuParamInd = 0;
+
+int parseEcuParam(ecuParam_t *ecuParam, uint8_t *data)
+{
+  int16_t val;
+
+  // test checksum
+  uint8_t cs = 0;
+  for(int i=0; i<3+ecuParam->responseLen; i++)
+  {
+    cs += data[i];
+  }
+
+  if(cs != data[4+ecuParam->responseLen])
+  {
+    ecuParam->lastTime_ms = -1;
+    return -1;
+  }
+
+  if(ecuParam->responseLen==1)
+    val = data[0];
+  else
+    val = data[0] | data[1]<<8;
+
+  ecuParam->val = (val*ecuParam->scale) + ecuParam->offset;
+  ecuParam->lastTime_ms = HAL_GetTick();
+
+  return 0;
+
+}
 
 int get_x12_ticks_rpm( float rpm )
 {
@@ -319,6 +428,7 @@ int main_cpp(void)
   uint32_t timerIGN = 0;
   uint32_t timerPrint = 0;
   uint32_t timerUpdates = 0;
+  uint32_t timerECU = 0;
   bool flagSlow = false;
 
   /* USB data buffer */
@@ -370,9 +480,13 @@ int main_cpp(void)
    */
   MCP4725_init (&dac, &hi2c1, MCP4725A0_ADDR_A00, 3.30);
   if (!MCP4725_isConnected (&dac))
-    exit(-1);
+  {
+    //exit(-1);
+  }
   if( MCP4725_setVoltage(&dac, 0, MCP4725_REGISTER_MODE, MCP4725_POWER_DOWN_100KOHM) )
-    exit(-1);
+  {
+    //exit(-1);
+  }
 
 
   /*
@@ -386,21 +500,32 @@ int main_cpp(void)
    */
   PI4IOE5V6416 ioexp_onboard(&hi2c1);
   if(ioexp_onboard.init(0x0000))
-    exit(-1);
+  {
+    //exit(-1);
+  }
 
   /*
    * screen pcb io expander
    */
   PI4IOE5V6416 ioexp_screen(&hi2c3);
   if(ioexp_screen.init(0x0000))
-    exit(-1);
+  {
+    //exit(-1);
+  }
 
   /*
    * Acc / Gyro setup
    */
   if(BMI088_Init(&imu, &hi2c1))
-    exit(-1);
+  {
+    //exit(-1);
+  }
 
+  /*
+   * USART and ECU ISO9141 init/control
+   */
+  // deinit the uart to allow gpio control
+  My_MX_USART1_UART_DeInit();
 
   /*
    * tach and speedo freq measurement setup
@@ -613,6 +738,11 @@ int main_cpp(void)
       /*
        * display updates
        */
+
+      // fixme: this forces a write to ram of 320x240*2 bytes.
+      // instead of doing this maybe we should be using "widgets",
+      // either from ugfx or our own, that track their state and clear
+      // themselves if they need.
       gdispClear(GFX_BLACK); // if the device doesnt support flushing, then this is immediate
 
       snprintf (logBuf, bufLen, "acc:%.1f,%.1f,%.1f", imu.acc_mps2[0],
@@ -693,6 +823,156 @@ int main_cpp(void)
     if( rpm < 6400 && rpm_alert )
     {
       rpm_alert = false;
+    }
+
+    /*
+     * ecu interface
+     */
+    int elapsed = HAL_GetTick() - timerECU;
+    switch(ecuState)
+    {
+      uint8_t buffer_tx[10], buffer_rx[10];
+
+      // start 5-baud init
+      case ECU_RESET:
+        My_MX_USART1_UART_DeInit();
+        timerECU = HAL_GetTick();
+        CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9);
+        ecuState = ECU_5_BAUD;
+        ecuTxDone = false;
+        ecuRxDone = false;
+        break;
+
+      // perform 5-baud init
+      case ECU_5_BAUD:
+        if(elapsed < 200*2)
+          CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9);
+        else if(elapsed < 200*4)
+          SET_BIT(GPIOA->ODR, GPIO_PIN_9);
+        else if(elapsed < 200*6)
+          CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9);
+        else if(elapsed < 200*8)
+          SET_BIT(GPIOA->ODR, GPIO_PIN_9);
+        else
+        {
+          My_MX_USART1_UART_Init();
+          ecuTxDone = false;
+          ecuRxDone = false;
+          timerECU = HAL_GetTick();
+          HAL_UART_Receive(&huart1, buffer_rx, 1, 0); // clear rx, if theres anything
+          HAL_UART_Receive_IT( &huart1,  buffer_rx, 3 ); // try to get reply data
+          ecuState = ECU_5_BAUD_VERIFY;
+        }
+        break;
+
+      case ECU_5_BAUD_VERIFY:
+        if(elapsed > 1000)
+        {
+          // if we waited for over 1 second then we didnt receive a reply.
+          // abor tthe transfer and start over
+          ecuState = ECU_RESET;
+          HAL_UART_Abort(&huart1);
+          break;
+        }
+
+        // see if we have received data
+        if ( ecuRxDone &&
+            (
+                 (buffer_rx[0]==0x55 && buffer_rx[1]==0x08 && buffer_rx[2]==0x08)
+              || (buffer_rx[0]==0x55 && buffer_rx[1]==0x94 && buffer_rx[2]==0x94)
+            )
+            )
+        {
+          ecuState = ECU_DELAY;
+          ecuDelayFor_ms = 30;
+          ecuStateNext = ECU_5_BAUD_TX_KW_NOT;
+          buffer_tx[0] = ~buffer_rx[2];
+          timerECU = HAL_GetTick();
+          ecuTxDone = false;
+          ecuRxDone = false;
+          HAL_UART_Receive_IT( &huart1,  buffer_rx, 2 ); // just receives what we sent, dont need it
+        }
+        break;
+
+      case ECU_5_BAUD_TX_KW_NOT:
+        ecuTxDone = false;
+        HAL_UART_Transmit_IT( &huart1,  buffer_tx, 1 );
+        timerECU = HAL_GetTick();
+        ecuState = ECU_5_BAUD_REPLY;
+        break;
+
+
+      case ECU_5_BAUD_REPLY:
+        if(!ecuTxDone && elapsed > 1000)
+        {
+          // if we waited for over 1 second then we didnt receive a reply.
+          // abort the transfer and start over
+          ecuState = ECU_RESET;
+          if(!ecuTxDone)
+            HAL_UART_Abort(&huart1);
+          break;
+        }
+
+        // we received an init reply, check it
+        if (buffer_rx[0] == buffer_tx[0] && buffer_rx[1] == 0xCC)
+        {
+          ecuStateNext = ECU_SEND_REQUEST;
+          ecuDelayFor_ms = 55;
+          ecuState = ECU_DELAY;
+        }
+        break;
+
+      case ECU_SEND_REQUEST:
+        buffer_tx[0] = 0x68; // addr
+        buffer_tx[1] = 0x6a; // addr
+        buffer_tx[2] = 0xf1; // addr
+        buffer_tx[3] = 0x01; // mode
+        buffer_tx[4] = ecuParams[ecuParamInd].PID; // PID
+        buffer_tx[5] = buffer_tx[0] + buffer_tx[1] + buffer_tx[2] + buffer_tx[3] + buffer_tx[4];
+        ecuTxDone = false;
+        ecuRxDone = false;
+        HAL_UART_Transmit_IT( &huart1,  buffer_tx, 6 );
+        HAL_UART_Receive_IT( &huart1,  buffer_rx, 10+ecuParams[ecuParamInd].responseLen );
+        timerECU = HAL_GetTick();
+        ecuState = ECU_PROCESS_REPLY;
+        break;
+
+      case ECU_PROCESS_REPLY:
+        if(elapsed > 1000)
+        {
+          ecuState = ECU_RESET;
+          if(!ecuTxDone || !ecuRxDone)
+            HAL_UART_Abort(&huart1);
+          break;
+        }
+
+        if(!ecuRxDone)
+          break;
+
+        if(parseEcuParam( &ecuParams[ecuParamInd], &buffer_rx[6] ))
+          ecuState = ECU_RESET;
+        else
+          ecuParamInd = (ecuParamInd+1==numEcuParams) ? 0 : ecuParamInd+1;
+
+        break;
+
+      case ECU_DELAY:
+        /*
+         * generic wait case.  used when we need to pause between
+         * receiving a value and sending the next one
+         */
+        if(elapsed < ecuDelayFor_ms)
+        {
+
+        }
+        else
+        {
+          ecuState = ecuStateNext;
+        }
+        break;
+
+      default:
+        break;
     }
 
 
