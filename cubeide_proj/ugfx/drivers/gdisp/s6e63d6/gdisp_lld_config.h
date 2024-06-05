@@ -27,6 +27,7 @@
 #define GDISP_HARDWARE_PIXELREAD                GFXON
 #define GDISP_HARDWARE_CONTROL                  GFXON
 #define GDISP_HARDWARE_FILLS                    GFXON
+#define GDISP_HARDWARE_CLEARS                   GFXON
 
 #define GDISP_LLD_PIXELFORMAT                   GDISP_PIXELFORMAT_RGB565
 

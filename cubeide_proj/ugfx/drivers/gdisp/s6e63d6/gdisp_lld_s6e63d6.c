@@ -15,6 +15,7 @@
 
 #include "board_s6e63d6.h"
 #include <stdlib.h>
+#include <string.h>
 
 /*===========================================================================*/
 /* Driver local definitions.                                                 */
@@ -39,7 +40,9 @@
 
 
 uint16_t ramBuffer[GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH];
-
+const int ramSize = sizeof(ramBuffer);
+int *ramBufferInt = (int*)ramBuffer;
+const int ramSizeInt = ramSize / 4;
 
 /*===========================================================================*/
 /* Driver local functions.                                                   */
@@ -119,7 +122,7 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
   // device code read
   if( read_index(0x0f) != 0x63D6 )
   {
-    exit(-1);
+    //exit(-1);
   }
 
   // 16-bit mode
@@ -309,6 +312,27 @@ LLDSPEC void gdisp_lld_fill_area (GDisplay *g)
   }
 
   g->flags |= GDISP_FLG_NEEDFLUSH;
+}
+#endif
+
+#if GDISP_HARDWARE_CLEARS
+LLDSPEC void gdisp_lld_clear (GDisplay *g)
+{
+//  // TODO: implement faster clear of memory
+//  if(g->p.color != GFX_BLACK)
+//  {
+//    g->p.x = g->p.y = 0;
+//    g->p.cx = g->g.Width;
+//    g->p.cy = g->g.Height;
+//    //g->p.color = color;
+//    gdisp_lld_fill_area(g);
+//  }
+//  else
+  {
+    //memset( ramBuffer, 0x00, ramSize );
+    for(int i=0; i<ramSizeInt; i++)
+      ramBufferInt[i] = g->p.color | (int)g->p.color<<16;
+  }
 }
 #endif
 
