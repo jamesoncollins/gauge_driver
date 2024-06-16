@@ -322,24 +322,12 @@ LLDSPEC void gdisp_lld_clear (GDisplay *g)
   // dont restroy the ram if we're still reading it for the spi transfer
   while (bus_busy ());
 
-//  // TODO: implement faster clear of memory
-//  if(g->p.color != GFX_BLACK)
-//  {
-//    g->p.x = g->p.y = 0;
-//    g->p.cx = g->g.Width;
-//    g->p.cy = g->g.Height;
-//    //g->p.color = color;
-//    gdisp_lld_fill_area(g);
-//  }
-//  else
-  {
-    //memset( ramBuffer, 0x00, ramSize );
-    uint16_t color = map_color(gdispColor2Native(g->p.color));
-    uint32_t color2 = color | color<<16;
-    for(int i=0; i<ramSizeInt; i++)
-      ramBufferInt[i] = color2;
-    g->flags |= GDISP_FLG_NEEDFLUSH;
-  }
+  //memset( ramBuffer, 0x00, ramSize );
+  uint16_t color = map_color(gdispColor2Native(g->p.color));
+  uint32_t color2 = color | color<<16;
+  for(int i=0; i<ramSizeInt; i++)
+    ramBufferInt[i] = color2;
+  g->flags |= GDISP_FLG_NEEDFLUSH;
 }
 #endif
 
