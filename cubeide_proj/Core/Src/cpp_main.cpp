@@ -13,6 +13,9 @@ extern "C" {
 #include "ugfx_widgets.h"
 #include "../Quaternion/Quaternion.hpp"
 #include "../../res/mitslogoanim_128.c"
+#include "../../res/batt.c"
+#include "../../res/brake.c"
+#include "../../res/beam.c"
 #include "../Core/PI4IOE5V6416/PI4IOE5V6416.hpp"
 
 /*
@@ -309,6 +312,18 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 } // extern C
 
+
+// if we're above either of these values then consider it a highload situation
+const int TPS_THRESHOLD = 30;
+const int RPM_THRESHOLD = 3000;
+
+typedef enum
+{
+  ECU_LOAD_LOW, // log when load is low
+  ECU_LOAD_HIGH // always log
+}
+ecuLoad_e;
+
 typedef struct
 {
   char name[16];
@@ -316,12 +331,45 @@ typedef struct
   uint8_t PID;
   uint8_t responseLen;
   float scale, offset;
+  bool inverse;         // 1 / x
   float val;
   int lastTime_ms;
+  ecuLoad_e load;
 }
 ecuParam_t;
 
-ecuParam_t ecuParams[] = {
+enum
+{
+  ECU_PARAM_TPS,
+  ECU_PARAM_SPEED,
+  ECU_PARAM_RPM,
+  ECU_PARAM_WB,
+  ECU_PARAM_KNOCK,
+  ECU_PARAM_TIMING,
+  ECU_PARAM_AFR_TARGET,
+
+  ECU_PARAM_FFTL,
+  ECU_PARAM_FFTM,
+  ECU_PARAM_FFTH,
+  ECU_PARAM_RFTL,
+  ECU_PARAM_RFTM,
+  ECU_PARAM_RFTH,
+
+  ECU_NUM_PARAMS
+};
+
+ecuParam_t ecuParams[ECU_NUM_PARAMS] = {
+    {
+        .name = "TPS",
+        .units = "%",
+        .PID = 0x17,
+        .responseLen = 1,
+        .scale = 100./255.,
+        .offset = 0,
+        .val = 0,
+        .lastTime_ms = -1,
+        .load = ECU_LOAD_HIGH,
+    },
     {
         .name = "Speed",
         .units = "mph",
@@ -331,6 +379,7 @@ ecuParam_t ecuParams[] = {
         .offset = 0,
         .val = 0,
         .lastTime_ms = -1,
+        .load = ECU_LOAD_HIGH,
     },
     {
         .name = "RPM",
@@ -341,6 +390,122 @@ ecuParam_t ecuParams[] = {
         .offset = 0,
         .val = 0,
         .lastTime_ms = -1,
+        .load = ECU_LOAD_HIGH,
+    },
+    {
+        .name = "Wideband",
+        .units = "AFT",
+        .PID = 0xBF,
+        .responseLen = 1,
+        .scale = 0.0627,
+        .offset = 7,
+        .val = 14.7,
+        .lastTime_ms = 0, //FIXME
+        .load = ECU_LOAD_HIGH,
+    },
+    {
+        .name = "Knock Sum",
+        .units = "Count",
+        .PID = 0x26,
+        .responseLen = 1,
+        .scale = 1,
+        .offset = 0,
+        .val = 0,
+        .lastTime_ms = -1,
+        .load = ECU_LOAD_HIGH,
+    },
+    {
+        .name = "Timing Adv",
+        .units = "°",
+        .PID = 0x06,
+        .responseLen = 1,
+        .scale = 1,
+        .offset = -20,
+        .val = 0,
+        .lastTime_ms = -1,
+        .load = ECU_LOAD_HIGH,
+    },
+    {
+        .name = "AFR Target",
+        .units = "afr",
+        .PID = 0x32,
+        .responseLen = 1,
+        .scale = 14.7*128.,
+        .offset = 0,
+        .inverse = true,
+        .val = 0,
+        .lastTime_ms = -1,
+        .load = ECU_LOAD_HIGH,
+    },
+
+
+
+    {
+        .name = "FFTL",
+        .units = "%",
+        .PID = 0x4c,
+        .responseLen = 1,
+        .scale = 0.1953125,
+        .offset = -25,
+        .val = 0,
+        .lastTime_ms = -1,
+        .load = ECU_LOAD_LOW,
+    },
+    {
+        .name = "FFTM",
+        .units = "%",
+        .PID = 0x4d,
+        .responseLen = 1,
+        .scale = 0.1953125,
+        .offset = -25,
+        .val = 0,
+        .lastTime_ms = -1,
+        .load = ECU_LOAD_LOW,
+    },
+    {
+        .name = "FFTH",
+        .units = "%",
+        .PID = 0x4e,
+        .responseLen = 1,
+        .scale = 0.1953125,
+        .offset = -25,
+        .val = 0,
+        .lastTime_ms = -1,
+        .load = ECU_LOAD_LOW,
+    },
+
+    {
+        .name = "RFTL",
+        .units = "%",
+        .PID = 0x0c,
+        .responseLen = 1,
+        .scale = 0.1953125,
+        .offset = -25,
+        .val = 0,
+        .lastTime_ms = -1,
+        .load = ECU_LOAD_LOW,
+    },
+    {
+        .name = "RFTM",
+        .units = "%",
+        .PID = 0x0d,
+        .responseLen = 1,
+        .scale = 0.1953125,
+        .offset = -25,
+        .val = 0,
+        .lastTime_ms = -1,
+        .load = ECU_LOAD_LOW,
+    },
+    {
+        .name = "RFTH",
+        .units = "%",
+        .PID = 0x0e,
+        .responseLen = 1,
+        .scale = 0.1953125,
+        .offset = -25,
+        .val = 0,
+        .lastTime_ms = -1,
+        .load = ECU_LOAD_LOW,
     },
 };
 
@@ -368,6 +533,9 @@ int parseEcuParam(ecuParam_t *ecuParam, uint8_t *data)
     val = data[0];
   else
     val = data[0] | data[1]<<8;
+
+  if(ecuParam->inverse)
+    val = 1./val;
 
   ecuParam->val = (val*ecuParam->scale) + ecuParam->offset;
   ecuParam->lastTime_ms = HAL_GetTick();
@@ -452,31 +620,37 @@ int main_cpp(void)
   screenWidth = gdispGetWidth();
   screenHeight = gdispGetHeight();
 
-  font_t font = gdispOpenFont("DejaVuSans10");
+  //font_t font = gdispOpenFont("DejaVuSans10");
   font_t fontLCD = gdispOpenFont("lcddot_tr80");
-  //font_t fontMits20 = gdispOpenFont("BITSUMIS20");
-  //font_t fontMits40 = gdispOpenFont("BITSUMIS40");
 
-  // widget settings
-  //gwinSetDefaultStyle(&WhiteWidgetStyle, FALSE);
-  //gwinSetDefaultFont(font);
-
-  gImage myImage;
-  gdispImageOpenMemory(&myImage,mitslogoanim_128);
-  gdispFillString(23, 200, "3000GT", fontLCD, GFX_AMBER, GFX_BLACK);
+  /*
+   * startup animation
+   */
+  gImage startupAnim;
+  gdispImageOpenMemory(&startupAnim, mitslogoanim_128);
+  //gdispFillString(23, 200, "3000GT", fontLCD, GFX_AMBER, GFX_BLACK);
   gdispFlush();
   gDelay delay;
   int displayLogo = 45; // number of logo frames
   while (displayLogo--)
   {
-    //gdispImageCache(&myImage);
-    gdispImageDraw(&myImage, 55, 90, myImage.width, myImage.height, 0, 0);
-    delay = gdispImageNext (&myImage);
+    //gdispImageCache(&startupAnim);
+    gdispImageDraw(&startupAnim,
+                   (screenWidth>>1)-(startupAnim.width>>1),
+                   75,
+                   startupAnim.width, startupAnim.height,
+                   0, 0);
+    delay = gdispImageNext (&startupAnim);
     gdispFlush();
     gfxSleepMilliseconds(delay);
   }
-  gdispImageClose (&myImage);
+  gdispImageClose (&startupAnim);
 
+  // load image resources
+  gImage battImg, beamImg, brakeImg;
+  gdispImageOpenMemory(&battImg, batt);
+  gdispImageOpenMemory(&beamImg, beam);
+  gdispImageOpenMemory(&brakeImg, brake);
 
   /*
    * dac setup
@@ -748,28 +922,37 @@ int main_cpp(void)
       // themselves if they need.
       gdispClear(GFX_BLACK); // if the device doesnt support flushing, then this is immediate
 
-      snprintf (logBuf, bufLen, "acc:%.1f,%.1f,%.1f", imu.acc_mps2[0],
-                imu.acc_mps2[1], imu.acc_mps2[2]);
-      gdispFillString(1, 16, logBuf, font, GFX_AMBER, GFX_BLACK);
-      drawVertBarGraph (90, 17, 7, 45, 9.7, 0, imu.acc_mps2[0]);
-      //drawHorzBarGraph(5, 50, 45, 7, 10, 0, imu.acc_mps2[2]);
-
-      snprintf (logBuf, bufLen, "rpm: %.1f", rpm);
-      gdispFillString(1, 25, logBuf, font, GFX_AMBER, GFX_BLACK);
-      drawVertBarGraph (99, 17, 7, 45, 30, 0, rpm);
-
-      snprintf (logBuf, bufLen, "spd: %.1f", speed);
-      gdispFillString(1, 35, logBuf, font, GFX_AMBER, GFX_BLACK);
-      drawVertBarGraph (109, 17, 7, 45, 30, 0, speed);
-
       // make x be -x, flip x and y
-      drawGimball (65, 45, 20, -imu.acc_mps2[1] / 9.8 * 20,
+      drawGimball (168, 48, 20, -imu.acc_mps2[1] / 9.8 * 20,
                    imu.acc_mps2[0] / 9.8 * 20);
 
-      // this box is exactly the size of the top yellow area on the
-      // common amazon ssd1306, 0.96" displays
-      //gdispDrawBox(0, 0, 128, 16, GFX_AMBER);
+      snprintf (logBuf, bufLen, "%.1f", ecuParams[ECU_PARAM_WB].val);
+      gdispFillString(30, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+      drawHorzBarGraph (44, 57, 60, 15, 19, 9, ecuParams[ECU_PARAM_WB].val);
 
+
+      // check warning
+      const uint16_t lampMask  = 1<<0;
+      const uint16_t beamMask  = 1<<1;
+      const uint16_t brakeMask = 1<<2;
+      const uint16_t battMask  = 1<<3;
+      const uint16_t psMask    = 1<<4;
+      uint16_t bulbVals = ioexp_screen.get();
+      if( !(bulbVals&battMask) ) // car pulls down
+        gdispImageDraw(&battImg,  25,  210, battImg.width,  battImg.height,  0, 0);
+      if( !(bulbVals&brakeMask) ) // car pulls down
+        gdispImageDraw(&brakeImg, 145,  210, brakeImg.width, brakeImg.height, 0, 0);
+      if( !(bulbVals&psMask) ) // car pulls HIGH
+        gdispFillString(100, 210, "4WS-OIL", fontLCD, GFX_YELLOW, GFX_BLACK);
+      if (bulbVals&lampMask )
+      {
+        // headlights are on
+        if( !(bulbVals&beamMask) )
+        {
+          // high beam on
+          gdispImageDraw(&beamImg, 62,  212, beamImg.width,  beamImg.height,  0, 0);
+        }
+      }
 
       // some devices dont support this and instead they draw whenever you call a drawing function
       // but its always safe to call it
@@ -832,6 +1015,23 @@ int main_cpp(void)
      * ecu interface
      */
     int elapsed = HAL_GetTick() - timerECU;
+    ecuLoad_e currentLoad = ECU_LOAD_LOW;
+    if(
+        ecuParams[ECU_PARAM_TPS].val > TPS_THRESHOLD
+        && HAL_GetTick()-ecuParams[ECU_PARAM_TPS].lastTime_ms<1000
+        )
+    {
+      currentLoad = ECU_LOAD_HIGH;
+    }
+
+    if(
+        ecuParams[ECU_PARAM_RPM].val > RPM_THRESHOLD
+        && HAL_GetTick()-ecuParams[ECU_PARAM_RPM].lastTime_ms<1000
+        )
+    {
+      currentLoad = ECU_LOAD_HIGH;
+    }
+
     switch(ecuState)
     {
       uint8_t buffer_tx[10], buffer_rx[10];
@@ -955,7 +1155,22 @@ int main_cpp(void)
         if(parseEcuParam( &ecuParams[ecuParamInd], &buffer_rx[6] ))
           ecuState = ECU_RESET;
         else
-          ecuParamInd = (ecuParamInd+1==numEcuParams) ? 0 : ecuParamInd+1;
+        {
+          // move to next param, unless the load states dont match
+          while(1)
+          {
+            ecuParamInd = (ecuParamInd+1==numEcuParams) ? 0 : ecuParamInd+1;
+            if(currentLoad==ECU_LOAD_HIGH && ecuParams[ecuParamInd].load == ECU_LOAD_LOW)
+            {
+
+            }
+            else
+            {
+              // we found the next valid param
+              break;
+            }
+          }
+        }
 
         break;
 
@@ -974,8 +1189,7 @@ int main_cpp(void)
         }
         break;
 
-      default:
-        break;
+
     }
 
 
