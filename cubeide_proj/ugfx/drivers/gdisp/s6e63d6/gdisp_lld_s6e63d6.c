@@ -172,15 +172,15 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
 //    write_data_one(g, 0);
 //  }
 
-  // display on
-  write_index(g, 0x05);
-  write_data_one(g, 0x0001);
-
-  gfxSleepMilliseconds (100);
-
-  // enable the negative rail of the regulator, this should
-  // let the screen actually display something
-  pwr_en(true);
+//  // display on
+//  write_index(g, 0x05);
+//  write_data_one(g, 0x0001);
+//
+//  gfxSleepMilliseconds (100);
+//
+//  // enable the negative rail of the regulator, this should
+//  // let the screen actually display something
+//  pwr_en(true);
 
   // Finish Init
   post_init_board (g);
@@ -239,6 +239,19 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
 LLDSPEC void gdisp_lld_flush (GDisplay *g)
 {
   uint16_t *ram;
+
+  static bool once = false;
+  if(!once)
+  {
+    // display on
+    write_index(g, 0x05);
+    write_data_one(g, 0x0001);
+    gfxSleepMilliseconds (100);
+    // enable the negative rail of the regulator, this should
+    // let the screen actually display something
+    pwr_en(true);
+    once = true;
+  }
 
   // Don't flush if we don't need it.
   if (!(g->flags & GDISP_FLG_NEEDFLUSH))
