@@ -37,7 +37,7 @@ const int DPMM = 240. / 36.72; // 6.53 dots per mm
 //#define PRINT_TO_USB
 
 //#define SWEEP_GAUGES  // sweep needles forever
-//#define SIM_GAUGES       // generate simulated rpm and mph
+#define SIM_GAUGES       // generate simulated rpm and mph
 
 // enable one of these to get acceleromter data
 //#define ACC_USE_BLOCK   // use blocking calls
@@ -57,6 +57,12 @@ BMI088 imu;
 uint8_t regAddr;
 
 float rpm, speed;
+
+const uint16_t lampMask  = 1<<1;
+const uint16_t beamMask  = 1<<0;
+const uint16_t psMask = 1<<2;
+const uint16_t battMask  = 1<<3;
+const uint16_t brakeMask    = 1<<4;
 
 extern "C" {
 
@@ -691,7 +697,9 @@ int main_cpp(void)
    * screen pcb io expander
    */
   PI4IOE5V6416 ioexp_screen(&hi2c3);
-  if(ioexp_screen.init(0x0000))
+  if(ioexp_screen.init(
+      lampMask|brakeMask|battMask|psMask
+      ))
   {
     //exit(-1);
   }
@@ -784,7 +792,7 @@ int main_cpp(void)
   x12[0] = &tachX12;
   x12[1] = &speedX12;
   x12[2] = &odoX12;
-  needles_ready = true;
+  //needles_ready = true;  // dont turn this on if you dont want to use the timer
 
   /*
    * load startup animation resources
@@ -834,7 +842,7 @@ int main_cpp(void)
           startup_state++;
         break;
       default:
-        if(displayCnt==0)
+        if(displayCnt<0)
           startup_done = true;
         break;
     }
@@ -854,8 +862,8 @@ int main_cpp(void)
     }
 
     // do these updates as fast as possible, the driver will take care of timing.
-    //tachX12.update ();
-    //speedX12.update ();
+    tachX12.update();
+    speedX12.update();
   }
   gdispImageClose (&startupAnim);
 
@@ -872,7 +880,7 @@ int main_cpp(void)
   /*
    * assume that the board is mounted with a known pitch angle, but that there is no yaw or roll
    */
-  constexpr float pitch = 0. * M_PI / 180.0;
+  constexpr float pitch = 75. * M_PI / 180.0;
   constexpr float cosPitch = cos(pitch), sinPitch = sin(pitch);
 
 
@@ -1014,13 +1022,12 @@ int main_cpp(void)
       gdispFillString(30, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
       drawHorzBarGraph (44, 57, 60, 15, 19, 9, ecuParams[ECU_PARAM_WB].val);
 
+      snprintf (logBuf, bufLen, "%d", (int)rpm);
+      gdispFillString(50, 100, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+      snprintf (logBuf, bufLen, "%d", (int)speed);
+      gdispFillString(50, 145, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
 
       // check warning
-      const uint16_t lampMask  = 1<<0;
-      const uint16_t beamMask  = 1<<1;
-      const uint16_t brakeMask = 1<<2;
-      const uint16_t battMask  = 1<<3;
-      const uint16_t psMask    = 1<<4;
       uint16_t bulbVals = ioexp_screen.get();
       if( !(bulbVals&battMask) ) // car pulls down
         gdispImageDraw(&battImg,  25,  210, battImg.width,  battImg.height,  0, 0);
@@ -1075,9 +1082,9 @@ int main_cpp(void)
     /*
      * called as fast as possible, moves the motors if they need to be moved
      */
-    //speedX12.update();
-    //tachX12.update();
-    //odoX12.update();
+    speedX12.update();
+    tachX12.update();
+    odoX12.update();
 
 
     /*
@@ -1317,8 +1324,8 @@ int main_cpp(void)
   tachX12.setPosition(0);
   while(1)
   {
-    //speedX12.update();
-    //tachX12.update();
+    speedX12.update();
+    tachX12.update();
     if(speedX12.stopped && tachX12.stopped)
       break;
   }
