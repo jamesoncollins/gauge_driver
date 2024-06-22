@@ -37,22 +37,24 @@ inline uint64_t get_cycle_count ()
 {
   volatile static uint64_t last_cycle_count_64 = 0;
 
-//  uint32_t primask;
-//  asm volatile ("mrs %0, PRIMASK" : "=r"(primask));
-//  asm volatile ("cpsid i");  // Disable interrupts.
+  uint32_t prim;
+  prim = __get_PRIMASK();
+  __disable_irq();
 
-  static unsigned lock = 0;
-  while (!lock_mutex (&lock))
-  {
-  };
+//  static unsigned lock = 0;
+//  while (!lock_mutex (&lock))
+//  {
+//  };
 
   int64_t r = last_cycle_count_64;
   r += DWT->CYCCNT - (uint32_t) (r);
   last_cycle_count_64 = r;
 
-  unlock_mutex (&lock);
+//  unlock_mutex (&lock);
 
-//  asm volatile ("msr PRIMASK, %0" : : "r"(primask));  // Restore interrupts.
+  if (!prim) {
+      __enable_irq();
+  }
 
   return r;
 }
