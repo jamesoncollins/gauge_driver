@@ -24,7 +24,7 @@
 #define GDISP_FLG_NEEDFLUSH                     (GDISP_FLG_DRIVER<<0)
 
 #ifndef GDISP_SCREEN_HEIGHT
-#define GDISP_SCREEN_HEIGHT		320
+#define GDISP_SCREEN_HEIGHT		260 //320
 #endif
 #ifndef GDISP_SCREEN_WIDTH
 #define GDISP_SCREEN_WIDTH		240
@@ -165,12 +165,14 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
 //  write_index(g, 0xF9);
 //  write_data_one(g, 0x000F);    // VGL -5V
 
-//  set_viewport(g, 0, 239, 0, 319);
-//  write_index(g, 0x22);
-//  for(int i=0; i<320*240; i++)
-//  {
-//    write_data_one(g, 0);
-//  }
+  // clear the ENTIRE screen buffer, even if its bigger
+  // that the viewport setup in the driver
+  set_viewport(g, 0, 239, 0, 319);
+  write_index(g, 0x22);
+  for(int i=0; i<320*240; i++)
+  {
+    write_data_one(g, 0);
+  }
 
 //  // display on
 //  write_index(g, 0x05);
@@ -239,7 +241,13 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
 LLDSPEC void gdisp_lld_flush (GDisplay *g)
 {
   uint16_t *ram;
+  while (bus_busy ());
+  ram = RAM(g);
 
+  /* fixme:
+   * now that we are again filling the screen buffer during init
+   * we could move this code back to init as well
+   */
   static bool once = false;
   if(!once)
   {
@@ -250,6 +258,7 @@ LLDSPEC void gdisp_lld_flush (GDisplay *g)
     // enable the negative rail of the regulator, this should
     // let the screen actually display something
     pwr_en(true);
+
     once = true;
   }
 
@@ -257,8 +266,7 @@ LLDSPEC void gdisp_lld_flush (GDisplay *g)
   if (!(g->flags & GDISP_FLG_NEEDFLUSH))
     return;
 
-  while (bus_busy ());
-  ram = RAM(g);
+
 
   /*
    * transfer the entire screen at once
