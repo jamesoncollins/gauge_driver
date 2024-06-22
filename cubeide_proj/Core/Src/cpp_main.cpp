@@ -26,8 +26,8 @@ extern "C" {
 #define SAMPLE_TIME_MS_PRINT   750
 #define SAMPLE_TIME_MS_UPDATES   (1000/24)
 
-int screenWidth;
-int screenHeight;
+uint16_t screenWidth;
+uint16_t screenHeight;
 const int DPI = 240. / 1.4456693; //166
 const int DPMM = 240. / 36.72; // 6.53 dots per mm
 
@@ -50,6 +50,7 @@ extern SPI_HandleTypeDef hspi1;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim16;
 extern UART_HandleTypeDef huart1;
+extern RTC_HandleTypeDef hrtc;
 
 MCP4725 dac;
 BMI088 imu;
@@ -68,6 +69,22 @@ bool rpm_alert = false;
 bool rpm_alert_has_lock = false;
 bool acc_has_lock = false;
 volatile unsigned i2c_lock = 0;
+
+
+/*
+ * call by a tier to update needle mposistions regularly
+ */
+SwitecX12 *x12[3] = {NULL, NULL};
+bool needles_ready = false;
+void update_needles()
+{
+  if(needles_ready)
+  {
+    x12[0]->update();
+    x12[1]->update();
+    x12[2]->update();
+  }
+}
 
 /*
  * exti interrupts from IMU
@@ -228,8 +245,13 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
       state[1] = IDLE;
     }
   }
-  else if(rpm_alert && rpm_alert_has_lock && htim->Instance == TIM16)
+  else if(htim->Instance == TIM16)
   {
+
+    update_needles();
+
+    if(rpm_alert && rpm_alert_has_lock)
+    {
     // tim16?
 //    static uint16_t valarr[16] =
 //    { 0+2048, 383+2048, 707+2048, 924+2048, 1000+2048, 924+2048, 707+2048, 383+2048, 0+2048, -383+2048, -707+2048, -924+2048, -1000+2048, -924+2048,
@@ -251,6 +273,7 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
       dac._i2cAddress,
       arr,
       2);
+    }
   }
 }
 
@@ -611,46 +634,30 @@ int main_cpp(void)
   HAL_GPIO_WritePin ( PWREN_GPIO_Port, PWREN_Pin, GPIO_PIN_SET );
 
   /*
+   * test if the board powered down correctly.
+   *
+   * clear the register so we are forced to reset it later
+   */
+  bool cleanPwr = false;
+  if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == 0xBEEF)
+  {
+    cleanPwr = true;
+  }
+  HAL_PWR_EnableBkUpAccess ();
+  HAL_RTCEx_BKUPWrite (&hrtc, RTC_BKP_DR1, 0x0000);
+  HAL_PWR_DisableBkUpAccess ();
+
+  /*
    * init graphics library
    */
   gfxInit();
-
   gdispClear(GFX_BLACK);
   gdispFlush();
   screenWidth = gdispGetWidth();
   screenHeight = gdispGetHeight();
 
-  //font_t font = gdispOpenFont("DejaVuSans10");
+  font_t font = gdispOpenFont("DejaVuSans10");
   font_t fontLCD = gdispOpenFont("lcddot_tr80");
-
-  /*
-   * startup animation
-   */
-  gImage startupAnim;
-  gdispImageOpenMemory(&startupAnim, mitslogoanim_128);
-  //gdispFillString(23, 200, "3000GT", fontLCD, GFX_AMBER, GFX_BLACK);
-  gdispFlush();
-  gDelay delay;
-  int displayLogo = 45; // number of logo frames
-  while (displayLogo--)
-  {
-    //gdispImageCache(&startupAnim);
-    gdispImageDraw(&startupAnim,
-                   (screenWidth>>1)-(startupAnim.width>>1),
-                   75,
-                   startupAnim.width, startupAnim.height,
-                   0, 0);
-    delay = gdispImageNext (&startupAnim);
-    gdispFlush();
-    gfxSleepMilliseconds(delay);
-  }
-  gdispImageClose (&startupAnim);
-
-  // load image resources
-  gImage battImg, beamImg, brakeImg;
-  gdispImageOpenMemory(&battImg, batt);
-  gdispImageOpenMemory(&beamImg, beam);
-  gdispImageOpenMemory(&brakeImg, brake);
 
   /*
    * dac setup
@@ -664,7 +671,6 @@ int main_cpp(void)
   {
     //exit(-1);
   }
-
 
   /*
    * dac output timer
@@ -751,12 +757,17 @@ int main_cpp(void)
   HAL_Delay(10);
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_SET );
 
-  // zero out the tach and speedo
-  for(int i=0; i<X27_STEPS; i++)
+  /*
+   * calibrate the needles by bumping them against the stops
+   */
+  if(!cleanPwr)
   {
-    tachX12.step(-1);
-    speedX12.step(-1);
-    DWT_Delay(500);
+    for(int i=0; i<X27_STEPS; i++)
+    {
+      tachX12.step(-1);
+      speedX12.step(-1);
+      DWT_Delay(500);
+    }
   }
   tachX12.currentStep = 0; tachX12.stopped = true; tachX12.vel = 0;
   speedX12.currentStep = 0; speedX12.stopped = true; speedX12.vel = 0;
@@ -766,23 +777,96 @@ int main_cpp(void)
   HAL_Delay(10);
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_SET );
 
-  tachX12.setPosition (X27_STEPS);
-  speedX12.setPosition (X27_STEPS);
-  while (!tachX12.stopped && !speedX12.stopped)
-  {
-    tachX12.update ();
-    speedX12.update ();
-  }
-  HAL_Delay(200);
 
-  tachX12.setPosition (0);
-  speedX12.setPosition (0);
-  while  (!tachX12.stopped && !speedX12.stopped)
+  /*
+   * tell the timer interrupt to start updating the needles
+   */
+  x12[0] = &tachX12;
+  x12[1] = &speedX12;
+  x12[2] = &odoX12;
+  needles_ready = true;
+
+  /*
+   * load startup animation resources
+   */
+  gImage startupAnim;
+  gdispImageOpenMemory(&startupAnim, mitslogoanim_128);
+  gDelay delay = 0;
+  int displayCnt = 42; // number of logo frames
+  gdispImageDraw(&startupAnim,
+                 (screenWidth>>1)-(startupAnim.width>>1),
+                 75,
+                 startupAnim.width, startupAnim.height,
+                 0, 0);
+  for(int i=0; i<17; i++)
   {
-    tachX12.update ();
-    speedX12.update ();
+    gdispImageNext (&startupAnim);
+    displayCnt--;
   }
-  HAL_Delay(200);
+
+
+  /*
+   * do gauge dance and startup animation
+   */
+  int startup_state = 0;
+  uint32_t timerAnim = HAL_GetTick ();
+  bool startup_done = false;
+  while(!startup_done)
+  {
+    switch(startup_state)
+    {
+      case 0:
+        tachX12.setPosition (X27_STEPS);
+        speedX12.setPosition (X27_STEPS);
+        startup_state++;
+        break;
+      case 1:
+        if(tachX12.stopped && speedX12.stopped)
+          startup_state ++;
+        break;
+      case 2:
+        tachX12.setPosition (0);
+        speedX12.setPosition (0);
+        startup_state++;
+        break;
+      case 3:
+        if(tachX12.stopped && speedX12.stopped)
+          startup_state++;
+        break;
+      default:
+        if(displayCnt==0)
+          startup_done = true;
+        break;
+    }
+
+    if(HAL_GetTick() - timerAnim > delay && displayCnt>=0)
+    {
+      // load te next image
+      gdispImageDraw(&startupAnim,
+                     (screenWidth>>1)-(startupAnim.width>>1),
+                     75,
+                     startupAnim.width, startupAnim.height,
+                     0, 0);
+      delay = gdispImageNext (&startupAnim);
+      timerAnim = HAL_GetTick ();
+      gdispFlush();
+      displayCnt--;
+    }
+
+    // do these updates as fast as possible, the driver will take care of timing.
+    //tachX12.update ();
+    //speedX12.update ();
+  }
+  gdispImageClose (&startupAnim);
+
+
+  /*
+   * load image resources for warning indicators
+   */
+  gImage battImg, beamImg, brakeImg;
+  gdispImageOpenMemory(&battImg, batt);
+  gdispImageOpenMemory(&beamImg, beam);
+  gdispImageOpenMemory(&brakeImg, brake);
 
 
   /*
@@ -943,7 +1027,7 @@ int main_cpp(void)
       if( !(bulbVals&brakeMask) ) // car pulls down
         gdispImageDraw(&brakeImg, 145,  210, brakeImg.width, brakeImg.height, 0, 0);
       if( !(bulbVals&psMask) ) // car pulls HIGH
-        gdispFillString(100, 210, "4WS-OIL", fontLCD, GFX_YELLOW, GFX_BLACK);
+        gdispFillString(100, 210, "4WS", font, GFX_YELLOW, GFX_BLACK);
       if (bulbVals&lampMask )
       {
         // headlights are on
@@ -991,9 +1075,9 @@ int main_cpp(void)
     /*
      * called as fast as possible, moves the motors if they need to be moved
      */
-    speedX12.update();
-    tachX12.update();
-    odoX12.update();
+    //speedX12.update();
+    //tachX12.update();
+    //odoX12.update();
 
 
     /*
@@ -1219,6 +1303,12 @@ int main_cpp(void)
 
   }
 
+
+  gdispClear(GFX_BLACK);
+  gdispFillString(60, 60, "PWR", fontLCD, GFX_AMBER, GFX_BLACK);
+  gdispFlush();
+
+
   /*
    * Power-down loop, do anything we need to in order to cleanup before
    * we power off.
@@ -1227,11 +1317,18 @@ int main_cpp(void)
   tachX12.setPosition(0);
   while(1)
   {
-    speedX12.update();
-    tachX12.update();
+    //speedX12.update();
+    //tachX12.update();
     if(speedX12.stopped && tachX12.stopped)
       break;
   }
+
+  /*
+   * store the fact that we shutdown clean
+   */
+  HAL_PWR_EnableBkUpAccess ();
+  HAL_RTCEx_BKUPWrite (&hrtc, RTC_BKP_DR1, 0xBEEF);
+  HAL_PWR_DisableBkUpAccess ();
 
   /*
    * we left the main loop, we can power down
