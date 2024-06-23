@@ -37,9 +37,9 @@ inline uint64_t get_cycle_count ()
 {
   volatile static uint64_t last_cycle_count_64 = 0;
 
-  uint32_t prim;
-  prim = __get_PRIMASK();
-  __disable_irq();
+//  uint32_t prim;
+//  prim = __get_PRIMASK();
+//  __disable_irq();
 
 //  static unsigned lock = 0;
 //  while (!lock_mutex (&lock))
@@ -52,9 +52,9 @@ inline uint64_t get_cycle_count ()
 
 //  unlock_mutex (&lock);
 
-  if (!prim) {
-      __enable_irq();
-  }
+//  if (!prim) {
+//      __enable_irq();
+//  }
 
   return r;
 }
@@ -83,7 +83,12 @@ void DWT_Delay(uint32_t us)
     while (DWT->CYCCNT - startTick < delayTicks);
 }
 
-uint64_t get_ticks_us ()
+inline uint32_t get_ticks_32()
+{
+  return DWT->CYCCNT;
+}
+
+uint64_t get_us_64 ()
 {
   return get_cycle_count () * US_PER_SYS_TICK ;
 }
