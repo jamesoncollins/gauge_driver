@@ -20,13 +20,15 @@
 //{ 50, 700 },
 //{ 100, 400 },
 //};
-static unsigned short defaultAccelTable[][2] =
+static uint32_t ticks_per_us =  ( 1e-6 / ((1. / 64000000.)) );
+static uint32_t defaultAccelTable[][2] =
 {
-{ 20, 1400 },
-{ 50, 700 },
-{ 100, 400 },
-{ 150, 300 },
-{ 300, 200 } };
+{ 20,  1400 * ticks_per_us },
+{ 50,  700  * ticks_per_us },
+{ 100, 400  * ticks_per_us },
+{ 150, 300  * ticks_per_us },
+{ 300, 200  * ticks_per_us }
+};
 
 //static unsigned short defaultAccelTable[][2] =
 //{
@@ -36,18 +38,18 @@ static unsigned short defaultAccelTable[][2] =
 //{ 150, 150 },
 //{ 300, 90 } };
 
-const int stepPulseMicrosec = 1;
-const int resetStepMicrosec = 300;
+const int stepPulseMicrosec = 1 * ticks_per_us;
+const int resetStepMicrosec = 300 * ticks_per_us;
 #define DEFAULT_ACCEL_TABLE_SIZE (sizeof(defaultAccelTable)/sizeof(*defaultAccelTable))
 
 #define LOW GPIO_PIN_RESET
 #define HIGH GPIO_PIN_SET
 
 // microseconds since program exec
-inline uint64_t micros ()
+inline uint32_t ticks ()
 {
-  return get_ticks_us();
-  //return DWT->CYCCNT * US_PER_SYS_TICK;
+  //return get_ticks_us();
+  return get_ticks_32();
 }
 
 inline void delay(uint32_t us)
@@ -127,7 +129,7 @@ void SwitecX12::advance ()
   {
     stopped = true;
     dir = 0;
-    time0 = micros ();
+    time0 = ticks ();
     return;
   }
 
@@ -172,12 +174,12 @@ void SwitecX12::advance ()
   // vel now defines delay
   unsigned char i = 0;
   // this is why vel must not be greater than the last vel in the table.
-  while (accelTable[i][0] < vel)
+  while ( (int)accelTable[i][0] < vel)
   {
     i++;
   }
   microDelay = accelTable[i][1];
-  time0 = micros ();
+  time0 = ticks ();
 }
 
 void SwitecX12::setPosition (uint32_t pos)
@@ -190,7 +192,7 @@ void SwitecX12::setPosition (uint32_t pos)
   {
     // reset the timer to avoid possible time overflow giving spurious deltas
     stopped = false;
-    time0 = micros ();
+    time0 = ticks ();
     microDelay = 0;
   }
 }
@@ -199,7 +201,7 @@ void SwitecX12::update ()
 {
   if (!stopped)
   {
-    unsigned long delta = micros () - time0;
+    unsigned long delta = ticks () - time0;
     if (delta >= microDelay)
     {
       advance ();

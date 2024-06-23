@@ -15,7 +15,7 @@ public:
   uint32_t steps;            // total steps available
   long time0;           // time when we entered this state
   unsigned int microDelay;       // microsecs until next state
-  unsigned short (*accelTable)[2]; // accel table can be modified.
+  uint32_t (*accelTable)[2]; // accel table can be modified.
   int maxVel;           // fastest vel allowed
   int vel;              // steps travelled under acceleration
   int dir;                      // direction -1,0,1
