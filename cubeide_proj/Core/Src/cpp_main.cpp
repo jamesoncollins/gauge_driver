@@ -636,14 +636,6 @@ int main_cpp(void)
   // init our 64-bit system-tick counter based on teh DWT timer
   init_get_cycle_count ();
 
-  /* Timers */
-  uint32_t timerLoop = 0;
-  uint32_t timerLED	= 0;
-  uint32_t timerIGN = 0;
-  uint32_t timerPrint = 0;
-  uint32_t timerUpdates = 0;
-  uint32_t timerECU = 0;
-  bool flagSlow = false;
 
   /* USB data buffer */
   const int bufLen = 256;
@@ -912,8 +904,17 @@ int main_cpp(void)
    *
    * We stay here until the ignition turns off.
    */
+
+  /* Timers */
+  uint32_t timerLoop = HAL_GetTick ();
+  uint32_t timerLED     = timerLoop;
+  uint32_t timerIGN = timerLoop;
+  uint32_t timerPrint = timerLoop;
+  uint32_t timerUpdates = timerLoop;
+  uint32_t timerECU = timerLoop;
+  bool flagSlow = false;
   bool firstAcc = false;
-  uint32_t loopPeriod = 0;
+  uint32_t loopPeriod = 0, worstLoopPeriod = 0;
   while (1)
   {
 
@@ -1086,7 +1087,7 @@ int main_cpp(void)
         }
       }
 
-      snprintf (logBuf, bufLen, "%d", (int)loopPeriod);
+      snprintf (logBuf, bufLen, "%d/%d", (int)loopPeriod ,(int) worstLoopPeriod);
       gdispFillString(150, 200, logBuf, font, GFX_AMBER, GFX_BLACK);
 
       //gdispDrawBox(0,0,screenWidth,screenHeight,GFX_AMBER);
@@ -1336,6 +1337,7 @@ int main_cpp(void)
     }
 
 
+
     /*
      * check ignition signal status.  we want it low for at least 10ms
      * before we decide the +car is off.
@@ -1354,6 +1356,7 @@ int main_cpp(void)
      * does nothing, just checks loop timing for diagnostics
      */
     loopPeriod = (HAL_GetTick () - timerLoop);
+    worstLoopPeriod = (loopPeriod>worstLoopPeriod) ? loopPeriod : worstLoopPeriod;
     if(loopPeriod>5)
     {
       flagSlow = true;
