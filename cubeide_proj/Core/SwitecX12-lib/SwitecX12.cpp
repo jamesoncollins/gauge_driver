@@ -38,8 +38,8 @@ static uint32_t defaultAccelTable[][2] =
 //{ 150, 150 },
 //{ 300, 90 } };
 
-const int stepPulseMicrosec = 1 * ticks_per_us;
-const int resetStepMicrosec = 300 * ticks_per_us;
+const int stepPulseTicks = 1 * ticks_per_us;
+const int resetStepTicks = 300 * ticks_per_us;
 #define DEFAULT_ACCEL_TABLE_SIZE (sizeof(defaultAccelTable)/sizeof(*defaultAccelTable))
 
 #define LOW GPIO_PIN_RESET
@@ -87,7 +87,7 @@ void SwitecX12::step (int dir)
   HAL_GPIO_WritePin (portDir, pinDir, dir > 0 ? LOW : HIGH);
   //digitalWrite(13, vel == maxVel ? HIGH : LOW);
   HAL_GPIO_WritePin (portStep, pinStep, HIGH);
-  delay (stepPulseMicrosec);
+  delay (stepPulseTicks);
   HAL_GPIO_WritePin (portStep, pinStep, LOW);
   currentStep += dir;
 }
@@ -109,7 +109,7 @@ void SwitecX12::stepTo (uint32_t position)
   for (int i = 0; i < count; i++)
   {
     step (dir);
-    delay (resetStepMicrosec);
+    delay (resetStepTicks);
   }
 }
 
