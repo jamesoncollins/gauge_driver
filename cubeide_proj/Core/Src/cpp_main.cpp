@@ -33,7 +33,7 @@ const int DPMM = 240. / 36.72; // 6.53 dots per mm
 
 // define this if you want to use an interrupt to update needle
 // positions, otherwise the main loop does it
-#define USE_NEEDLE_CALLBACK
+//#define USE_NEEDLE_CALLBACK
 
 /*
  * #defines used to control what happens in teh main loop
@@ -913,6 +913,7 @@ int main_cpp(void)
    * We stay here until the ignition turns off.
    */
   bool firstAcc = false;
+  uint32_t loopPeriod = 0;
   while (1)
   {
 
@@ -1084,6 +1085,9 @@ int main_cpp(void)
           gdispImageDraw(&beamImg, 62,  212, beamImg.width,  beamImg.height,  0, 0);
         }
       }
+
+      snprintf (logBuf, bufLen, "%d", (int)loopPeriod);
+      gdispFillString(150, 200, logBuf, font, GFX_AMBER, GFX_BLACK);
 
       // some devices dont support this and instead they draw whenever you call a drawing function
       // but its always safe to call it
@@ -1343,7 +1347,7 @@ int main_cpp(void)
     /*
      * does nothing, just checks loop timing for diagnostics
      */
-    uint32_t loopPeriod = (HAL_GetTick () - timerLoop);
+    loopPeriod = (HAL_GetTick () - timerLoop);
     if(loopPeriod>5)
     {
       flagSlow = true;
