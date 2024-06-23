@@ -31,6 +31,10 @@ uint16_t screenHeight;
 const int DPI = 240. / 1.4456693; //166
 const int DPMM = 240. / 36.72; // 6.53 dots per mm
 
+// define this if you want to use an interrupt to update needle
+// positions, otherwise the main loop does it
+#define USE_NEEDLE_CALLBACK
+
 /*
  * #defines used to control what happens in teh main loop
  */
@@ -42,8 +46,6 @@ const int DPMM = 240. / 36.72; // 6.53 dots per mm
 // enable one of these to get acceleromter data
 //#define ACC_USE_BLOCK   // use blocking calls
 #define ACC_USE_IT    // use interrupt calls (not wokring)
-
-
 
 extern I2C_HandleTypeDef hi2c1, hi2c3;
 extern SPI_HandleTypeDef hspi1;
@@ -261,30 +263,32 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 
     update_needles();
 
-//    if(rpm_alert && rpm_alert_has_lock)
-//    {
-//    // tim16?
-////    static uint16_t valarr[16] =
-////    { 0+2048, 383+2048, 707+2048, 924+2048, 1000+2048, 924+2048, 707+2048, 383+2048, 0+2048, -383+2048, -707+2048, -924+2048, -1000+2048, -924+2048,
-////        -707+2048, -383+2048 };
-////    static int16_t valarr[16] =
-////    { -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000,  };
+#if 0 // we arent using this yet
+    if(rpm_alert && rpm_alert_has_lock)
+    {
+    // tim16?
+//    static uint16_t valarr[16] =
+//    { 0+2048, 383+2048, 707+2048, 924+2048, 1000+2048, 924+2048, 707+2048, 383+2048, 0+2048, -383+2048, -707+2048, -924+2048, -1000+2048, -924+2048,
+//        -707+2048, -383+2048 };
 //    static int16_t valarr[16] =
-//    { 0, 707, 1000, 707, 0, -707, -1000, -707,  0, 707, 1000, 707, 0, -707, -1000, -707, };
-//    static uint16_t valarr_ctr = 0;
-//    int16_t val = ( valarr[valarr_ctr & 0xf]  * 2 + 2048 ) & 0x0fff;
-//    valarr_ctr++;
-//#define lowByte(x)            ((uint8_t)(x%256))
-//#define highByte(x)             ((uint8_t)(x/256))
-//    static uint8_t arr[2];
-//    arr[1] = lowByte(val);
-//    arr[0] = highByte(val);
-//    HAL_I2C_Master_Transmit_IT(
-//      &hi2c1,
-//      dac._i2cAddress,
-//      arr,
-//      2);
-//    }
+//    { -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000,  };
+    static int16_t valarr[16] =
+    { 0, 707, 1000, 707, 0, -707, -1000, -707,  0, 707, 1000, 707, 0, -707, -1000, -707, };
+    static uint16_t valarr_ctr = 0;
+    int16_t val = ( valarr[valarr_ctr & 0xf]  * 2 + 2048 ) & 0x0fff;
+    valarr_ctr++;
+#define lowByte(x)            ((uint8_t)(x%256))
+#define highByte(x)             ((uint8_t)(x/256))
+    static uint8_t arr[2];
+    arr[1] = lowByte(val);
+    arr[0] = highByte(val);
+    HAL_I2C_Master_Transmit_IT(
+      &hi2c1,
+      dac._i2cAddress,
+      arr,
+      2);
+    }
+#endif
   }
 }
 
@@ -801,7 +805,9 @@ int main_cpp(void)
   x12[0] = &tachX12;
   x12[1] = &speedX12;
   x12[2] = &odoX12;
+#ifdef USE_NEEDLE_CALLBACK
   needles_ready = true;  // dont turn this on if you dont want to use the timer
+#endif
 
   /*
    * load startup animation resources
@@ -871,8 +877,10 @@ int main_cpp(void)
     }
 
     // do these updates as fast as possible, the driver will take care of timing.
-//    tachX12.update();
-//    speedX12.update();
+#ifndef USE_NEEDLE_CALLBACK
+    tachX12.update();
+    speedX12.update();
+#endif
   }
   gdispImageClose (&startupAnim);
 
@@ -1096,9 +1104,11 @@ int main_cpp(void)
     /*
      * called as fast as possible, moves the motors if they need to be moved
      */
-//    speedX12.update();
-//    tachX12.update();
-//    odoX12.update();
+#ifndef USE_NEEDLE_CALLBACK
+    tachX12.update();
+    speedX12.update();
+    odoX12.update();
+#endif
 
 
     /*
@@ -1338,8 +1348,10 @@ int main_cpp(void)
   tachX12.setPosition(0);
   while(1)
   {
-//    speedX12.update();
-//    tachX12.update();
+#ifndef USE_NEEDLE_CALLBACK
+    tachX12.update();
+    speedX12.update();
+#endif
     if(speedX12.stopped && tachX12.stopped)
       break;
   }
