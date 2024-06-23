@@ -37,9 +37,9 @@ inline uint64_t get_cycle_count ()
 {
   volatile static uint64_t last_cycle_count_64 = 0;
 
-//  uint32_t prim;
-//  prim = __get_PRIMASK();
-//  __disable_irq();
+  uint32_t prim;
+  prim = __get_PRIMASK();
+  __disable_irq();
 
 //  static unsigned lock = 0;
 //  while (!lock_mutex (&lock))
@@ -52,9 +52,9 @@ inline uint64_t get_cycle_count ()
 
 //  unlock_mutex (&lock);
 
-//  if (!prim) {
-//      __enable_irq();
-//  }
+  if (!prim) {
+      __enable_irq();
+  }
 
   return r;
 }
