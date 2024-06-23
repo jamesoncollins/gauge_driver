@@ -24,7 +24,7 @@ extern "C" {
  */
 #define SAMPLE_TIME_MS_LED    1000
 #define SAMPLE_TIME_MS_PRINT   750
-#define SAMPLE_TIME_MS_UPDATES   (1000/24)
+#define SAMPLE_TIME_MS_UPDATES   (1000./20.)
 
 uint16_t screenWidth;
 uint16_t screenHeight;
@@ -33,7 +33,7 @@ const int DPMM = 240. / 36.72; // 6.53 dots per mm
 
 // define this if you want to use an interrupt to update needle
 // positions, otherwise the main loop does it
-//#define USE_NEEDLE_CALLBACK
+#define USE_NEEDLE_CALLBACK
 
 /*
  * #defines used to control what happens in teh main loop
@@ -41,7 +41,7 @@ const int DPMM = 240. / 36.72; // 6.53 dots per mm
 //#define PRINT_TO_USB
 
 //#define SWEEP_GAUGES  // sweep needles forever
-#define SIM_GAUGES       // generate simulated rpm and mph
+//#define SIM_GAUGES       // generate simulated rpm and mph
 
 // enable one of these to get acceleromter data
 //#define ACC_USE_BLOCK   // use blocking calls
@@ -1071,23 +1071,29 @@ int main_cpp(void)
       }
       //bulbVals = ioexp_screen.get();
       if( !(bulbVals&battMask) ) // car pulls down
-        gdispImageDraw(&battImg,  25,  210, battImg.width,  battImg.height,  0, 0);
+        gdispImageDraw(&battImg,  20,  210, battImg.width,  battImg.height,  0, 0);
       if( !(bulbVals&brakeMask) ) // car pulls down
-        gdispImageDraw(&brakeImg, 145,  210, brakeImg.width, brakeImg.height, 0, 0);
+        gdispImageDraw(&brakeImg, 140,  210, brakeImg.width, brakeImg.height, 0, 0);
       if(  (bulbVals&psMask) ) // car pulls HIGH
-        gdispFillString(100, 210, "4WS", font, GFX_YELLOW, GFX_BLACK);
+        gdispFillString(95, 210, "4WS", font, GFX_YELLOW, GFX_BLACK);
       if (bulbVals&lampMask )
       {
         // headlights are on
         if( !(bulbVals&beamMask) )
         {
           // high beam on
-          gdispImageDraw(&beamImg, 62,  212, beamImg.width,  beamImg.height,  0, 0);
+          gdispImageDraw(&beamImg, 62-5,  212, beamImg.width,  beamImg.height,  0, 0);
         }
       }
 
       snprintf (logBuf, bufLen, "%d", (int)loopPeriod);
       gdispFillString(150, 200, logBuf, font, GFX_AMBER, GFX_BLACK);
+
+      //gdispDrawBox(0,0,screenWidth,screenHeight,GFX_AMBER);
+      //gdispDrawBox(1,1,screenWidth-1,screenHeight-1,GFX_AMBER);
+      //gdispDrawBox(2,2,screenWidth-2,screenHeight-2,GFX_AMBER);
+      //gdispDrawBox(3,3,screenWidth-3,screenHeight-3,GFX_AMBER);
+      //gdispDrawBox(4,4,screenWidth-4,screenHeight-4,GFX_AMBER);
 
       // some devices dont support this and instead they draw whenever you call a drawing function
       // but its always safe to call it
