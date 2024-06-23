@@ -66,6 +66,7 @@ const uint16_t beamMask  = 1<<0;
 const uint16_t psMask = 1<<2;
 const uint16_t battMask  = 1<<3;
 const uint16_t brakeMask    = 1<<4;
+bool bulbReadWaiting = false;
 
 extern "C" {
 
@@ -117,6 +118,13 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
  */
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
+  if(hi2c->Instance==hi2c3.Instance)
+  {
+    // this is the screen io expander
+    bulbReadWaiting = false;
+    return;
+  }
+
   do_convert = true;
 
   bool was_locked = acc_has_lock;
@@ -127,11 +135,7 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-  if(hi2c->Instance==hi2c3.Instance)
-  {
-    // this is the screen io expander
-    // nothing to do.
-  }
+
 }
 
 /*
@@ -708,10 +712,10 @@ int main_cpp(void)
   PI4IOE5V6416 ioexp_screen(&hi2c3);
   if(ioexp_screen.init(
         0x0000
-        //lampMask
-        |brakeMask
-        //|battMask
-        //|psMask
+//        | lampMask    // not sure
+        | brakeMask     // switch pulls bulb down, need to mimic bulb voltage
+//        | battMask    // voltage source is normally applied
+//        | psMask      // switch pulls this up, so we pull down
       ))
   {
     //exit(-1);
@@ -1050,7 +1054,12 @@ int main_cpp(void)
       gdispFillString(50, 145, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
 
       // check warning
-      ioexp_screen.get_IT(&bulbVals); //we dont know when this will finish, dont care
+      if(!bulbReadWaiting)
+      {
+        if(ioexp_screen.get_IT(&bulbVals)==0) //we dont know when this will finish, dont care
+          bulbReadWaiting = true;
+      }
+      //bulbVals = ioexp_screen.get();
       if( !(bulbVals&battMask) ) // car pulls down
         gdispImageDraw(&battImg,  25,  210, battImg.width,  battImg.height,  0, 0);
       if( !(bulbVals&brakeMask) ) // car pulls down

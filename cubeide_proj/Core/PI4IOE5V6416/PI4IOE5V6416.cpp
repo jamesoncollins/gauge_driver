@@ -7,8 +7,9 @@ PI4IOE5V6416::PI4IOE5V6416(I2C_HandleTypeDef *i2c)
 }
 
 /*
- * reads the two ports, sets one of them to have pull up resistors,
- * then reads again
+ * Configure all ports to use pull or or pull down resistors.
+ *
+ * Default is pull-down.
  */
 int PI4IOE5V6416::init( uint16_t pullup_mask )
 {
@@ -28,6 +29,16 @@ int PI4IOE5V6416::init( uint16_t pullup_mask )
   // set IO mode
   // nevermind, this defaults to high-impedance input
 
+  // enable pull-up / pull-down resistor
+  buffer = 0xffff;
+  status |= HAL_I2C_Mem_Write(
+            i2cdev,
+            ADDR,
+            0x46, 1,
+            (uint8_t*)&buffer,
+            2,
+            1000);
+
   // select pull-up or pull-down resistor
   buffer = pullup_mask;
   status |= HAL_I2C_Mem_Write(
@@ -38,15 +49,7 @@ int PI4IOE5V6416::init( uint16_t pullup_mask )
             2,
             1000);
 
-  // enable pull-up / pull-down resistor
-  buffer = 0xffff;
-  status |= HAL_I2C_Mem_Write(
-            i2cdev,
-            ADDR,
-            0x46, 1,
-            (uint8_t*)&buffer,
-            2,
-            1000);
+
 
   return status;
 }
@@ -66,15 +69,16 @@ uint16_t PI4IOE5V6416::get()
   return buffer;
 }
 
-void PI4IOE5V6416::get_IT(uint16_t *user_buffer)
+int PI4IOE5V6416::get_IT(uint16_t *user_buffer)
 {
   status = 0;
-  user_buffer = 0x00000;
+  *user_buffer = 0x0000;
+  status = 0;
   status |= HAL_I2C_Mem_Read_IT(
             i2cdev,
             ADDR,
             0, 1,
-            (uint8_t*)&user_buffer,
+            (uint8_t*)user_buffer,
             2);
-  return;
+  return status;
 }
