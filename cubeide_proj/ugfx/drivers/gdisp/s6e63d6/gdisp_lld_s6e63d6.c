@@ -23,11 +23,16 @@
 
 #define GDISP_FLG_NEEDFLUSH                     (GDISP_FLG_DRIVER<<0)
 
+// trim height from the bottom
+// trim width from the left and right
+#define TRIM_HEIGHT 65
+#define TRIM_WIDTH 0
+
 #ifndef GDISP_SCREEN_HEIGHT
-#define GDISP_SCREEN_HEIGHT		260 //320
+#define GDISP_SCREEN_HEIGHT		(320 - TRIM_HEIGHT) //320
 #endif
 #ifndef GDISP_SCREEN_WIDTH
-#define GDISP_SCREEN_WIDTH		240
+#define GDISP_SCREEN_WIDTH		(240 - TRIM_WIDTH) // 240
 #endif
 #ifndef GDISP_INITIAL_CONTRAST
 #define GDISP_INITIAL_CONTRAST	50
@@ -35,6 +40,12 @@
 #ifndef GDISP_INITIAL_BACKLIGHT
 #define GDISP_INITIAL_BACKLIGHT	100
 #endif
+
+// FIXME: something is wrong here, if i try to draw a box of the whole screen the bottom cuts off
+#define H_start_address (TRIM_WIDTH>>1) // 0x00
+#define H_end_address ((GDISP_SCREEN_WIDTH-1) + H_start_address)
+#define V_start_address 0x00
+#define V_end_address (GDISP_SCREEN_HEIGHT-1)
 
 #include "s6e63d6.h"
 
@@ -61,10 +72,7 @@ const int ramSizeInt = sizeof(ramBuffer) / 4;
 #define map_color(color) ((color>>8) | (color<<8))
 //#define map_color(color) (color)
 
-#define H_start_address 0x00
-#define H_end_address ((GDISP_SCREEN_WIDTH-1) + H_start_address)
-#define V_start_address 0x00
-#define V_end_address (GDISP_SCREEN_HEIGHT-1)
+
 
 static void set_viewport (GDisplay *g, uint16_t hstart,uint16_t hend, uint16_t vstart, uint16_t vend)
 {
@@ -77,12 +85,16 @@ static void set_viewport (GDisplay *g, uint16_t hstart,uint16_t hend, uint16_t v
 //  gCoord p_cx = GDISP_SCREEN_WIDTH; //g->p.cx;
 //  gCoord p_cy = GDISP_SCREEN_HEIGHT; //g->p.cy;
 
-  write_index(g, 0x35);
-  write_data_one(g, vstart);
-  write_index(g, 0x36);
-  write_data_one(g, vend);
-  write_index(g, 0x37);
-  write_data_one(g, ((hstart<<8)|(hend)));
+  // we only need to set the viewport once, we do that in init
+  // todo: we could do it here to allow for updates of subsections of the screen
+//  write_index(g, 0x35);
+//  write_data_one(g, vstart);
+//  write_index(g, 0x36);
+//  write_data_one(g, vend);
+//  write_index(g, 0x37);
+//  write_data_one(g, ((hstart<<8)|(hend)));
+
+  // this is now just the starting location
   write_index(g, 0x20);
   write_data_one(g, hstart);
   write_index(g, 0x21);
@@ -174,6 +186,14 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
     write_data_one(g, 0);
   }
 
+  // set viewport
+  write_index(g, 0x35);
+  write_data_one(g, V_start_address);
+  write_index(g, 0x36);
+  write_data_one(g, V_end_address);
+  write_index(g, 0x37);
+  write_data_one(g, ((H_start_address<<8)|(H_end_address)));
+
 //  // display on
 //  write_index(g, 0x05);
 //  write_data_one(g, 0x0001);
@@ -241,7 +261,13 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
 LLDSPEC void gdisp_lld_flush (GDisplay *g)
 {
   uint16_t *ram;
-  while (bus_busy ());
+  if (bus_busy ())
+  {
+    // if the bus is still busy then we're running very slow
+    // dont bother flushing, becuase we know we haven't written
+    // anything
+    return;
+  }
   ram = RAM(g);
 
   /* fixme:
@@ -320,7 +346,10 @@ LLDSPEC void gdisp_lld_fill_area (GDisplay *g)
       break;
   }
 
-  while (bus_busy ());
+  while (bus_busy ())
+  {
+    asm("nop");
+  }
   spage = sy;
   base = RAM(g) + GDISP_SCREEN_WIDTH * spage;
   zpages = (ey) - spage + 1;
@@ -341,7 +370,10 @@ LLDSPEC void gdisp_lld_clear (GDisplay *g)
 {
 
   // dont restroy the ram if we're still reading it for the spi transfer
-  while (bus_busy ());
+  while (bus_busy ())
+  {
+    asm("nop");
+  }
 
   //memset( ramBuffer, 0x00, ramSize );
   uint16_t color = map_color(gdispColor2Native(g->p.color));
@@ -378,7 +410,10 @@ LLDSPEC void gdisp_lld_draw_pixel (GDisplay *g)
       break;
   }
 
-  while (bus_busy ());
+  while (bus_busy ())
+  {
+    asm("nop");
+  }
   RAM(g)[xyaddr(x, y)] = map_color(gdispColor2Native(g->p.color));
   g->flags |= GDISP_FLG_NEEDFLUSH;
 }
