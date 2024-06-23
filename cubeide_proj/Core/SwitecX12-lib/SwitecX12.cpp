@@ -184,6 +184,7 @@ void SwitecX12::advance ()
 
 void SwitecX12::setPosition (uint32_t pos)
 {
+  dontUpdate = true;
   // pos is unsigned so don't need to check for <0
   if (pos >= steps)
     pos = steps - 1;
@@ -195,11 +196,12 @@ void SwitecX12::setPosition (uint32_t pos)
     time0 = ticks ();
     microDelay = 0;
   }
+  dontUpdate = false;
 }
 
 void SwitecX12::update ()
 {
-  if (!stopped)
+  if (!dontUpdate && !stopped)
   {
     unsigned long delta = ticks () - time0;
     if (delta >= microDelay)

@@ -52,6 +52,7 @@ public:
 
 private:
   void advance ();
+  bool dontUpdate = true;
 };
 
 #endif
