@@ -589,9 +589,9 @@ int parseEcuParam(ecuParam_t *ecuParam, uint8_t *data)
 int get_x12_ticks_rpm( float rpm )
 {
   const float MIN_RPM = 500;
-  const float ZERO_ANGLE = 0;    // degrees beyond the stopper to get to 0
+  const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
   const float MIN_RPM_ANGLE = 7; // degrees from zero to MIN_RPM
-  const float DEGREES_PER_RPM = ( 22.0 / 1000.  );
+  const float DEGREES_PER_RPM = ( 21.75 / 1000.  );
 
   if( rpm <= 1 )
     return ZERO_ANGLE * 12.;
@@ -604,7 +604,7 @@ int get_x12_ticks_rpm( float rpm )
 int get_x12_ticks_speed( float speed )
 {
   const float MIN_MPH = 10;
-  const float ZERO_ANGLE = 0;    // degrees beyond the stopper to get to 0
+  const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
   const float MIN_MPH_ANGLE = 6.5; // degrees from zero to MIN_RPM
   const float DEGREES_PER_MPH = ( 1.35 );
 
