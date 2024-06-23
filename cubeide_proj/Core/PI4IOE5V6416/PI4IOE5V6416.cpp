@@ -65,3 +65,16 @@ uint16_t PI4IOE5V6416::get()
 
   return buffer;
 }
+
+void PI4IOE5V6416::get_IT(uint16_t *user_buffer)
+{
+  status = 0;
+  user_buffer = 0x00000;
+  status |= HAL_I2C_Mem_Read_IT(
+            i2cdev,
+            ADDR,
+            0, 1,
+            (uint8_t*)&user_buffer,
+            2);
+  return;
+}

@@ -12,8 +12,8 @@ public:
   PI4IOE5V6416(I2C_HandleTypeDef *i2c);
   int init(uint16_t pullup_mask);
   uint16_t get();
+  void get_IT(uint16_t *buffer);
 
-private:
   I2C_HandleTypeDef *i2cdev;
   uint8_t status = 0;
   uint16_t buffer;

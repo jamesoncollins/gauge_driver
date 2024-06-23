@@ -58,6 +58,7 @@ uint8_t regAddr;
 
 float rpm, speed;
 
+uint16_t bulbVals = 0;
 const uint16_t lampMask  = 1<<1;
 const uint16_t beamMask  = 1<<0;
 const uint16_t psMask = 1<<2;
@@ -124,7 +125,11 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-
+  if(hi2c->Instance==hi2c3.Instance)
+  {
+    // this is the screen io expander
+    // nothing to do.
+  }
 }
 
 /*
@@ -1037,7 +1042,7 @@ int main_cpp(void)
       gdispFillString(50, 145, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
 
       // check warning
-      uint16_t bulbVals = ioexp_screen.get();
+      ioexp_screen.get_IT(&bulbVals); //we dont know when this will finish, dont care
       if( !(bulbVals&battMask) ) // car pulls down
         gdispImageDraw(&battImg,  25,  210, battImg.width,  battImg.height,  0, 0);
       if( !(bulbVals&brakeMask) ) // car pulls down
