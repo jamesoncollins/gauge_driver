@@ -589,29 +589,31 @@ int parseEcuParam(ecuParam_t *ecuParam, uint8_t *data)
 int get_x12_ticks_rpm( float rpm )
 {
   const float MIN_RPM = 500;
-  const float ZERO_ANGLE = 5;    // degrees beyond the stopper to get to 0
-  const float MIN_RPM_ANGLE = 3; // degrees from zero to MIN_RPM
-  const float DEGREES_PER_RPM_MIN = MIN_RPM_ANGLE / MIN_RPM;
-  const float DEGREES_PER_RPM = ( 21.5 / 1000.  );
+  const float ZERO_ANGLE = 0;    // degrees beyond the stopper to get to 0
+  const float MIN_RPM_ANGLE = 7; // degrees from zero to MIN_RPM
+  const float DEGREES_PER_RPM = ( 22.0 / 1000.  );
 
-  if( rpm<MIN_RPM )
-    return (rpm * DEGREES_PER_RPM_MIN + ZERO_ANGLE) * 12.;
+  if( rpm <= 1 )
+    return ZERO_ANGLE * 12.;
+  else if( rpm<=MIN_RPM )
+    return (MIN_RPM_ANGLE + ZERO_ANGLE) * 12.;
   else
-    return ((rpm * DEGREES_PER_RPM + ZERO_ANGLE) - MIN_RPM_ANGLE ) * 12.;
+    return ((rpm-MIN_RPM) * DEGREES_PER_RPM + ZERO_ANGLE + MIN_RPM_ANGLE ) * 12.;
 }
 
 int get_x12_ticks_speed( float speed )
 {
   const float MIN_MPH = 10;
-  const float ZERO_ANGLE = 5;    // degrees beyond the stopper to get to 0
-  const float MIN_MPH_ANGLE = 3; // degrees from zero to MIN_RPM
-  const float DEGREES_PER_MPH_MIN = MIN_MPH_ANGLE / MIN_MPH;
-  const float DEGREES_PER_MPH = ( 1.31 );
+  const float ZERO_ANGLE = 0;    // degrees beyond the stopper to get to 0
+  const float MIN_MPH_ANGLE = 6.5; // degrees from zero to MIN_RPM
+  const float DEGREES_PER_MPH = ( 1.35 );
 
-  if( speed<MIN_MPH )
-    return (speed * DEGREES_PER_MPH_MIN + ZERO_ANGLE) * 12.;
+  if( speed <= 1 )
+    return ZERO_ANGLE * 12.;
+  else if( speed<=MIN_MPH )
+    return (MIN_MPH_ANGLE + ZERO_ANGLE) * 12.;
   else
-    return ((speed * DEGREES_PER_MPH + ZERO_ANGLE) - MIN_MPH_ANGLE ) * 12.;
+    return ((speed-MIN_MPH) * DEGREES_PER_MPH + ZERO_ANGLE + MIN_MPH_ANGLE ) * 12.;
 }
 
 int movingAvg(int *ptrArrNumbers, long *ptrSum, int *pos, int len, int nextNum)
@@ -992,6 +994,21 @@ int main_cpp(void)
       timerPrint = HAL_GetTick ();
     }
 
+#ifdef SIM_GAUGES
+    static int lastTime = 0;
+    int diff = HAL_GetTick () - lastTime;
+    rpm += (float) diff / 1000. * 3000; // 3000rpm per second
+    if (rpm > 9000)
+      rpm = 3000;
+    speed += (float) diff / 1000. * 20; // 20 mph per second
+    if (speed > 180)
+    {
+      speed = 0;
+      rpm = 1000;
+    }
+    lastTime = HAL_GetTick ();
+#endif
+
     /*
      * Any updates we want presented to the user.
      *  Currently this is 20fps
@@ -1000,30 +1017,22 @@ int main_cpp(void)
 #ifndef SWEEP_GAUGES
     if ((HAL_GetTick () - timerUpdates) >= SAMPLE_TIME_MS_UPDATES)
     {
-#ifdef SIM_GAUGES
-      rpm += (float)SAMPLE_TIME_MS_UPDATES / 1000. * 3000;
-      if(rpm>7000)
-        rpm = 0;
-      speed += (float)SAMPLE_TIME_MS_UPDATES / 1000. * 40;
-      if(speed>100)
-        speed = 0;
-      //speed = (imu.acc_mps2[2] / 9.8) * 50 + 50;
-      if(speed > 100)
-        speed = 100;
-      if(speed < 10)
-        speed = 10;
-#else
+#ifndef SIM_GAUGES
       /*
        * convert ticks, to Hz, to RPM and Speed
        */
       rpm   = (ticks[TACHIND]==0) ? 0 : (float)F_CLK / (float)ticks[TACHIND];   // Actually this is Hz
       speed = (ticks[SPEEDOIND]==0) ? 0 : (float)F_CLK / (float)ticks[SPEEDOIND]; // Actually, this is Hz
       rpm = rpm * RPM_PER_HZ;
-      if(rpm < 0) rpm = 0;
-      else if(rpm > 9000) rpm = 9000;
+      if(rpm < 0)
+        rpm = 0;
+      else if(rpm > 9000)
+        rpm = 9000;
       speed = speed * MPH_PER_HZ;
-      if(speed < 0) speed = 0;
-      else if(speed > 180) speed = 180;
+      if(speed < 0)
+        speed = 0;
+      else if(speed > 180)
+        speed = 180;
 #endif
       tachX12.setPosition( get_x12_ticks_rpm(rpm) );
       speedX12.setPosition( get_x12_ticks_speed(speed) );
