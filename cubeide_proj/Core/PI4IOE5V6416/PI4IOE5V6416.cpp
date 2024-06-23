@@ -25,23 +25,25 @@ int PI4IOE5V6416::init( uint16_t pullup_mask )
             2,          // data read len
             1000);
 
-  /*
-   * set all pins to inputs
-   */
-  buffer = 0xffff;
-  status |= HAL_I2C_Mem_Write(
-            i2cdev,
-            ADDR,
-            0x46, 1,
-            (uint8_t*)&buffer,
-            2,
-            1000);
+  // set IO mode
+  // nevermind, this defaults to high-impedance input
 
+  // select pull-up or pull-down resistor
   buffer = pullup_mask;
   status |= HAL_I2C_Mem_Write(
             i2cdev,
             ADDR,
             0x48, 1,
+            (uint8_t*)&buffer,
+            2,
+            1000);
+
+  // enable pull-up / pull-down resistor
+  buffer = 0xffff;
+  status |= HAL_I2C_Mem_Write(
+            i2cdev,
+            ADDR,
+            0x46, 1,
             (uint8_t*)&buffer,
             2,
             1000);

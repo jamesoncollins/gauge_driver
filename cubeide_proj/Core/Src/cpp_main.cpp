@@ -698,7 +698,11 @@ int main_cpp(void)
    */
   PI4IOE5V6416 ioexp_screen(&hi2c3);
   if(ioexp_screen.init(
-      lampMask|brakeMask|battMask|psMask
+        0x0000
+        //lampMask
+        |brakeMask
+        //|battMask
+        //|psMask
       ))
   {
     //exit(-1);
@@ -924,6 +928,11 @@ int main_cpp(void)
       }
     }
 
+    /*
+     * fixme: mutex isnt required, just use a flag.  the reason
+     * is that we only lock from this loop and we only unlock from the
+     * callbacks.
+     */
     if( acc_int_rdy  )
     {
       if (!acc_has_lock)
@@ -1033,7 +1042,7 @@ int main_cpp(void)
         gdispImageDraw(&battImg,  25,  210, battImg.width,  battImg.height,  0, 0);
       if( !(bulbVals&brakeMask) ) // car pulls down
         gdispImageDraw(&brakeImg, 145,  210, brakeImg.width, brakeImg.height, 0, 0);
-      if( !(bulbVals&psMask) ) // car pulls HIGH
+      if(  (bulbVals&psMask) ) // car pulls HIGH
         gdispFillString(100, 210, "4WS", font, GFX_YELLOW, GFX_BLACK);
       if (bulbVals&lampMask )
       {
