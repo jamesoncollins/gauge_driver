@@ -22,9 +22,9 @@ extern "C" {
  * Milisecond timers, controlled by the main while loop, for various
  * slow functions
  */
-#define SAMPLE_TIME_MS_LED    1000
-#define SAMPLE_TIME_MS_PRINT   750
-#define SAMPLE_TIME_MS_UPDATES   (1000./20.)
+#define SAMPLE_TIME_MS_LED       1000
+#define SAMPLE_TIME_MS_PRINT     750
+#define SAMPLE_TIME_MS_UPDATES   50     // 20fps
 
 uint16_t screenWidth;
 uint16_t screenHeight;
@@ -84,7 +84,7 @@ volatile unsigned i2c_lock = 0;
 /*
  * call by a tier to update needle mposistions regularly
  */
-SwitecX12 *x12[3] = {NULL, NULL};
+SwitecX12 *x12[3];
 bool needles_ready = false;
 void update_needles()
 {
@@ -113,8 +113,8 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
 
 
 /*
- * this callback fires when the acceleromter read finishs,
- * its currently the only thing using IT mem reads
+ * this callback fires when the acceleromter read finishes
+ * or the iio expander on the display board.
  */
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
@@ -168,6 +168,8 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
  *
  * 27 tooth variant (trans pre feb 1993?) 1.117hz/mph
  * 28 tooth 1.078 hz/mp
+ * Initial testing is showing this to be way off.  I display 100mph,
+ * but gps says 60mph.
  *
  */
 #define SPEEDOIND 0
@@ -769,7 +771,8 @@ int main_cpp(void)
       STEP_ODO_GPIO_Port,
       STEP_ODO_Pin,
       DIR_ODO_GPIO_Port,
-      DIR_ODO_Pin
+      DIR_ODO_Pin,
+      20
       );
 
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );

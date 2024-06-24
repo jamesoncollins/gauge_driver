@@ -59,7 +59,8 @@ inline void delay(uint32_t us)
 
 SwitecX12::SwitecX12 (uint32_t steps,
 		      GPIO_TypeDef* portStep, int pinStep,
-		      GPIO_TypeDef* portDir, int pinDir)
+		      GPIO_TypeDef* portDir, int pinDir,
+		      int _maxVel)
 {
   this->steps = steps;
   this->pinStep = pinStep;
@@ -77,7 +78,13 @@ SwitecX12::SwitecX12 (uint32_t steps,
   targetStep = 0;
 
   accelTable = defaultAccelTable;
+
   maxVel = defaultAccelTable[DEFAULT_ACCEL_TABLE_SIZE - 1][0]; // last value in table.
+
+  if(_maxVel > 0)
+  {
+    maxVel = (maxVel<_maxVel) ? maxVel : _maxVel;
+  }
 }
 
 void SwitecX12::step (int dir)

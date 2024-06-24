@@ -22,7 +22,8 @@ public:
   bool stopped;               // true if stopped
   SwitecX12 (uint32_t steps,
 	     GPIO_TypeDef*, int,
-	     GPIO_TypeDef*, int);
+	     GPIO_TypeDef*, int,
+	     int _maxVel = -1);
 
   /*
    * step right now
