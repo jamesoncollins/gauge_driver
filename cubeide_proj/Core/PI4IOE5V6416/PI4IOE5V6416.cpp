@@ -72,7 +72,7 @@ uint16_t PI4IOE5V6416::get()
 int PI4IOE5V6416::get_IT(uint16_t *user_buffer)
 {
   status = 0;
-  *user_buffer = 0x0000;
+//  *user_buffer = 0x0000;
   status = 0;
   status |= HAL_I2C_Mem_Read_IT(
             i2cdev,
