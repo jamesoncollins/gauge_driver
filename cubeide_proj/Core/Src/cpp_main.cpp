@@ -58,7 +58,7 @@ MCP4725 dac;
 BMI088 imu;
 uint8_t regAddr;
 
-float rpm, speed;
+int rpm, speed;
 
 uint16_t bulbVals = 0;
 const uint16_t lampMask  = 1<<1;
@@ -177,14 +177,12 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 #define IDLE   0
 #define DONE   1
 #define F_CLK  (SystemCoreClock)
-#define OVERFLOW_MS ((int)(1000*65536.f/(float)F_CLK))
-#define MPH_PER_HZ (1.38888) //(1.11746031667) //( 1.07755102 )
+#define OVERFLOW_MS ((int)(1000*65536.f/(float)F_CLK)) // 1.042
+#define MPH_PER_HZ (1.38888*60./100.) //(1.11746031667) //( 1.07755102 )
 #define RPM_PER_HZ ( 20 ) // 3 ticks per revolution
-volatile uint8_t state[2] = {IDLE, IDLE};
-volatile uint32_t T1[2] = {0,0};
-volatile uint32_t T2[2] = {0,0};
-volatile uint32_t ticks[2] = {0,0};
-volatile uint32_t TIM2_OVC[2] = {0,0};
+volatile uint32_t last[2] = {0,0};
+volatile uint32_t elapsed_micros[2] = {0,0};
+volatile uint32_t overlap_cnt[2] = {0,0};
 volatile uint32_t speed_tick_count = 0;
 
 /* i originally measured that every 3 ticks of the speedo, the odo was stepped once.
@@ -201,20 +199,19 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
   if(htim->Instance != TIM2)
     return;
 
-  int ch = (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) ? SPEEDOIND : TACHIND;
-  if (state[ch] == IDLE)
-  {
-    T1[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
-    TIM2_OVC[ch] = 0;
-    state[ch] = DONE;
-  }
-  else if (state[ch] == DONE)
-  {
-    T2[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
-    ticks[ch] = (T2[ch] + (TIM2_OVC[ch] * 65536)) - T1[ch];
-    state[ch] = IDLE;
-    TIM2_OVC[ch] = 0;
-  }
+  int ch;
+  if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3)
+    ch = SPEEDOIND;
+  else if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4)
+    ch = TACHIND;
+  else
+    return;
+
+  uint32_t now = get_ticks_32();
+  elapsed_micros[ch] = (now - last[ch]) * (float) (1.0f / (float) F_CLK * (float) 1e6);
+  last[ch] = now;
+  overlap_cnt[ch] = 0;
+
 
   /*
    * flag for an odo tick every 3 (or whatever) speedo ticks
@@ -238,31 +235,29 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 
 
 
-/*
- * keep track of how many times the timer elapsed so we can use
- * that to calc the actual time between ticks.
- *
- * note, if this gets too high then assume no more ticks are coming
- * and we need to say the freq is 0
- */
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 {
   if(htim->Instance == TIM2)
   {
-    TIM2_OVC[0]++;
-    TIM2_OVC[1]++;
-    if(TIM2_OVC[0]*OVERFLOW_MS > 250)
+    // used to be the section where we handled overlapping for the rpm and speed counters.
+    // but now we're using the 32-bit system counter.
+    int ch;
+    if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3)
+      ch = SPEEDOIND;
+    else if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4)
+      ch = TACHIND;
+    else
+      return;
+
+    __atomic_fetch_add(&overlap_cnt[ch], 1, 0);
+    if(overlap_cnt[ch]>1000)
     {
-      TIM2_OVC[0] = 0;
-      ticks[0] = 0;
-      state[0] = IDLE;
+      // if we overlap 1000 times (which i think is about 1 second)
+      // then assume that there are no ticks at all
+      elapsed_micros[ch] = 0;
+      last[ch] = get_ticks_32();
     }
-    if(TIM2_OVC[1]*OVERFLOW_MS > 250)
-    {
-      TIM2_OVC[1] = 0;
-      ticks[1] = 0;
-      state[1] = IDLE;
-    }
+
   }
   else if(htim->Instance == TIM16)
   {
@@ -618,7 +613,7 @@ int get_x12_ticks_speed( float speed )
     return ((speed-MIN_MPH) * DEGREES_PER_MPH + ZERO_ANGLE + MIN_MPH_ANGLE ) * 12.;
 }
 
-int movingAvg(int *ptrArrNumbers, long *ptrSum, int *pos, int len, int nextNum)
+int movingAvg(int *ptrArrNumbers, int *ptrSum, int *pos, int len, int nextNum)
 {
   //Subtract the oldest number from the prev sum, add the new number
   *ptrSum = *ptrSum - ptrArrNumbers[*pos] + nextNum;
@@ -983,9 +978,10 @@ int main_cpp(void)
     /* Print */
     if ((HAL_GetTick () - timerPrint) >= SAMPLE_TIME_MS_PRINT)
     {
+      timerPrint = HAL_GetTick ();
       int ind = 0;
       ind += snprintf (logBuf+ind, bufLen-ind, "\033[1J");
-      ind += snprintf (logBuf+ind, bufLen-ind, "tach: %.1f , speedo %.1f  \n",  rpm,  speed);
+      ind += snprintf (logBuf+ind, bufLen-ind, "tach: %d , speedo %d  \n",  rpm,  speed);
       ind += snprintf (logBuf+ind, bufLen-ind, "acc: %.1f, %.1f, %.1f", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
       if(flagSlow)
       {
@@ -996,7 +992,6 @@ int main_cpp(void)
 #else
       printf("%s", logBuf);
 #endif
-      timerPrint = HAL_GetTick ();
     }
 
 #ifdef SIM_GAUGES
@@ -1022,13 +1017,27 @@ int main_cpp(void)
 #ifndef SWEEP_GAUGES
     if ((HAL_GetTick () - timerUpdates) >= SAMPLE_TIME_MS_UPDATES)
     {
+      timerUpdates = HAL_GetTick ();
 #ifndef SIM_GAUGES
       /*
        * convert ticks, to Hz, to RPM and Speed
        */
-      rpm   = (ticks[TACHIND]==0) ? 0 : (float)F_CLK / (float)ticks[TACHIND];   // Actually this is Hz
-      speed = (ticks[SPEEDOIND]==0) ? 0 : (float)F_CLK / (float)ticks[SPEEDOIND]; // Actually, this is Hz
+      float tmp_micro = 1e-6 * (float)elapsed_micros[TACHIND];
+      rpm   = (tmp_micro==0) ? 0 : 1.f / (float)tmp_micro;   // Actually this is Hz
+      static int rpmArr[5];
+      static int rpmPos = 0;
+      static int rpmSum = 0;
       rpm = rpm * RPM_PER_HZ;
+      rpm = movingAvg(rpmArr, &rpmSum, &rpmPos, 5, rpm);
+
+      tmp_micro = 1e-6 * (float)elapsed_micros[SPEEDOIND];
+      speed   = (tmp_micro==0) ? 0 : 1.f / (float)tmp_micro;
+      static int speedArr[5];
+      static int speedPos = 0;
+      static int speedSum = 0;
+      speed = speed * MPH_PER_HZ;
+      speed = movingAvg(speedArr, &speedPos, &speedSum, 5, speed);
+
       if(rpm < 0)
         rpm = 0;
       else if(rpm > 9000)
@@ -1041,7 +1050,6 @@ int main_cpp(void)
 #endif
       tachX12.setPosition( get_x12_ticks_rpm(rpm) );
       speedX12.setPosition( get_x12_ticks_speed(speed) );
-      timerUpdates = HAL_GetTick ();
 
 
       /*
@@ -1074,6 +1082,8 @@ int main_cpp(void)
           bulbReadWaiting = true;
       }
       //bulbVals = ioexp_screen.get();
+      snprintf (logBuf, bufLen, "%d", bulbVals);
+      gdispFillString(110, 200, logBuf, font, GFX_AMBER, GFX_BLACK);
       if( !(bulbVals&battMask) ) // car pulls down
         gdispImageDraw(&battImg,  20,  210, battImg.width,  battImg.height,  0, 0);
       if( !(bulbVals&brakeMask) ) // car pulls down
