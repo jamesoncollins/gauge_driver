@@ -171,18 +171,28 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
  * Initial testing is showing this to be way off.  I display 100mph,
  * but gps says 60mph.
  *
+ * speed and RPM are measured by TIM2, which is 1MHz and ticks 100000 times (100ms) per overflow
+ *
  */
-#define SPEEDOIND 0
-#define TACHIND 1
-#define IDLE   0
-#define DONE   1
-#define F_CLK  (SystemCoreClock)
-#define OVERFLOW_MS ((int)(1000*65536.f/(float)F_CLK)) // 1.042
-#define MPH_PER_HZ (1.38888*60./100.) //(1.11746031667) //( 1.07755102 )
+enum
+{
+  SPEEDOIND = 0,
+  TACHIND = 1,
+};
+enum
+{
+  IDLE = 0,
+  DONE = 1,
+};
+#define F_CLK  (1000000)        // TIM2 uses 1MHz cock
+#define OVERFLOW_MS ((int)(1000*1000.f/(float)F_CLK)) // TIM2 counts to 1000-1, so every 1ms
+#define MPH_PER_HZ ( 1.0370304 ) //(1.11746031667) //( 1.07755102 )
 #define RPM_PER_HZ ( 20 ) // 3 ticks per revolution
-volatile uint32_t last[2] = {0,0};
-volatile uint32_t elapsed_micros[2] = {0,0};
-volatile uint32_t overlap_cnt[2] = {0,0};
+volatile uint8_t state[2] = {IDLE, IDLE};
+volatile uint32_t T1[2] = {0,0};
+volatile uint32_t T2[2] = {0,0};
+volatile uint32_t ticks[2] = {0,0};
+volatile uint32_t TIM2_OVC[2] = {0,0};
 volatile uint32_t speed_tick_count = 0;
 
 /* i originally measured that every 3 ticks of the speedo, the odo was stepped once.
@@ -199,19 +209,20 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
   if(htim->Instance != TIM2)
     return;
 
-  int ch;
-  if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3)
-    ch = SPEEDOIND;
-  else if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4)
-    ch = TACHIND;
-  else
-    return;
-
-  uint32_t now = get_ticks_32();
-  elapsed_micros[ch] = (now - last[ch]) * (float) (1.0f / (float) F_CLK * (float) 1e6);
-  last[ch] = now;
-  overlap_cnt[ch] = 0;
-
+  int ch = (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) ? SPEEDOIND : TACHIND;
+  if (state[ch] == IDLE)
+  {
+    T1[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
+    TIM2_OVC[ch] = 0;
+    state[ch] = DONE;
+  }
+  else if (state[ch] == DONE)
+  {
+    T2[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
+    ticks[ch] = (T2[ch] + (TIM2_OVC[ch] * 65536)) - T1[ch];
+    state[ch] = IDLE;
+    TIM2_OVC[ch] = 0;
+  }
 
   /*
    * flag for an odo tick every 3 (or whatever) speedo ticks
@@ -235,29 +246,31 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 
 
 
+/*
+ * keep track of how many times the timer elapsed so we can use
+ * that to calc the actual time between ticks.
+ *
+ * note, if this gets too high then assume no more ticks are coming
+ * and we need to say the freq is 0
+ */
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 {
   if(htim->Instance == TIM2)
   {
-    // used to be the section where we handled overlapping for the rpm and speed counters.
-    // but now we're using the 32-bit system counter.
-    int ch;
-    if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3)
-      ch = SPEEDOIND;
-    else if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4)
-      ch = TACHIND;
-    else
-      return;
-
-    __atomic_fetch_add(&overlap_cnt[ch], 1, 0);
-    if(overlap_cnt[ch]>1000)
+    TIM2_OVC[0]++;
+    TIM2_OVC[1]++;
+    if(TIM2_OVC[0]*OVERFLOW_MS > 250)
     {
-      // if we overlap 1000 times (which i think is about 1 second)
-      // then assume that there are no ticks at all
-      elapsed_micros[ch] = 0;
-      last[ch] = get_ticks_32();
+      TIM2_OVC[0] = 0;
+      ticks[0] = 0;
+      state[0] = IDLE;
     }
-
+    if(TIM2_OVC[1]*OVERFLOW_MS > 250)
+    {
+      TIM2_OVC[1] = 0;
+      ticks[1] = 0;
+      state[1] = IDLE;
+    }
   }
   else if(htim->Instance == TIM16)
   {
@@ -1022,31 +1035,28 @@ int main_cpp(void)
       /*
        * convert ticks, to Hz, to RPM and Speed
        */
-      float tmp_micro = 1e-6 * (float)elapsed_micros[TACHIND];
-      rpm   = (tmp_micro==0) ? 0 : 1.f / (float)tmp_micro;   // Actually this is Hz
+      float tmp_float = 1e-6 * (float)ticks[TACHIND];   // fixme: this doesnt need to be float math
+      tmp_float   = (tmp_float==0) ? 0 : 1.f / (float)tmp_float;
       static int rpmArr[5];
       static int rpmPos = 0;
       static int rpmSum = 0;
-      rpm = rpm * RPM_PER_HZ;
+      tmp_float = tmp_float * RPM_PER_HZ;
+      if(tmp_float > 9000 || tmp_float < 100)
+        tmp_float = rpm;
+      rpm = tmp_float;
       rpm = movingAvg(rpmArr, &rpmSum, &rpmPos, 5, rpm);
 
-      tmp_micro = 1e-6 * (float)elapsed_micros[SPEEDOIND];
-      speed   = (tmp_micro==0) ? 0 : 1.f / (float)tmp_micro;
+      tmp_float = 1e-6 * (float)ticks[SPEEDOIND];  // fixme: this doesnt need to be float math
+      tmp_float   = (tmp_float==0) ? 0 : 1.f / (float)tmp_float;
       static int speedArr[5];
       static int speedPos = 0;
       static int speedSum = 0;
-      speed = speed * MPH_PER_HZ;
+      tmp_float = tmp_float * MPH_PER_HZ;
+      if(tmp_float > 180 )
+        tmp_float = speed;
+      speed = tmp_float;
       speed = movingAvg(speedArr, &speedPos, &speedSum, 5, speed);
 
-      if(rpm < 0)
-        rpm = 0;
-      else if(rpm > 9000)
-        rpm = 9000;
-      speed = speed * MPH_PER_HZ;
-      if(speed < 0)
-        speed = 0;
-      else if(speed > 180)
-        speed = 180;
 #endif
       tachX12.setPosition( get_x12_ticks_rpm(rpm) );
       speedX12.setPosition( get_x12_ticks_speed(speed) );
