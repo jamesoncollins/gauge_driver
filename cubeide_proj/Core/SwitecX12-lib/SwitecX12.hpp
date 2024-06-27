@@ -23,7 +23,8 @@ public:
   SwitecX12 (uint32_t steps,
 	     GPIO_TypeDef*, int,
 	     GPIO_TypeDef*, int,
-	     int _maxVel = -1);
+	     uint32_t accelTable[][2] = NULL,
+	     int tableLen = 0);
 
   /*
    * step right now

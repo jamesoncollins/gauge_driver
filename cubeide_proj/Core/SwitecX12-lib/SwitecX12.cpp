@@ -20,14 +20,14 @@
 //{ 50, 700 },
 //{ 100, 400 },
 //};
-static uint32_t ticks_per_us =  ( 1e-6 / ((1. / 64000000.)) );
+static uint32_t ticks_per_us =  ( 64000000 * 1e-6);
 static uint32_t defaultAccelTable[][2] =
 {
-{ 20,  2000 * ticks_per_us },
-{ 50,  1000 * ticks_per_us },
-{ 100, 700  * ticks_per_us },
-{ 150, 400  * ticks_per_us },
-{ 300, 300  * ticks_per_us }
+{ 20,  (uint32_t) 1.1 * 2000 * ticks_per_us },
+{ 50,  (uint32_t) 1.1 * 1000 * ticks_per_us },
+{ 100, (uint32_t) 1.1 * 700  * ticks_per_us },
+{ 150, (uint32_t) 1.1 * 400  * ticks_per_us },
+{ 300, (uint32_t) 1.1 * 300  * ticks_per_us }
 };
 
 //static unsigned short defaultAccelTable[][2] =
@@ -60,7 +60,8 @@ inline void delay(uint32_t us)
 SwitecX12::SwitecX12 (uint32_t steps,
 		      GPIO_TypeDef* portStep, int pinStep,
 		      GPIO_TypeDef* portDir, int pinDir,
-		      int _maxVel)
+		      uint32_t _accelTable[][2],
+                      int tableLen)
 {
   this->steps = steps;
   this->pinStep = pinStep;
@@ -78,12 +79,12 @@ SwitecX12::SwitecX12 (uint32_t steps,
   targetStep = 0;
 
   accelTable = defaultAccelTable;
-
   maxVel = defaultAccelTable[DEFAULT_ACCEL_TABLE_SIZE - 1][0]; // last value in table.
 
-  if(_maxVel > 0)
+  if(tableLen > 0)
   {
-    maxVel = (maxVel<_maxVel) ? maxVel : _maxVel;
+    accelTable = defaultAccelTable;
+    maxVel = defaultAccelTable[tableLen-1][0];
   }
 }
 

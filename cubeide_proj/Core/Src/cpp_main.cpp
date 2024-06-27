@@ -774,13 +774,14 @@ int main_cpp(void)
       DIR_SPEED_Pin
       );
 
+  uint32_t slowTable[][2] = { 20, (uint32_t) (2100. * 64000000. * 1e-6) };
   SwitecX12 odoX12(
       0xFFFFFFFE,  // hopefully infinite
       STEP_ODO_GPIO_Port,
       STEP_ODO_Pin,
       DIR_ODO_GPIO_Port,
       DIR_ODO_Pin,
-      20
+      slowTable, 1
       );
 
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );
