@@ -61,11 +61,11 @@ uint8_t regAddr;
 int rpm, speed;
 
 uint16_t bulbVals = 0;
-const uint16_t lampMask  = 1<<1;
-const uint16_t beamMask  = 1<<0;
-const uint16_t psMask = 1<<2;
-const uint16_t battMask  = 1<<3;
-const uint16_t brakeMask    = 1<<4;
+const uint16_t lampMask         = 1<<1;
+const uint16_t beamMask         = 1<<0;
+const uint16_t psMask           = 1<<3;
+const uint16_t battMask         = 1<<2;
+const uint16_t brakeMask        = 1<<4;
 bool bulbReadWaiting = false;
 
 extern "C" {
