@@ -58,7 +58,7 @@ MCP4725 dac;
 BMI088 imu;
 uint8_t regAddr;
 
-int rpm, speed;
+float rpm, speed;
 
 uint16_t bulbVals = 0;
 const uint16_t lampMask         = 1<<1;
@@ -184,10 +184,10 @@ enum
   IDLE = 0,
   DONE = 1,
 };
-#define F_CLK  (1000000)        // TIM2 uses 1MHz cock
+//#define F_CLK  (1000000)        // TIM2 uses 1MHz cock
 #define OVERFLOW_MS ((int)(100)) // TIM2 counts to 100000-1, so every 100ms
 #define MPH_PER_HZ ( 1.0370304 ) //(1.11746031667) //( 1.07755102 )
-#define RPM_PER_HZ ( 20 ) // 3 ticks per revolution
+#define RPM_PER_HZ ( 20. ) // 3 ticks per revolution
 volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
 volatile uint32_t T2[2] = {0,0};
@@ -601,7 +601,7 @@ int get_x12_ticks_rpm( float rpm )
   const float MIN_RPM = 500;
   const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
   const float MIN_RPM_ANGLE = 4; // degrees from zero to MIN_RPM
-  const float DEGREES_PER_RPM = ( 21.75 / 1000.  );
+  const float DEGREES_PER_RPM = 21.75 / 1000.;
 
   if( rpm <= 1 )
     return ZERO_ANGLE * 12.;
@@ -615,8 +615,8 @@ int get_x12_ticks_speed( float speed )
 {
   const float MIN_MPH = 10;
   const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
-  const float MIN_MPH_ANGLE = 4; // degrees from zero to MIN_RPM
-  const float DEGREES_PER_MPH = ( 1.35 );
+  const float MIN_MPH_ANGLE = 4; // degrees from zero to MIN_MPH
+  const float DEGREES_PER_MPH = 1.35;
 
   if( speed <= 1 )
     return ZERO_ANGLE * 12.;
@@ -998,7 +998,7 @@ int main_cpp(void)
       timerPrint = HAL_GetTick ();
       int ind = 0;
 //      ind += snprintf (logBuf+ind, bufLen-ind, "\033[1J");
-      ind += snprintf (logBuf+ind, bufLen-ind, " tach: %d , speedo %d  \n",  rpm,  speed);
+      ind += snprintf (logBuf+ind, bufLen-ind, " tach: %d , speedo %d  \n",  (int)rpm,  (int)speed);
 //      ind += snprintf (logBuf+ind, bufLen-ind, " acc: %.1f, %.1f, %.1f \n", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
       if(flagSlow)
       {
@@ -1041,25 +1041,25 @@ int main_cpp(void)
        */
       float tmp_float = 1e-6 * (float)ticks[TACHIND];   // fixme: this doesnt need to be float math
       tmp_float   = (tmp_float==0) ? 0 : 1.f / (float)tmp_float;
-      static int rpmArr[5];
-      static int rpmPos = 0;
-      static int rpmSum = 0;
       tmp_float = tmp_float * RPM_PER_HZ;
       if( tmp_float > 9000 )
         tmp_float = rpm;
       rpm = tmp_float;
-      rpm = movingAvg(rpmArr, &rpmSum, &rpmPos, 5, rpm);
+      //static int rpmArr[5];
+      //static int rpmPos = 0;
+      //static int rpmSum = 0;
+      //rpm = movingAvg(rpmArr, &rpmSum, &rpmPos, 5, rpm);
 
       tmp_float = 1e-6 * (float)ticks[SPEEDOIND];  // fixme: this doesnt need to be float math
       tmp_float   = (tmp_float==0) ? 0 : 1.f / (float)tmp_float;
-      static int speedArr[5];
-      static int speedPos = 0;
-      static int speedSum = 0;
       tmp_float = tmp_float * MPH_PER_HZ;
       if(tmp_float > 180 )
         tmp_float = speed;
       speed = tmp_float;
-      speed = movingAvg(speedArr, &speedPos, &speedSum, 5, speed);
+      //static int speedArr[5];
+      //static int speedPos = 0;
+      //static int speedSum = 0;
+      //speed = movingAvg(speedArr, &speedPos, &speedSum, 5, speed);
 
 #endif
       tachX12.setPosition( get_x12_ticks_rpm(rpm) );
