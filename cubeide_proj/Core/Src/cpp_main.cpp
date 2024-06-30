@@ -89,6 +89,7 @@ volatile unsigned i2c_lock = 0;
  */
 SwitecX12 *x12[3];
 bool needles_ready = false;
+bool measure_freq = false;
 void update_needles ()
 {
   x12[0]->update ();
@@ -186,8 +187,8 @@ enum
 };
 //#define F_CLK  (1000000)        // TIM2 uses 1MHz cock
 #define OVERFLOW_MS ((int)(100)) // TIM2 counts to 100000-1, so every 100ms
-#define MPH_PER_HZ ( 1.0370304 ) //(1.11746031667) //( 1.07755102 )
-#define RPM_PER_HZ ( 20. ) // 3 ticks per revolution
+const float MPH_PER_HZ = ( 1.0370304 ); //(1.11746031667) //( 1.07755102 )
+const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
 volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
 volatile uint32_t T2[2] = {0,0};
@@ -281,29 +282,29 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 
     if(needles_ready)
     {
+      if(measure_freq)
+      {
 #ifndef SWEEP_GAUGES
 #ifndef SIM_GAUGES
-      /*
-       * convert ticks, to Hz, to RPM and Speed
-       */
-      float tmp_float = 1e-6 * (float)ticks[TACHIND];   // fixme: this doesnt need to be float math
-      tmp_float   = (tmp_float==0) ? 0 : 1.f / tmp_float; //fixme: float division
-      tmp_float = tmp_float * RPM_PER_HZ;
-      if( tmp_float > 9000 )
-        tmp_float = rpm;
-      rpm = tmp_float;
+        /*
+         * convert ticks, to Hz, to RPM and Speed
+         */
+        int tmp_int = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)(1000000.f / (float)ticks[TACHIND]);
+        if( tmp_int > 9000 )
+          tmp_int = rpm;
+        rpm = tmp_int;
+        //rpm = 5000;
 
-      tmp_float = 1e-6 * (float)ticks[SPEEDOIND];  // fixme: this doesnt need to be float math
-      tmp_float   = (tmp_float==0) ? 0 : 1.f / tmp_float;
-      tmp_float = tmp_float * MPH_PER_HZ;
-      if(tmp_float > 180 )
-        tmp_float = speed;
-      speed = tmp_float;
+        tmp_int = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)(1000000.f / (float)ticks[SPEEDOIND]);
+        if( tmp_int > 180 )
+          tmp_int = speed;
+        speed = tmp_int;
+        //speed = 90;
 #endif
-      x12[0]->setPosition( get_x12_ticks_rpm(rpm) );
-      x12[1]->setPosition( get_x12_ticks_speed(speed) );
+        x12[0]->setPosition( get_x12_ticks_rpm(rpm) );
+        x12[1]->setPosition( get_x12_ticks_speed(speed) );
 #endif
-
+      }
       update_needles();
     }
 
@@ -629,9 +630,9 @@ int parseEcuParam(ecuParam_t *ecuParam, uint8_t *data)
 int get_x12_ticks_rpm( float rpm )
 {
   const float MIN_RPM = 500;
-  const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
-  const float MIN_RPM_ANGLE = 4; // degrees from zero to MIN_RPM
-  const float DEGREES_PER_RPM = 21.75 / 1000.;
+  const float ZERO_ANGLE = 1;    // degrees beyond the stopper to get to 0
+  const float MIN_RPM_ANGLE = 4.5; // degrees from zero to MIN_RPM
+  const float DEGREES_PER_RPM = 21.9 / 1000.;
 
   if( rpm <= 1 )
     return ZERO_ANGLE * 12.;
@@ -644,8 +645,8 @@ int get_x12_ticks_rpm( float rpm )
 int get_x12_ticks_speed( float speed )
 {
   const float MIN_MPH = 10;
-  const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
-  const float MIN_MPH_ANGLE = 4; // degrees from zero to MIN_MPH
+  const float ZERO_ANGLE = 1;    // degrees beyond the stopper to get to 0
+  const float MIN_MPH_ANGLE = 3.5; // degrees from zero to MIN_MPH
   const float DEGREES_PER_MPH = 1.35;
 
   if( speed <= 1 )
@@ -927,6 +928,10 @@ int main_cpp(void)
   }
   gdispImageClose (&startupAnim);
 
+  /*
+   * tell the interrupt it should start setting needle pos based on rpm is calcs
+   */
+  measure_freq = true;
 
   /*
    * load image resources for warning indicators
@@ -1107,9 +1112,11 @@ int main_cpp(void)
       gdispClear(GFX_BLACK); // if the device doesnt support flushing, then this is immediate
 
       // make x be -x, flip x and y
-      const float gimbal_radius = 35;
-      drawGimball (168, 48, gimbal_radius, -imu.acc_mps2[1] / 9.8 * gimbal_radius,
-                   imu.acc_mps2[0] / 9.8 * gimbal_radius);
+      const int gimbal_radius = 35;
+      drawGimball (168, 48, gimbal_radius,
+                   (int)(-imu.acc_mps2[1]*100.) / 980 * gimbal_radius,
+                   (int)( imu.acc_mps2[0]*100.) / 980 * gimbal_radius
+                   );
 
       snprintf (logBuf, bufLen, "%.1f", ecuParams[ECU_PARAM_WB].val);
       gdispFillString(30, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
@@ -1433,6 +1440,7 @@ int main_cpp(void)
    * Power-down loop, do anything we need to in order to cleanup before
    * we power off.
    */
+  measure_freq = false;
   speedX12.setPosition(0);
   tachX12.setPosition(0);
   while(1)
