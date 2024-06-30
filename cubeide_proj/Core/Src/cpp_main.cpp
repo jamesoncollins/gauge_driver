@@ -185,7 +185,7 @@ enum
   DONE = 1,
 };
 #define F_CLK  (1000000)        // TIM2 uses 1MHz cock
-#define OVERFLOW_MS ((int)(1000*1000.f/(float)F_CLK)) // TIM2 counts to 1000-1, so every 1ms
+#define OVERFLOW_MS ((int)(100)) // TIM2 counts to 100000-1, so every 100ms
 #define MPH_PER_HZ ( 1.0370304 ) //(1.11746031667) //( 1.07755102 )
 #define RPM_PER_HZ ( 20 ) // 3 ticks per revolution
 volatile uint8_t state[2] = {IDLE, IDLE};
@@ -219,7 +219,7 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
   else if (state[ch] == DONE)
   {
     T2[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
-    ticks[ch] = (T2[ch] + (TIM2_OVC[ch] * 65536)) - T1[ch];
+    ticks[ch] = (T2[ch] + (TIM2_OVC[ch] * 100000)) - T1[ch];
     state[ch] = IDLE;
     TIM2_OVC[ch] = 0;
   }
@@ -600,7 +600,7 @@ int get_x12_ticks_rpm( float rpm )
 {
   const float MIN_RPM = 500;
   const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
-  const float MIN_RPM_ANGLE = 7; // degrees from zero to MIN_RPM
+  const float MIN_RPM_ANGLE = 4; // degrees from zero to MIN_RPM
   const float DEGREES_PER_RPM = ( 21.75 / 1000.  );
 
   if( rpm <= 1 )
@@ -615,7 +615,7 @@ int get_x12_ticks_speed( float speed )
 {
   const float MIN_MPH = 10;
   const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
-  const float MIN_MPH_ANGLE = 6.5; // degrees from zero to MIN_RPM
+  const float MIN_MPH_ANGLE = 4; // degrees from zero to MIN_RPM
   const float DEGREES_PER_MPH = ( 1.35 );
 
   if( speed <= 1 )
@@ -718,7 +718,7 @@ int main_cpp(void)
         0x0000
 //        | lampMask    // not sure
         | brakeMask     // switch pulls bulb down, need to mimic bulb voltage
-//        | battMask    // voltage source is normally applied
+        | battMask    // voltage source is normally applied
 //        | psMask      // switch pulls this up, so we pull down
       ))
   {
@@ -783,6 +783,8 @@ int main_cpp(void)
       DIR_ODO_Pin,
       slowTable, 1
       );
+  odoX12.currentStep = 0xFFFFFFFE;
+  odoX12.targetStep = 0xFFFFFFFE;
 
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );
   HAL_Delay(10);
@@ -793,15 +795,15 @@ int main_cpp(void)
    */
   if(!cleanPwr)
   {
-    for(int i=0; i<X27_STEPS; i++)
+    for(int i=0; i<X27_STEPS>>1; i++)
     {
       tachX12.step(-1);
       speedX12.step(-1);
       DWT_Delay(500);
     }
   }
-  tachX12.currentStep = 0; tachX12.stopped = true; tachX12.vel = 0;
-  speedX12.currentStep = 0; speedX12.stopped = true; speedX12.vel = 0;
+  tachX12.reset();
+  speedX12.reset();
   HAL_Delay(200);
 
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );
@@ -833,6 +835,7 @@ int main_cpp(void)
                  0, 0);
   for(int i=0; i<17; i++)
   {
+    // skip ahead before displaying.  logo anim is too long.
     gdispImageNext (&startupAnim);
     displayCnt--;
   }
@@ -854,7 +857,7 @@ int main_cpp(void)
         startup_state++;
         break;
       case 1:
-        if(tachX12.stopped && speedX12.stopped)
+        if(tachX12.atTarget() && speedX12.atTarget())
           startup_state ++;
         break;
       case 2:
@@ -863,7 +866,7 @@ int main_cpp(void)
         startup_state++;
         break;
       case 3:
-        if(tachX12.stopped && speedX12.stopped)
+        if(tachX12.atTarget() && speedX12.atTarget())
           startup_state++;
         break;
       default:
@@ -994,12 +997,12 @@ int main_cpp(void)
     {
       timerPrint = HAL_GetTick ();
       int ind = 0;
-      ind += snprintf (logBuf+ind, bufLen-ind, "\033[1J");
-      ind += snprintf (logBuf+ind, bufLen-ind, "tach: %d , speedo %d  \n",  rpm,  speed);
-      ind += snprintf (logBuf+ind, bufLen-ind, "acc: %.1f, %.1f, %.1f", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
+//      ind += snprintf (logBuf+ind, bufLen-ind, "\033[1J");
+      ind += snprintf (logBuf+ind, bufLen-ind, " tach: %d , speedo %d  \n",  rpm,  speed);
+//      ind += snprintf (logBuf+ind, bufLen-ind, " acc: %.1f, %.1f, %.1f \n", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
       if(flagSlow)
       {
-	ind += snprintf (logBuf+ind, bufLen-ind, "main loop running slow \n");
+//	ind += snprintf (logBuf+ind, bufLen-ind, "main loop running slow \n");
       }
 #ifdef PRINT_TO_USB
       CDC_Transmit_FS ((uint8_t*) logBuf, ind);
@@ -1042,7 +1045,7 @@ int main_cpp(void)
       static int rpmPos = 0;
       static int rpmSum = 0;
       tmp_float = tmp_float * RPM_PER_HZ;
-      if(tmp_float > 9000 || tmp_float < 100)
+      if( tmp_float > 9000 )
         tmp_float = rpm;
       rpm = tmp_float;
       rpm = movingAvg(rpmArr, &rpmSum, &rpmPos, 5, rpm);
@@ -1130,9 +1133,9 @@ int main_cpp(void)
     /*
      * odometer ticks
      */
-    if(odo_tick_flag && odoX12.stopped)
+    if(odo_tick_flag && odoX12.atTarget())
     {
-      odoX12.setPosition(odoX12.targetStep+ODO_STEPS_PER_TICK);
+      odoX12.setPosition(odoX12.targetStep-ODO_STEPS_PER_TICK);
       odo_tick_flag = false;
     }
 #else
@@ -1140,13 +1143,13 @@ int main_cpp(void)
      * temporarily sweep needle back and forth
      */
     static bool set = false;
-    if ( set && tachX12.stopped && speedX12.stopped )
+    if ( set && tachX12.atTarget() && speedX12.atTarget() )
     {
       set = !set;
       tachX12.setPosition (get_x12_ticks_rpm(7000));
       speedX12.setPosition (get_x12_ticks_speed(180) );
     }
-    else if ( !set && tachX12.stopped && speedX12.stopped )
+    else if ( !set && tachX12.atTarget() && speedX12.atTarget() )
     {
       set = !set;
       tachX12.setPosition (0);
@@ -1407,7 +1410,7 @@ int main_cpp(void)
     tachX12.update();
     speedX12.update();
 #endif
-    if(speedX12.stopped && tachX12.stopped)
+    if(speedX12.atTarget() && tachX12.atTarget())
       break;
   }
 
