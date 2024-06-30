@@ -18,6 +18,9 @@ extern "C" {
 #include "../../res/beam.c"
 #include "../Core/PI4IOE5V6416/PI4IOE5V6416.hpp"
 
+int get_x12_ticks_speed( float  );
+int get_x12_ticks_rpm( float  );
+
 /*
  * Milisecond timers, controlled by the main while loop, for various
  * slow functions
@@ -82,18 +85,15 @@ volatile unsigned i2c_lock = 0;
 
 
 /*
- * call by a tier to update needle mposistions regularly
+ * call by a tier to update needle positions regularly
  */
 SwitecX12 *x12[3];
 bool needles_ready = false;
-void update_needles()
+void update_needles ()
 {
-  if(needles_ready)
-  {
-    x12[0]->update();
-    x12[1]->update();
-    x12[2]->update();
-  }
+  x12[0]->update ();
+  x12[1]->update ();
+  x12[2]->update ();
 }
 
 /*
@@ -274,8 +274,38 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
   }
   else if(htim->Instance == TIM16)
   {
+    /*
+     * we should be here every
+     * 1 / (10000 * (1/64000000 seconds)) = 6.4kHz
+     */
 
-    update_needles();
+    if(needles_ready)
+    {
+#ifndef SWEEP_GAUGES
+#ifndef SIM_GAUGES
+      /*
+       * convert ticks, to Hz, to RPM and Speed
+       */
+      float tmp_float = 1e-6 * (float)ticks[TACHIND];   // fixme: this doesnt need to be float math
+      tmp_float   = (tmp_float==0) ? 0 : 1.f / tmp_float; //fixme: float division
+      tmp_float = tmp_float * RPM_PER_HZ;
+      if( tmp_float > 9000 )
+        tmp_float = rpm;
+      rpm = tmp_float;
+
+      tmp_float = 1e-6 * (float)ticks[SPEEDOIND];  // fixme: this doesnt need to be float math
+      tmp_float   = (tmp_float==0) ? 0 : 1.f / tmp_float;
+      tmp_float = tmp_float * MPH_PER_HZ;
+      if(tmp_float > 180 )
+        tmp_float = speed;
+      speed = tmp_float;
+#endif
+      x12[0]->setPosition( get_x12_ticks_rpm(rpm) );
+      x12[1]->setPosition( get_x12_ticks_speed(speed) );
+#endif
+
+      update_needles();
+    }
 
 #if 0 // we arent using this yet
     if(rpm_alert && rpm_alert_has_lock)
@@ -1035,35 +1065,35 @@ int main_cpp(void)
     if ((HAL_GetTick () - timerUpdates) >= SAMPLE_TIME_MS_UPDATES)
     {
       timerUpdates = HAL_GetTick ();
-#ifndef SIM_GAUGES
-      /*
-       * convert ticks, to Hz, to RPM and Speed
-       */
-      float tmp_float = 1e-6 * (float)ticks[TACHIND];   // fixme: this doesnt need to be float math
-      tmp_float   = (tmp_float==0) ? 0 : 1.f / (float)tmp_float;
-      tmp_float = tmp_float * RPM_PER_HZ;
-      if( tmp_float > 9000 )
-        tmp_float = rpm;
-      rpm = tmp_float;
-      //static int rpmArr[5];
-      //static int rpmPos = 0;
-      //static int rpmSum = 0;
-      //rpm = movingAvg(rpmArr, &rpmSum, &rpmPos, 5, rpm);
-
-      tmp_float = 1e-6 * (float)ticks[SPEEDOIND];  // fixme: this doesnt need to be float math
-      tmp_float   = (tmp_float==0) ? 0 : 1.f / (float)tmp_float;
-      tmp_float = tmp_float * MPH_PER_HZ;
-      if(tmp_float > 180 )
-        tmp_float = speed;
-      speed = tmp_float;
-      //static int speedArr[5];
-      //static int speedPos = 0;
-      //static int speedSum = 0;
-      //speed = movingAvg(speedArr, &speedPos, &speedSum, 5, speed);
-
-#endif
-      tachX12.setPosition( get_x12_ticks_rpm(rpm) );
-      speedX12.setPosition( get_x12_ticks_speed(speed) );
+//#ifndef SIM_GAUGES
+//      /*
+//       * convert ticks, to Hz, to RPM and Speed
+//       */
+//      float tmp_float = 1e-6 * (float)ticks[TACHIND];   // fixme: this doesnt need to be float math
+//      tmp_float   = (tmp_float==0) ? 0 : 1.f / (float)tmp_float;
+//      tmp_float = tmp_float * RPM_PER_HZ;
+//      if( tmp_float > 9000 )
+//        tmp_float = rpm;
+//      rpm = tmp_float;
+//      //static int rpmArr[5];
+//      //static int rpmPos = 0;
+//      //static int rpmSum = 0;
+//      //rpm = movingAvg(rpmArr, &rpmSum, &rpmPos, 5, rpm);
+//
+//      tmp_float = 1e-6 * (float)ticks[SPEEDOIND];  // fixme: this doesnt need to be float math
+//      tmp_float   = (tmp_float==0) ? 0 : 1.f / (float)tmp_float;
+//      tmp_float = tmp_float * MPH_PER_HZ;
+//      if(tmp_float > 180 )
+//        tmp_float = speed;
+//      speed = tmp_float;
+//      //static int speedArr[5];
+//      //static int speedPos = 0;
+//      //static int speedSum = 0;
+//      //speed = movingAvg(speedArr, &speedPos, &speedSum, 5, speed);
+//
+//#endif
+//      tachX12.setPosition( get_x12_ticks_rpm(rpm) );
+//      speedX12.setPosition( get_x12_ticks_speed(speed) );
 
 
       /*
@@ -1077,8 +1107,9 @@ int main_cpp(void)
       gdispClear(GFX_BLACK); // if the device doesnt support flushing, then this is immediate
 
       // make x be -x, flip x and y
-      drawGimball (168, 48, 35, -imu.acc_mps2[1] / 9.8 * 20,
-                   imu.acc_mps2[0] / 9.8 * 20);
+      const float gimbal_radius = 35;
+      drawGimball (168, 48, gimbal_radius, -imu.acc_mps2[1] / 9.8 * gimbal_radius,
+                   imu.acc_mps2[0] / 9.8 * gimbal_radius);
 
       snprintf (logBuf, bufLen, "%.1f", ecuParams[ECU_PARAM_WB].val);
       gdispFillString(30, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
