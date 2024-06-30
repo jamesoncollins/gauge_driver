@@ -25,6 +25,7 @@ public:
 	     GPIO_TypeDef*, int,
 	     uint32_t accelTable[][2] = NULL,
 	     int tableLen = 0);
+  bool atTarget();
 
   /*
    * step right now
@@ -35,6 +36,9 @@ public:
    * step to 0, right now
    */
   void zero ();
+
+  // like zero() but doesnt actually move
+  void reset ();
 
   /*
    * step to position, right now

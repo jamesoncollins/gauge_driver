@@ -39,13 +39,13 @@ static uint32_t defaultAccelTable[][2] =
 //{ 300, 90 } };
 
 const int stepPulseTicks = 1 * ticks_per_us;
-const int resetStepTicks = 300 * ticks_per_us;
+const int resetStepTicks = 2000 * ticks_per_us;
 #define DEFAULT_ACCEL_TABLE_SIZE (sizeof(defaultAccelTable)/sizeof(*defaultAccelTable))
 
 #define LOW GPIO_PIN_RESET
 #define HIGH GPIO_PIN_SET
 
-// microseconds since program exec
+// clock ticks since startm overflows at 32-bits
 inline uint32_t ticks ()
 {
   //return get_ticks_us();
@@ -55,6 +55,11 @@ inline uint32_t ticks ()
 inline void delay(uint32_t us)
 {
   DWT_Delay(us);
+}
+
+bool SwitecX12::atTarget()
+{
+  return (targetStep==currentStep) && stopped;
 }
 
 SwitecX12::SwitecX12 (uint32_t steps,
@@ -93,7 +98,6 @@ void SwitecX12::step (int dir)
   // the chip is actually active-high = CW as the pin is labeled CW-/CCW
   // but its flipped here becuase the schematic is flipped
   HAL_GPIO_WritePin (portDir, pinDir, dir > 0 ? LOW : HIGH);
-  //digitalWrite(13, vel == maxVel ? HIGH : LOW);
   HAL_GPIO_WritePin (portStep, pinStep, HIGH);
   delay (stepPulseTicks);
   HAL_GPIO_WritePin (portStep, pinStep, LOW);
@@ -119,6 +123,15 @@ void SwitecX12::stepTo (uint32_t position)
     step (dir);
     delay (resetStepTicks);
   }
+}
+
+void SwitecX12::reset()
+{
+  currentStep = 0;
+  targetStep = 0;
+  vel = 0;
+  dir = 0;
+  stopped = true;
 }
 
 void SwitecX12::zero ()
