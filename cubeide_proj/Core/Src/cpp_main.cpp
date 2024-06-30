@@ -288,17 +288,19 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 #ifndef SIM_GAUGES
         /*
          * convert ticks, to Hz, to RPM and Speed
+         *
+         * TODO: get rid of float division
          */
-        int tmp_int = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)(1000000.f / (float)ticks[TACHIND]);
-        if( tmp_int > 9000 )
-          tmp_int = rpm;
-        rpm = tmp_int;
+        float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)(1000000.f / (float)ticks[TACHIND]);
+        if( tmp > 9000 )
+          tmp = rpm;
+        rpm = tmp;
         //rpm = 5000;
 
-        tmp_int = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)(1000000.f / (float)ticks[SPEEDOIND]);
-        if( tmp_int > 180 )
-          tmp_int = speed;
-        speed = tmp_int;
+        tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)(1000000.f / (float)ticks[SPEEDOIND]);
+        if( tmp > 180 )
+          tmp = speed;
+        speed = tmp;
         //speed = 90;
 #endif
         x12[0]->setPosition( get_x12_ticks_rpm(rpm) );
