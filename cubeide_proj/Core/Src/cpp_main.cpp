@@ -1077,7 +1077,7 @@ int main_cpp(void)
       gdispClear(GFX_BLACK); // if the device doesnt support flushing, then this is immediate
 
       // make x be -x, flip x and y
-      drawGimball (168, 48, 20, -imu.acc_mps2[1] / 9.8 * 20,
+      drawGimball (168, 48, 35, -imu.acc_mps2[1] / 9.8 * 20,
                    imu.acc_mps2[0] / 9.8 * 20);
 
       snprintf (logBuf, bufLen, "%.1f", ecuParams[ECU_PARAM_WB].val);
