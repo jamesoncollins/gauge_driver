@@ -1,7 +1,9 @@
 #ifndef SwitecX12_h
 #define SwitecX12_h
 
-#include "main.h"
+#include <stddef.h>
+#include <atomic>
+#include <stm32wb55xx.h>
 
 class SwitecX12
 {
@@ -58,7 +60,7 @@ public:
 
 private:
   void advance ();
-  bool dontUpdate = true;
+  std::atomic<bool> lock;
 };
 
 #endif

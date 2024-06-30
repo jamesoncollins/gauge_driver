@@ -205,7 +205,15 @@ void SwitecX12::advance ()
 
 void SwitecX12::setPosition (uint32_t pos)
 {
-  dontUpdate = true;
+
+  /*
+   * wait to aqauire the lock.
+   * we'll only fail if an interrupt is still in update()
+   */
+  bool wasLocked = false;
+  while(!wasLocked)
+    lock.compare_exchange_weak(wasLocked, true);
+
   // pos is unsigned so don't need to check for <0
   if (pos >= steps)
     pos = steps - 1;
@@ -217,12 +225,23 @@ void SwitecX12::setPosition (uint32_t pos)
     time0 = ticks ();
     microDelay = 0;
   }
-  dontUpdate = false;
+
+  lock.store(false);
 }
 
 void SwitecX12::update ()
 {
-  if (!dontUpdate && !stopped)
+
+  /*
+   * try to aquire the lock, return immediatly if we
+   * fail
+   */
+  bool wasLocked = false;
+  lock.compare_exchange_weak(wasLocked, true);
+  if(wasLocked)
+    return;
+
+  if (!stopped)
   {
     unsigned long delta = ticks () - time0;
     if (delta >= microDelay)
@@ -230,4 +249,6 @@ void SwitecX12::update ()
       advance ();
     }
   }
+
+  lock.store(false);
 }
