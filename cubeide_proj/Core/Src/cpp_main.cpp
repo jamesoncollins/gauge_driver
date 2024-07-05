@@ -187,7 +187,7 @@ enum
 };
 //#define F_CLK  (1000000)        // TIM2 uses 1MHz cock
 #define OVERFLOW_MS ((int)(100)) // TIM2 counts to 100000-1, so every 100ms
-const float MPH_PER_HZ = ( 1.0370304 ); //(1.11746031667) //( 1.07755102 )
+const float MPH_PER_HZ = ( 0.8425872 ); //(1.11746031667) //( 1.07755102 )
 const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
 volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
@@ -699,9 +699,9 @@ int main_cpp(void)
   {
     cleanPwr = true;
   }
-  HAL_PWR_EnableBkUpAccess ();
+  //HAL_PWR_EnableBkUpAccess ();
   HAL_RTCEx_BKUPWrite (&hrtc, RTC_BKP_DR1, 0x0000);
-  HAL_PWR_DisableBkUpAccess ();
+  //HAL_PWR_DisableBkUpAccess ();
 
   /*
    * init graphics library
