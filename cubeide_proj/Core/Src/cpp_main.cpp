@@ -695,6 +695,7 @@ int main_cpp(void)
    * clear the register so we are forced to reset it later
    */
   bool cleanPwr = false;
+  HAL_PWR_EnableBkUpAccess ();
   if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == 0xBEEF)
   {
     cleanPwr = true;
@@ -1458,9 +1459,9 @@ int main_cpp(void)
   /*
    * store the fact that we shutdown clean
    */
-  HAL_PWR_EnableBkUpAccess ();
+  //HAL_PWR_EnableBkUpAccess ();
   HAL_RTCEx_BKUPWrite (&hrtc, RTC_BKP_DR1, 0xBEEF);
-  HAL_PWR_DisableBkUpAccess ();
+  //HAL_PWR_DisableBkUpAccess ();
 
   /*
    * we left the main loop, we can power down
