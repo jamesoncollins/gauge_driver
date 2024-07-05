@@ -6,6 +6,7 @@
 extern "C" {
 #include "../Core/MCP4725-lib/MCP4725.h"
 #include "../Core/BMI088-lib/BMI088.h"
+#include "filters.h"
 }
 #include "../Core/SwitecX12-lib/SwitecX12.hpp"
 #include "utils.h"
@@ -70,6 +71,7 @@ const uint16_t psMask           = 1<<3;
 const uint16_t battMask         = 1<<2;
 const uint16_t brakeMask        = 1<<4;
 bool bulbReadWaiting = false;
+iir_ma_state_t rpm_filter_state, speed_filter_state;
 
 extern "C" {
 
@@ -294,14 +296,12 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
         float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)(1000000.f / (float)ticks[TACHIND]);
         if( tmp > 9000 )
           tmp = rpm;
-        rpm = tmp;
-        //rpm = 5000;
+        rpm = iir_ma( &rpm_filter_state, tmp );
 
         tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)(1000000.f / (float)ticks[SPEEDOIND]);
         if( tmp > 180 )
           tmp = speed;
-        speed = tmp;
-        //speed = 90;
+        speed = iir_ma( &speed_filter_state, tmp );
 #endif
         x12[0]->setPosition( get_x12_ticks_rpm(rpm) );
         x12[1]->setPosition( get_x12_ticks_speed(speed) );
