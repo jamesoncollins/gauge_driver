@@ -247,14 +247,10 @@ void HAL_RTC_MspInit(RTC_HandleTypeDef* hrtc)
 
   /* USER CODE END RTC_MspInit 0 */
 
-  /** Enable access to the backup domain
-  */
-    HAL_PWR_EnableBkUpAccess();
-
   /** Initializes the peripherals clock
   */
     PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
-    PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+    PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
     if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
     {
       Error_Handler();
