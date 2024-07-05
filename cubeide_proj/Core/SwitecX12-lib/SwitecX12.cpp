@@ -23,11 +23,11 @@
 static uint32_t ticks_per_us =  ( 64000000 * 1e-6);
 static uint32_t defaultAccelTable[][2] =
 {
-{ 50,  (uint32_t) 1.1 * 10000 * ticks_per_us },
-{ 100, (uint32_t) 1.1 * 5000 * ticks_per_us },
-{ 150, (uint32_t) 1.1 * 3000  * ticks_per_us },
-{ 200, (uint32_t) 1.1 * 1000  * ticks_per_us },
-{ 250, (uint32_t) 1.1 * 500  * ticks_per_us },
+{ 20,  (uint32_t) 1.1 * 10000 * ticks_per_us },
+{ 100, (uint32_t) 1.1 * 2000 * ticks_per_us },
+{ 150, (uint32_t) 1.1 * 750  * ticks_per_us },
+{ 200, (uint32_t) 1.1 * 500  * ticks_per_us },
+{ 250, (uint32_t) 1.1 * 400  * ticks_per_us },
 { 300, (uint32_t) 1.1 * 300  * ticks_per_us }
 };
 
