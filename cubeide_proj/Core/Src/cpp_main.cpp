@@ -1117,8 +1117,8 @@ int main_cpp(void)
       // make x be -x, flip x and y
       const int gimbal_radius = 35;
       drawGimball (168, 48, gimbal_radius,
-                   -imu.acc_mps2[1] / (9.8.f / 2.f) * gimbal_radius,
-                    imu.acc_mps2[0] / (9.8.f / 2.f) * gimbal_radius
+                   -imu.acc_mps2[1] / (9.8f / 2.f) * gimbal_radius,
+                    imu.acc_mps2[0] / (9.8f / 2.f) * gimbal_radius
                    );
 
       snprintf (logBuf, bufLen, "%.1f", ecuParams[ECU_PARAM_WB].val);
