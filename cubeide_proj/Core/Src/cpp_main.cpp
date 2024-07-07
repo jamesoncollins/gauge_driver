@@ -4,11 +4,11 @@
 
 #include "usbd_cdc_if.h"
 extern "C" {
-#include "../Core/MCP4725-lib/MCP4725.h"
-#include "../Core/BMI088-lib/BMI088.h"
+#include "../MCP4725-lib/MCP4725.h"
+#include "../BMI088-lib/BMI088.h"
 #include "filters.h"
 }
-#include "../Core/SwitecX12-lib/SwitecX12.hpp"
+#include "../SwitecX12-lib/SwitecX12.hpp"
 #include "utils.h"
 #include "gfx.h"
 #include "ugfx_widgets.h"
@@ -17,7 +17,8 @@ extern "C" {
 #include "../../res/batt.c"
 #include "../../res/brake.c"
 #include "../../res/beam.c"
-#include "../Core/PI4IOE5V6416/PI4IOE5V6416.hpp"
+#include "../PI4IOE5V6416/PI4IOE5V6416.hpp"
+#include "../ECUK-lib/ECUK.hpp"
 
 int get_x12_ticks_speed( float  );
 int get_x12_ticks_rpm( float  );
@@ -61,6 +62,10 @@ extern RTC_HandleTypeDef hrtc;
 MCP4725 dac;
 BMI088 imu;
 uint8_t regAddr;
+
+bool ecuTxDone = false;
+bool ecuRxDone = false;
+ECUK ecu(&huart1, &ecuTxDone, &ecuRxDone);
 
 float rpm, speed;
 
@@ -310,6 +315,9 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
       update_needles();
     }
 
+
+    ecu.update();
+
 #if 0 // we arent using this yet
     if(rpm_alert && rpm_alert_has_lock)
     {
@@ -353,32 +361,6 @@ int _write(int32_t file, uint8_t *ptr, int32_t len)
     return len;
 }
 
-/*
- * uart and ecu handling
- */
-
-typedef enum
-{
-  ECU_RESET = 0,
-
-  ECU_5_BAUD,
-  ECU_5_BAUD_VERIFY,
-  ECU_5_BAUD_REPLY,
-  ECU_5_BAUD_TX_KW_NOT,
-
-  ECU_SEND_REQUEST,
-  ECU_PROCESS_REPLY,
-
-  ECU_DELAY
-}
-ecuState_e;
-
-ecuState_e ecuState = ECU_RESET;
-ecuState_e ecuStateNext = ECU_RESET;
-int ecuDelayFor_ms = 0;
-bool ecuTxDone = false;
-bool ecuRxDone = false;
-
 void HAL_UART_AbortCpltCallback(UART_HandleTypeDef *huart)
 {
 
@@ -396,238 +378,6 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 
 } // extern C
-
-
-// if we're above either of these values then consider it a highload situation
-const int TPS_THRESHOLD = 30;
-const int RPM_THRESHOLD = 3000;
-
-typedef enum
-{
-  ECU_LOAD_LOW, // log when load is low
-  ECU_LOAD_HIGH // always log
-}
-ecuLoad_e;
-
-typedef struct
-{
-  char name[16];
-  char units[16];
-  uint8_t PID;
-  uint8_t responseLen;
-  float scale, offset;
-  bool inverse;         // 1 / x
-  float val;
-  int lastTime_ms;
-  ecuLoad_e load;
-}
-ecuParam_t;
-
-enum
-{
-  ECU_PARAM_TPS,
-  ECU_PARAM_SPEED,
-  ECU_PARAM_RPM,
-  ECU_PARAM_WB,
-  ECU_PARAM_KNOCK,
-  ECU_PARAM_TIMING,
-  ECU_PARAM_AFR_TARGET,
-
-  ECU_PARAM_FFTL,
-  ECU_PARAM_FFTM,
-  ECU_PARAM_FFTH,
-  ECU_PARAM_RFTL,
-  ECU_PARAM_RFTM,
-  ECU_PARAM_RFTH,
-
-  ECU_NUM_PARAMS
-};
-
-ecuParam_t ecuParams[ECU_NUM_PARAMS] = {
-    {
-        .name = "TPS",
-        .units = "%",
-        .PID = 0x17,
-        .responseLen = 1,
-        .scale = 100./255.,
-        .offset = 0,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_HIGH,
-    },
-    {
-        .name = "Speed",
-        .units = "mph",
-        .PID = 0x2F,
-        .responseLen = 1,
-        .scale = 1.2427424,
-        .offset = 0,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_HIGH,
-    },
-    {
-        .name = "RPM",
-        .units = "rpm",
-        .PID = 0x21,
-        .responseLen = 1,
-        .scale = 31.25,
-        .offset = 0,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_HIGH,
-    },
-    {
-        .name = "Wideband",
-        .units = "AFT",
-        .PID = 0xBF,
-        .responseLen = 1,
-        .scale = 0.0627,
-        .offset = 7,
-        .val = 14.7,
-        .lastTime_ms = 0, //FIXME
-        .load = ECU_LOAD_HIGH,
-    },
-    {
-        .name = "Knock Sum",
-        .units = "Count",
-        .PID = 0x26,
-        .responseLen = 1,
-        .scale = 1,
-        .offset = 0,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_HIGH,
-    },
-    {
-        .name = "Timing Adv",
-        .units = "°",
-        .PID = 0x06,
-        .responseLen = 1,
-        .scale = 1,
-        .offset = -20,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_HIGH,
-    },
-    {
-        .name = "AFR Target",
-        .units = "afr",
-        .PID = 0x32,
-        .responseLen = 1,
-        .scale = 14.7*128.,
-        .offset = 0,
-        .inverse = true,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_HIGH,
-    },
-
-
-
-    {
-        .name = "FFTL",
-        .units = "%",
-        .PID = 0x4c,
-        .responseLen = 1,
-        .scale = 0.1953125,
-        .offset = -25,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_LOW,
-    },
-    {
-        .name = "FFTM",
-        .units = "%",
-        .PID = 0x4d,
-        .responseLen = 1,
-        .scale = 0.1953125,
-        .offset = -25,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_LOW,
-    },
-    {
-        .name = "FFTH",
-        .units = "%",
-        .PID = 0x4e,
-        .responseLen = 1,
-        .scale = 0.1953125,
-        .offset = -25,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_LOW,
-    },
-
-    {
-        .name = "RFTL",
-        .units = "%",
-        .PID = 0x0c,
-        .responseLen = 1,
-        .scale = 0.1953125,
-        .offset = -25,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_LOW,
-    },
-    {
-        .name = "RFTM",
-        .units = "%",
-        .PID = 0x0d,
-        .responseLen = 1,
-        .scale = 0.1953125,
-        .offset = -25,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_LOW,
-    },
-    {
-        .name = "RFTH",
-        .units = "%",
-        .PID = 0x0e,
-        .responseLen = 1,
-        .scale = 0.1953125,
-        .offset = -25,
-        .val = 0,
-        .lastTime_ms = -1,
-        .load = ECU_LOAD_LOW,
-    },
-};
-
-const int numEcuParams = sizeof(ecuParams) / sizeof(ecuParams[0]);
-int ecuParamInd = 0;
-
-int parseEcuParam(ecuParam_t *ecuParam, uint8_t *data)
-{
-  int16_t val;
-
-  // test checksum
-  uint8_t cs = 0;
-  for(int i=0; i<3+ecuParam->responseLen; i++)
-  {
-    cs += data[i];
-  }
-
-  if(cs != data[4+ecuParam->responseLen])
-  {
-    ecuParam->lastTime_ms = -1;
-    return -1;
-  }
-
-  if(ecuParam->responseLen==1)
-    val = data[0];
-  else
-    val = data[0] | data[1]<<8;
-
-  if(ecuParam->inverse)
-    val = 1./val;
-
-  ecuParam->val = (val*ecuParam->scale) + ecuParam->offset;
-  ecuParam->lastTime_ms = HAL_GetTick();
-
-  return 0;
-
-}
 
 int get_x12_ticks_rpm( float rpm )
 {
@@ -963,7 +713,7 @@ int main_cpp(void)
   uint32_t timerIGN = timerLoop;
   uint32_t timerPrint = timerLoop;
   uint32_t timerUpdates = timerLoop;
-  uint32_t timerECU = timerLoop;
+  //uint32_t timerECU = timerLoop;
   bool flagSlow = false;
   bool firstAcc = false;
   uint32_t loopPeriod = 0, worstLoopPeriod = 0;
@@ -1072,36 +822,6 @@ int main_cpp(void)
     if ((HAL_GetTick () - timerUpdates) >= SAMPLE_TIME_MS_UPDATES)
     {
       timerUpdates = HAL_GetTick ();
-//#ifndef SIM_GAUGES
-//      /*
-//       * convert ticks, to Hz, to RPM and Speed
-//       */
-//      float tmp_float = 1e-6 * (float)ticks[TACHIND];   // fixme: this doesnt need to be float math
-//      tmp_float   = (tmp_float==0) ? 0 : 1.f / (float)tmp_float;
-//      tmp_float = tmp_float * RPM_PER_HZ;
-//      if( tmp_float > 9000 )
-//        tmp_float = rpm;
-//      rpm = tmp_float;
-//      //static int rpmArr[5];
-//      //static int rpmPos = 0;
-//      //static int rpmSum = 0;
-//      //rpm = movingAvg(rpmArr, &rpmSum, &rpmPos, 5, rpm);
-//
-//      tmp_float = 1e-6 * (float)ticks[SPEEDOIND];  // fixme: this doesnt need to be float math
-//      tmp_float   = (tmp_float==0) ? 0 : 1.f / (float)tmp_float;
-//      tmp_float = tmp_float * MPH_PER_HZ;
-//      if(tmp_float > 180 )
-//        tmp_float = speed;
-//      speed = tmp_float;
-//      //static int speedArr[5];
-//      //static int speedPos = 0;
-//      //static int speedSum = 0;
-//      //speed = movingAvg(speedArr, &speedPos, &speedSum, 5, speed);
-//
-//#endif
-//      tachX12.setPosition( get_x12_ticks_rpm(rpm) );
-//      speedX12.setPosition( get_x12_ticks_speed(speed) );
-
 
       /*
        * display updates
@@ -1120,9 +840,9 @@ int main_cpp(void)
                     -imu.acc_mps2[0] / (9.8f / 1.f) * gimbal_radius
                    );
 
-      snprintf (logBuf, bufLen, "%.1f", ecuParams[ECU_PARAM_WB].val);
-      gdispFillString(30, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
-      drawHorzBarGraph (44, 57, 60, 15, 19, 9, ecuParams[ECU_PARAM_WB].val);
+      //snprintf (logBuf, bufLen, "%.1f", ecuParams[ECU_PARAM_WB].val);
+      //gdispFillString(30, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+      //drawHorzBarGraph (44, 57, 60, 15, 19, 9, ecuParams[ECU_PARAM_WB].val);
 
       snprintf (logBuf, bufLen, "%d", (int)rpm);
       gdispFillString(50, 100, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
@@ -1221,188 +941,6 @@ int main_cpp(void)
     {
       rpm_alert = false;
     }
-
-    /*
-     * ecu interface
-     */
-    int elapsed = HAL_GetTick() - timerECU;
-    ecuLoad_e currentLoad = ECU_LOAD_LOW;
-    if(
-        ecuParams[ECU_PARAM_TPS].val > TPS_THRESHOLD
-        && HAL_GetTick()-ecuParams[ECU_PARAM_TPS].lastTime_ms<1000
-        )
-    {
-      currentLoad = ECU_LOAD_HIGH;
-    }
-
-    if(
-        ecuParams[ECU_PARAM_RPM].val > RPM_THRESHOLD
-        && HAL_GetTick()-ecuParams[ECU_PARAM_RPM].lastTime_ms<1000
-        )
-    {
-      currentLoad = ECU_LOAD_HIGH;
-    }
-
-    switch(ecuState)
-    {
-      uint8_t buffer_tx[10], buffer_rx[10];
-
-      // start 5-baud init
-      case ECU_RESET:
-        My_MX_USART1_UART_DeInit();
-        timerECU = HAL_GetTick();
-        SET_BIT(GPIOA->ODR, GPIO_PIN_9);
-        ecuState = ECU_5_BAUD;
-        ecuTxDone = false;
-        ecuRxDone = false;
-        break;
-
-      // perform 5-baud init
-      case ECU_5_BAUD:
-        if(elapsed < 200*2)
-          CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9);
-        else if(elapsed < 200*4)
-          SET_BIT(GPIOA->ODR, GPIO_PIN_9);
-        else if(elapsed < 200*6)
-          CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9);
-        else if(elapsed < 200*8)
-          SET_BIT(GPIOA->ODR, GPIO_PIN_9);
-        else
-        {
-          My_MX_USART1_UART_Init();
-          ecuTxDone = false;
-          ecuRxDone = false;
-          timerECU = HAL_GetTick();
-          HAL_UART_Receive(&huart1, buffer_rx, 1, 0); // clear rx, if theres anything
-          HAL_UART_Receive_IT( &huart1,  buffer_rx, 3 ); // try to get reply data
-          ecuState = ECU_5_BAUD_VERIFY;
-        }
-        break;
-
-      case ECU_5_BAUD_VERIFY:
-        if(elapsed > 1000)
-        {
-          // if we waited for over 1 second then we didnt receive a reply.
-          // abor tthe transfer and start over
-          ecuState = ECU_RESET;
-          HAL_UART_Abort(&huart1);
-          break;
-        }
-
-        // see if we have received data
-        if ( ecuRxDone &&
-            (
-                 (buffer_rx[0]==0x55 && buffer_rx[1]==0x08 && buffer_rx[2]==0x08)
-              || (buffer_rx[0]==0x55 && buffer_rx[1]==0x94 && buffer_rx[2]==0x94)
-            )
-            )
-        {
-          ecuState = ECU_DELAY;
-          ecuDelayFor_ms = 30;
-          ecuStateNext = ECU_5_BAUD_TX_KW_NOT;
-          buffer_tx[0] = ~buffer_rx[2];
-          timerECU = HAL_GetTick();
-          ecuTxDone = false;
-          ecuRxDone = false;
-          HAL_UART_Receive_IT( &huart1,  buffer_rx, 2 ); // just receives what we sent, dont need it
-        }
-        break;
-
-      case ECU_5_BAUD_TX_KW_NOT:
-        ecuTxDone = false;
-        HAL_UART_Transmit_IT( &huart1,  buffer_tx, 1 );
-        timerECU = HAL_GetTick();
-        ecuState = ECU_5_BAUD_REPLY;
-        break;
-
-
-      case ECU_5_BAUD_REPLY:
-        if(!ecuTxDone && elapsed > 1000)
-        {
-          // if we waited for over 1 second then we didnt receive a reply.
-          // abort the transfer and start over
-          ecuState = ECU_RESET;
-          if(!ecuTxDone)
-            HAL_UART_Abort(&huart1);
-          break;
-        }
-
-        // we received an init reply, check it
-        if (buffer_rx[0] == buffer_tx[0] && buffer_rx[1] == 0xCC)
-        {
-          ecuStateNext = ECU_SEND_REQUEST;
-          ecuDelayFor_ms = 55;
-          ecuState = ECU_DELAY;
-        }
-        break;
-
-      case ECU_SEND_REQUEST:
-        buffer_tx[0] = 0x68; // addr
-        buffer_tx[1] = 0x6a; // addr
-        buffer_tx[2] = 0xf1; // addr
-        buffer_tx[3] = 0x01; // mode
-        buffer_tx[4] = ecuParams[ecuParamInd].PID; // PID
-        buffer_tx[5] = buffer_tx[0] + buffer_tx[1] + buffer_tx[2] + buffer_tx[3] + buffer_tx[4];
-        ecuTxDone = false;
-        ecuRxDone = false;
-        HAL_UART_Transmit_IT( &huart1,  buffer_tx, 6 );
-        HAL_UART_Receive_IT( &huart1,  buffer_rx, 10+ecuParams[ecuParamInd].responseLen );
-        timerECU = HAL_GetTick();
-        ecuState = ECU_PROCESS_REPLY;
-        break;
-
-      case ECU_PROCESS_REPLY:
-        if(elapsed > 1000)
-        {
-          ecuState = ECU_RESET;
-          if(!ecuTxDone || !ecuRxDone)
-            HAL_UART_Abort(&huart1);
-          break;
-        }
-
-        if(!ecuRxDone)
-          break;
-
-        if(parseEcuParam( &ecuParams[ecuParamInd], &buffer_rx[6] ))
-          ecuState = ECU_RESET;
-        else
-        {
-          // move to next param, unless the load states dont match
-          while(1)
-          {
-            ecuParamInd = (ecuParamInd+1==numEcuParams) ? 0 : ecuParamInd+1;
-            if(currentLoad==ECU_LOAD_HIGH && ecuParams[ecuParamInd].load == ECU_LOAD_LOW)
-            {
-
-            }
-            else
-            {
-              // we found the next valid param
-              break;
-            }
-          }
-        }
-
-        break;
-
-      case ECU_DELAY:
-        /*
-         * generic wait case.  used when we need to pause between
-         * receiving a value and sending the next one
-         */
-        if(elapsed < ecuDelayFor_ms)
-        {
-
-        }
-        else
-        {
-          ecuState = ecuStateNext;
-        }
-        break;
-
-
-    }
-
 
 
     /*
