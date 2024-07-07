@@ -71,7 +71,7 @@ const uint16_t psMask           = 1<<3;
 const uint16_t battMask         = 1<<2;
 const uint16_t brakeMask        = 1<<4;
 bool bulbReadWaiting = false;
-iir_ma_state_t rpm_filter_state, speed_filter_state;
+iir_ma_state_t rpm_filter_state = {0.3,0}, speed_filter_state = {0.3,0};
 
 extern "C" {
 
@@ -700,9 +700,8 @@ int main_cpp(void)
   {
     cleanPwr = true;
   }
-  //HAL_PWR_EnableBkUpAccess ();
   HAL_RTCEx_BKUPWrite (&hrtc, RTC_BKP_DR1, 0x0000);
-  //HAL_PWR_DisableBkUpAccess ();
+  HAL_PWR_DisableBkUpAccess ();
 
   /*
    * init graphics library
@@ -1117,8 +1116,8 @@ int main_cpp(void)
       // make x be -x, flip x and y
       const int gimbal_radius = 35;
       drawGimball (168, 48, gimbal_radius,
-                   -imu.acc_mps2[1] / (9.8f / 2.f) * gimbal_radius,
-                    imu.acc_mps2[0] / (9.8f / 2.f) * gimbal_radius
+                    -imu.acc_mps2[1] / (9.8f / 1.f) * gimbal_radius,
+                    -imu.acc_mps2[0] / (9.8f / 1.f) * gimbal_radius
                    );
 
       snprintf (logBuf, bufLen, "%.1f", ecuParams[ECU_PARAM_WB].val);
@@ -1459,9 +1458,9 @@ int main_cpp(void)
   /*
    * store the fact that we shutdown clean
    */
-  //HAL_PWR_EnableBkUpAccess ();
+  HAL_PWR_EnableBkUpAccess ();
   HAL_RTCEx_BKUPWrite (&hrtc, RTC_BKP_DR1, 0xBEEF);
-  //HAL_PWR_DisableBkUpAccess ();
+  HAL_PWR_DisableBkUpAccess ();
 
   /*
    * we left the main loop, we can power down

@@ -10,6 +10,7 @@
 
 typedef struct
 {
+  const float alpha;
   float yz1;
 }
 iir_ma_state_t;
