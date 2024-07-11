@@ -76,7 +76,6 @@ const uint16_t psMask           = 1<<3;
 const uint16_t battMask         = 1<<2;
 const uint16_t brakeMask        = 1<<4;
 bool bulbReadWaiting = false;
-iir_ma_state_t rpm_filter_state = {0.3,0}, speed_filter_state = {0.3,0};
 
 extern "C" {
 
@@ -199,9 +198,10 @@ const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
 volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
 volatile uint32_t T2[2] = {0,0};
-volatile uint32_t ticks[2] = {0,0};
+volatile float ticks[2] = {0,0};
 volatile uint32_t TIM2_OVC[2] = {0,0};
 volatile uint32_t speed_tick_count = 0;
+iir_ma_state_t filter_state[2] = {{0.3,0}, {0.3,0}};
 
 /* i originally measured that every 3 ticks of the speedo, the odo was stepped once.
  * and with our stepper i think a full step is actually 12 micro steps.
@@ -227,9 +227,10 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
   else if (state[ch] == DONE)
   {
     T2[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
-    ticks[ch] = (T2[ch] + (TIM2_OVC[ch] * 100000)) - T1[ch];
+    float tmp = (T2[ch] + (TIM2_OVC[ch] * 100000)) - T1[ch];
     state[ch] = IDLE;
     TIM2_OVC[ch] = 0;
+    ticks[ch] = iir_ma( &filter_state[ch], tmp );
   }
 
   /*
@@ -301,12 +302,12 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
         float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)(1000000.f / (float)ticks[TACHIND]);
         if( tmp > 9000 )
           tmp = rpm;
-        rpm = iir_ma( &rpm_filter_state, tmp );
+        rpm = tmp;
 
         tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)(1000000.f / (float)ticks[SPEEDOIND]);
         if( tmp > 180 )
           tmp = speed;
-        speed = iir_ma( &speed_filter_state, tmp );
+        speed = tmp;
 #endif
         x12[0]->setPosition( get_x12_ticks_rpm(rpm) );
         x12[1]->setPosition( get_x12_ticks_speed(speed) );
@@ -833,7 +834,7 @@ int main_cpp(void)
       // themselves if they need.
       gdispClear(GFX_BLACK); // if the device doesnt support flushing, then this is immediate
 
-      // make x be -x, flip x and y
+      // fixme: unnecessary float division
       const int gimbal_radius = 35;
       drawGimball (168, 48, gimbal_radius,
                     -imu.acc_mps2[1] / (9.8f / 1.f) * gimbal_radius,
