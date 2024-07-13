@@ -3,12 +3,15 @@
 
 #include "ECUK.hpp"
 
+#define WHILE_NOT(ARG) while(ARG){};
+
 ECUK::ECUK(UART_HandleTypeDef *huart, bool *_txDone, bool *_rxDone)
 {
   _huart = huart;
   timerECU = HAL_GetTick ();
   txDone = _txDone;
   rxDone = _rxDone;
+  initSuccess = false;
 }
 
 void ECUK::update()
@@ -41,6 +44,8 @@ void ECUK::update()
 
     // start 5-baud init
     case ECU_RESET:
+      initSuccess = false;
+      HAL_UART_Abort(_huart);
       My_MX_USART1_UART_DeInit();       //fixme: we shouldnt call a hardware-specific function here
       timerECU = HAL_GetTick();
       SET_BIT(GPIOA->ODR, GPIO_PIN_9);
@@ -65,8 +70,8 @@ void ECUK::update()
         *txDone = false;
         *rxDone = false;
         timerECU = HAL_GetTick();
-        HAL_UART_Receive(_huart, buffer_rx, 1, 0); // clear rx, if theres anything
-        HAL_UART_Receive_IT( _huart,  buffer_rx, 3 ); // try to get reply data
+        WHILE_NOT(HAL_UART_Receive(_huart, buffer_rx, 1, 0)); // clear rx, if theres anything
+        WHILE_NOT(HAL_UART_Receive_IT( _huart,  buffer_rx, 3 )); // try to get reply data
         ecuState = ECU_5_BAUD_VERIFY;
       }
       break;
@@ -96,13 +101,13 @@ void ECUK::update()
         timerECU = HAL_GetTick();
         *txDone = false;
         *rxDone = false;
-        HAL_UART_Receive_IT( _huart,  buffer_rx, 2 ); // just receives what we sent, dont need it
+        WHILE_NOT(HAL_UART_Receive_IT( _huart,  buffer_rx, 2 )); // just receives what we sent, dont need it
       }
       break;
 
     case ECU_5_BAUD_TX_KW_NOT:
       *txDone = false;
-      HAL_UART_Transmit_IT( _huart,  buffer_tx, 1 );
+      WHILE_NOT(HAL_UART_Transmit_IT( _huart,  buffer_tx, 1 ));
       timerECU = HAL_GetTick();
       ecuState = ECU_5_BAUD_REPLY;
       break;
@@ -122,6 +127,7 @@ void ECUK::update()
       // we received an init reply, check it
       if (buffer_rx[0] == buffer_tx[0] && buffer_rx[1] == 0xCC)
       {
+        initSuccess = true;
         ecuStateNext = ECU_SEND_REQUEST;
         ecuDelayFor_ms = 55;
         ecuState = ECU_DELAY;
@@ -137,8 +143,8 @@ void ECUK::update()
       buffer_tx[5] = buffer_tx[0] + buffer_tx[1] + buffer_tx[2] + buffer_tx[3] + buffer_tx[4];
       *txDone = false;
       *rxDone = false;
-      HAL_UART_Transmit_IT( _huart,  buffer_tx, 6 );
-      HAL_UART_Receive_IT( _huart,  buffer_rx, 10+ecuParams[ecuParamInd].responseLen );
+      WHILE_NOT(HAL_UART_Transmit_IT( _huart,  buffer_tx, 6 ));
+      WHILE_NOT(HAL_UART_Receive_IT( _huart,  buffer_rx, 10+ecuParams[ecuParamInd].responseLen ));
       timerECU = HAL_GetTick();
       ecuState = ECU_PROCESS_REPLY;
       break;
@@ -229,6 +235,30 @@ int ECUK::parseEcuParam(ecuParam_t *ecuParam, uint8_t *data)
 
 }
 
+
+const char* ECUK::getStatus()
+{
+  if(initSuccess)
+    return "CONNECTED";
+  switch(ecuState)
+  {
+    case ECU_RESET:
+      return "RESET";
+      break;
+
+    case ECU_5_BAUD:
+    case ECU_5_BAUD_VERIFY:
+    case ECU_5_BAUD_REPLY:
+    case ECU_5_BAUD_TX_KW_NOT:
+    case ECU_DELAY:
+      return "INIT";
+      break;
+
+    default:
+      return "UNK";
+      break;
+  }
+}
 
 float ECUK::getVal(ecuParam_e paramInd)
 {

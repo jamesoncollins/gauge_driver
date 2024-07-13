@@ -227,6 +227,8 @@ public:
 
   float getVal(ecuParam_e);
 
+  const char* getStatus();
+
 private:
   int parseEcuParam(ecuParam_t *ecuParam, uint8_t *data);
 
@@ -237,6 +239,7 @@ private:
   ecuState_e ecuStateNext = ECU_RESET;
   int ecuDelayFor_ms = 0;
   bool *txDone, *rxDone;
+  bool initSuccess = false;
 
 };
 
