@@ -3,6 +3,17 @@
 #include "gfx.h"
 #include "math.h"
 
+uint32_t COLOR_PRIMARY = GFX_AMBER_YEL;
+uint32_t COLOR_SECONDARY = GFX_RED;
+uint32_t COLOR_BACKGROUND = GFX_BLACK;
+
+void setColors(uint32_t primary, uint32_t secondary, uint32_t background)
+{
+  COLOR_PRIMARY = primary;
+  COLOR_SECONDARY = secondary;
+  COLOR_BACKGROUND = background;
+}
+
 /*
  *
  * TODO: detect GDISP_HARDWARE_FILLS and fill boxes isntead of drawing lines

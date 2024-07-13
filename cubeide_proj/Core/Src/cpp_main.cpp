@@ -20,6 +20,8 @@ extern "C" {
 #include "../PI4IOE5V6416/PI4IOE5V6416.hpp"
 #include "../ECUK-lib/ECUK.hpp"
 
+uint32_t GFX_AMBER = GFX_AMBER_YEL;
+
 int get_x12_ticks_speed( float  );
 int get_x12_ticks_rpm( float  );
 
@@ -463,7 +465,8 @@ int main_cpp(void)
   screenWidth = gdispGetWidth();
   screenHeight = gdispGetHeight();
 
-  font_t font = gdispOpenFont("DejaVuSans10");
+  font_t font10 = gdispOpenFont("DejaVuSans10");
+  font_t font20 = gdispOpenFont("DejaVuSans20");
   font_t fontLCD = gdispOpenFont("lcddot_tr80");
 
   /*
@@ -845,6 +848,9 @@ int main_cpp(void)
       gdispFillString(30, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
       drawHorzBarGraph (24, 57, 80, 15, 19, 9, ecu.getVal(ECUK::ECU_PARAM_WB));
 
+      snprintf (logBuf, bufLen, "ECU: %s", ecu.getStatus());
+      gdispFillString(30, 50, logBuf, font20, GFX_AMBER, GFX_BLACK);
+
       snprintf (logBuf, bufLen, "%d", (int)rpm);
       gdispFillString(50, 100, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%d", (int)speed);
@@ -858,25 +864,33 @@ int main_cpp(void)
       }
       //bulbVals = ioexp_screen.get();
       snprintf (logBuf, bufLen, "%d", bulbVals);
-      gdispFillString(110, 200, logBuf, font, GFX_AMBER, GFX_BLACK);
+      gdispFillString(110, 200, logBuf, font10, GFX_AMBER, GFX_BLACK);
       if( !(bulbVals&battMask) ) // car pulls down
         gdispImageDraw(&battImg,  20,  210, battImg.width,  battImg.height,  0, 0);
       if( !(bulbVals&brakeMask) ) // car pulls down
         gdispImageDraw(&brakeImg, 140,  210, brakeImg.width, brakeImg.height, 0, 0);
       if(  (bulbVals&psMask) ) // car pulls HIGH
-        gdispFillString(95, 210, "4WS", font, GFX_YELLOW, GFX_BLACK);
+        gdispFillString(95, 210, "4WS", font10, GFX_YELLOW, GFX_BLACK);
       if (bulbVals&lampMask )
       {
         // headlights are on
+        GFX_AMBER = GFX_AMBER_SAE;
+        setColors(GFX_AMBER,GFX_RED,GFX_BLACK);
         if( !(bulbVals&beamMask) )
         {
           // high beam on
           gdispImageDraw(&beamImg, 62-5,  212, beamImg.width,  beamImg.height,  0, 0);
         }
       }
+      else
+      {
+        // headlights are off
+        GFX_AMBER = GFX_AMBER_YEL;
+        setColors(GFX_AMBER,GFX_RED,GFX_BLACK);
+      }
 
       snprintf (logBuf, bufLen, "%d/%d", (int)loopPeriod ,(int) worstLoopPeriod);
-      gdispFillString(150, 200, logBuf, font, GFX_AMBER, GFX_BLACK);
+      gdispFillString(150, 200, logBuf, font10, GFX_AMBER, GFX_BLACK);
 
       //gdispDrawBox(0,0,screenWidth,screenHeight,GFX_AMBER);
       //gdispDrawBox(1,1,screenWidth-1,screenHeight-1,GFX_AMBER);

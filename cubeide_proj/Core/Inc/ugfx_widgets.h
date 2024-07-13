@@ -11,17 +11,7 @@
 
 #include "gfx.h"
 
-#ifndef COLOR_PRIMARY
-#define COLOR_PRIMARY GFX_AMBER
-#endif
-
-#ifndef COLOR_SECONDARY
-#define COLOR_SECONDARY GFX_RED
-#endif
-
-#ifndef COLOR_BACKGROUND
-#define COLOR_BACKGROUND GFX_BLACK
-#endif
+void setColors(uint32_t,uint32_t,uint32_t);
 
 /*
  *
