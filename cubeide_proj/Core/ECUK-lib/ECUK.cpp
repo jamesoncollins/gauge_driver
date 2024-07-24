@@ -3,6 +3,15 @@
 
 #include "ECUK.hpp"
 
+/*
+ * iso driver negates signals on both tx and rx.
+ *
+ * for usart this is handleded through hardware and you dont need to think
+ * about it.
+ */
+#define HIGH GPIO_PIN_RESET
+#define LOW GPIO_PIN_SET
+
 #define WHILE_NOT(ARG) while(ARG){};
 
 ECUK::ECUK(UART_HandleTypeDef *huart, bool *_txDone, bool *_rxDone)
@@ -48,9 +57,9 @@ void ECUK::update()
       HAL_UART_Abort(_huart);
       My_MX_USART1_UART_DeInit();       //fixme: we shouldnt call a hardware-specific function here
       timerECU = HAL_GetTick();
-      CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9);
+      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, HIGH); // make sure line is high for awhile
       ecuState = ECU_DELAY;
-      ecuDelayFor_ms = 2000;
+      ecuDelayFor_ms = 1000;
       ecuStateNext = ECU_5_BAUD;
       *txDone = false;
       *rxDone = false;
@@ -58,25 +67,31 @@ void ECUK::update()
 
     // perform 5-baud init
     case ECU_5_BAUD:
-      if(elapsed < 200*5)
-        CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9);        // clear line
+      if(elapsed < 200*1)
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, LOW);      // start bit
+      else if(elapsed < 200*2)
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<0))>>0) );
+      else if(elapsed < 200*3)
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<1))>>1) );
+      else if(elapsed < 200*4)
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<2))>>2) );
+      else if(elapsed < 200*5)
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<3))>>3) );
       else if(elapsed < 200*6)
-        SET_BIT(GPIOA->ODR, GPIO_PIN_9);      // start bit
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<4))>>4) );
+      else if(elapsed < 200*7)
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<5))>>5) );
       else if(elapsed < 200*8)
-        CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9);      // first data bit
-      else if(elapsed < 200*10)
-        SET_BIT(GPIOA->ODR, GPIO_PIN_9);
-      else if(elapsed < 200*12)
-        CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9);
-      else if(elapsed < 200*14)
-        SET_BIT(GPIOA->ODR, GPIO_PIN_9);        // final bit
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<6))>>6) );
+      else if(elapsed < 200*9)
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<7))>>7) );
       else
       {
-        CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9);        // stop bit
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, HIGH);        // stop bit
         *txDone = false;
         *rxDone = false;
         timerECU = HAL_GetTick();
-        My_MX_USART1_UART_Init();
+        My_MX_USART1_UART_Init(BAUDRATE);
         WHILE_NOT(HAL_UART_Receive_IT( _huart,  &buffer_rx[0], 3 )); // try to get reply data
         ecuState = ECU_5_BAUD_VERIFY;
       }

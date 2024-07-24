@@ -232,6 +232,9 @@ public:
   const char* getStatus();
 
 private:
+  const char INIT_SEQ = 0xC0;
+  const int BAUDRATE = 10400;
+
   int parseEcuParam(ecuParam_t *ecuParam, uint8_t *data);
 
   UART_HandleTypeDef *_huart;
