@@ -35,7 +35,7 @@ extern void DWT_Delay_us(volatile uint32_t microseconds);
 extern int my_transfer (I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint8_t *pData,
                  int16_t Size, uint32_t Timeout);
 extern void My_MX_USART1_UART_DeInit();
-extern void My_MX_USART1_UART_Init();
+extern void My_MX_USART1_UART_Init(int);
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
