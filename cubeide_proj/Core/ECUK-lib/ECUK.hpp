@@ -29,13 +29,6 @@ public:
   }
   ecuState_e;
 
-  typedef enum
-  {
-    ECU_LOAD_LOW, // log when load is low
-    ECU_LOAD_HIGH // always log
-  }
-  ecuLoad_e;
-
   typedef struct
   {
     const char name[16];
@@ -46,196 +39,37 @@ public:
     const bool inverse;         // 1 / x
     float val;
     int lastTime_ms;
-    ecuLoad_e load;
+    int priority;
   }
   ecuParam_t;
-
-  typedef enum
-  {
-//    ECU_PARAM_TPS,
-    ECU_PARAM_SPEED,
-//    ECU_PARAM_RPM,
-//    ECU_PARAM_WB,
-//    ECU_PARAM_KNOCK,
-//    ECU_PARAM_TIMING,
-//    ECU_PARAM_AFR_TARGET,
-//
-//    ECU_PARAM_FFTL,
-//    ECU_PARAM_FFTM,
-//    ECU_PARAM_FFTH,
-//    ECU_PARAM_RFTL,
-//    ECU_PARAM_RFTM,
-//    ECU_PARAM_RFTH,
-
-    ECU_NUM_PARAMS
-  } ecuParam_e;
-
-  ecuParam_t ecuParams[ECU_NUM_PARAMS] = {
-//      {
-//          .name = "TPS",
-//          .units = "%",
-//          .PID = 0x17,
-//          .responseLen = 1,
-//          .scale = 100./255.,
-//          .offset = 0,
-//          .val = 0,
-//          .lastTime_ms = -1,
-//          .load = ECU_LOAD_HIGH,
-//      },
-      {
-          .name = "Speed",
-          .units = "mph",
-          .PID = 0x0d,//0x2F,
-          .responseLen = 1,
-          .scale = 1.2427424,
-          .offset = 0,
-          .val = 0,
-          .lastTime_ms = -1,
-          .load = ECU_LOAD_HIGH,
-      },
-//      {
-//          .name = "RPM",
-//          .units = "rpm",
-//          .PID = 0x21,
-//          .responseLen = 1,
-//          .scale = 31.25,
-//          .offset = 0,
-//          .val = 0,
-//          .lastTime_ms = -1,
-//          .load = ECU_LOAD_HIGH,
-//      },
-//      {
-//          .name = "Wideband",
-//          .units = "AFT",
-//          .PID = 0xBF,
-//          .responseLen = 1,
-//          .scale = 0.0627,
-//          .offset = 7,
-//          .val = 14.7,
-//          .lastTime_ms = 0, //FIXME
-//          .load = ECU_LOAD_HIGH,
-//      },
-//      {
-//          .name = "Knock Sum",
-//          .units = "Count",
-//          .PID = 0x26,
-//          .responseLen = 1,
-//          .scale = 1,
-//          .offset = 0,
-//          .val = 0,
-//          .lastTime_ms = -1,
-//          .load = ECU_LOAD_HIGH,
-//      },
-//      {
-//          .name = "Timing Adv",
-//          .units = "°",
-//          .PID = 0x06,
-//          .responseLen = 1,
-//          .scale = 1,
-//          .offset = -20,
-//          .val = 0,
-//          .lastTime_ms = -1,
-//          .load = ECU_LOAD_HIGH,
-//      },
-//      {
-//          .name = "AFR Target",
-//          .units = "afr",
-//          .PID = 0x32,
-//          .responseLen = 1,
-//          .scale = 14.7*128.,
-//          .offset = 0,
-//          .inverse = true,
-//          .val = 0,
-//          .lastTime_ms = -1,
-//          .load = ECU_LOAD_HIGH,
-//      },
-//
-//
-//
-//      {
-//          .name = "FFTL",
-//          .units = "%",
-//          .PID = 0x4c,
-//          .responseLen = 1,
-//          .scale = 0.1953125,
-//          .offset = -25,
-//          .val = 0,
-//          .lastTime_ms = -1,
-//          .load = ECU_LOAD_LOW,
-//      },
-//      {
-//          .name = "FFTM",
-//          .units = "%",
-//          .PID = 0x4d,
-//          .responseLen = 1,
-//          .scale = 0.1953125,
-//          .offset = -25,
-//          .val = 0,
-//          .lastTime_ms = -1,
-//          .load = ECU_LOAD_LOW,
-//      },
-//      {
-//          .name = "FFTH",
-//          .units = "%",
-//          .PID = 0x4e,
-//          .responseLen = 1,
-//          .scale = 0.1953125,
-//          .offset = -25,
-//          .val = 0,
-//          .lastTime_ms = -1,
-//          .load = ECU_LOAD_LOW,
-//      },
-//
-//      {
-//          .name = "RFTL",
-//          .units = "%",
-//          .PID = 0x0c,
-//          .responseLen = 1,
-//          .scale = 0.1953125,
-//          .offset = -25,
-//          .val = 0,
-//          .lastTime_ms = -1,
-//          .load = ECU_LOAD_LOW,
-//      },
-//      {
-//          .name = "RFTM",
-//          .units = "%",
-//          .PID = 0x0d,
-//          .responseLen = 1,
-//          .scale = 0.1953125,
-//          .offset = -25,
-//          .val = 0,
-//          .lastTime_ms = -1,
-//          .load = ECU_LOAD_LOW,
-//      },
-//      {
-//          .name = "RFTH",
-//          .units = "%",
-//          .PID = 0x0e,
-//          .responseLen = 1,
-//          .scale = 0.1953125,
-//          .offset = -25,
-//          .val = 0,
-//          .lastTime_ms = -1,
-//          .load = ECU_LOAD_LOW,
-//      },
-  };
-
-  constexpr static const int numEcuParams = sizeof(ecuParams) / sizeof(ecuParams[0]);
 
   ECUK(UART_HandleTypeDef *huart, bool *_txDone, bool *_rxDone);
 
   void update();
 
-  float getVal(ecuParam_e);
+  float getVal(int);
 
   const char* getStatus();
 
-private:
+protected:
   const char INIT_SEQ = 0xC0;
   const int BAUDRATE = 10400;
+  const int NUM5BAUDREPLYBYTES = 3;
+  const bool HASINITRESPONSE = true;
+  const int REQUEST_BYTE_DELAY_MS = 5;
+  const int ECU_REQUEST_DELAY_MS = 55;
 
-  int parseEcuParam(ecuParam_t *ecuParam, uint8_t *data);
+  virtual int parse5BaudReply(const uint8_t *) = 0;
+
+  /*
+   * load PID request into buffer
+   *
+   * return expected receive length
+   */
+  virtual void loadRequest( uint8_t *, int &txLen, int &rxLen ) = 0;
+  virtual int parseRequest( uint8_t *data) = 0;
+  virtual int getNumParams() = 0;
+  virtual ecuParam_t getParam(int ind) = 0;
 
   UART_HandleTypeDef *_huart;
   int ecuParamInd = 0;
@@ -245,7 +79,6 @@ private:
   int ecuDelayFor_ms = 0;
   bool *txDone, *rxDone;
   bool initSuccess = false;
-  bool highSpeedMode = false;
   uint8_t buffer_tx[10], buffer_rx[15];
   int delayTxInd = 0, delayTxCnt = 0;
 

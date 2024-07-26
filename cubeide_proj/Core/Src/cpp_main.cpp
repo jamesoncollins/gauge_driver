@@ -18,7 +18,7 @@ extern "C" {
 #include "../../res/brake.c"
 #include "../../res/beam.c"
 #include "../PI4IOE5V6416/PI4IOE5V6416.hpp"
-#include "../ECUK-lib/ECUK.hpp"
+#include "../ECUK-lib/MUTII.hpp"
 
 uint32_t GFX_AMBER = GFX_AMBER_YEL;
 
@@ -67,7 +67,7 @@ uint8_t regAddr;
 
 bool ecuTxDone = false;
 bool ecuRxDone = false;
-ECUK ecu(&huart1, &ecuTxDone, &ecuRxDone);
+MUTII ecu(&huart1, &ecuTxDone, &ecuRxDone);
 
 float rpm, speed;
 
@@ -844,17 +844,17 @@ int main_cpp(void)
                     -imu.acc_mps2[0] / (9.8f / 1.f) * gimbal_radius
                    );
 
-      snprintf (logBuf, bufLen, "%.1f", ecu.getVal(ECUK::ECU_PARAM_WB));
-      gdispFillString(30, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
-      drawHorzBarGraph (24, 57, 80, 15, 19, 9, ecu.getVal(ECUK::ECU_PARAM_WB));
+      snprintf (logBuf, bufLen, "%.1f", ecu.getVal(MUTII::ECU_PARAM_WB));
+      gdispFillString(20, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+      drawHorzBarGraph (20, 57, 80, 15, 19, 9, ecu.getVal(MUTII::ECU_PARAM_WB));
 
       snprintf (logBuf, bufLen, "ECU: %s", ecu.getStatus());
-      gdispFillString(30, 50, logBuf, font20, GFX_AMBER, GFX_BLACK);
+      gdispFillString(20, 80, logBuf, font20, GFX_AMBER, GFX_BLACK);
 
-      snprintf (logBuf, bufLen, "%d", (int)rpm);
-      gdispFillString(50, 100, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%d", (int)speed);
-      gdispFillString(50, 145, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+      gdispFillString(30, 110, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+      snprintf (logBuf, bufLen, "%d", (int)rpm);
+      gdispFillString(30, 155, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
 
       // check warning
       if(!bulbReadWaiting)
