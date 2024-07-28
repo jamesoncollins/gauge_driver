@@ -104,9 +104,9 @@ private:
 
   }
 
-  ecuParam_t getParam(int ind)
+  ecuParam_t *getParam(int ind)
   {
-    return ecuParams[ind];
+    return &ecuParams[ind];
   }
 
 };

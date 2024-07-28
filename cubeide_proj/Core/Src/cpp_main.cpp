@@ -844,7 +844,7 @@ int main_cpp(void)
                     -imu.acc_mps2[0] / (9.8f / 1.f) * gimbal_radius
                    );
 
-      snprintf (logBuf, bufLen, "%.1f", ecu.getVal(MUTII::ECU_PARAM_WB));
+      snprintf (logBuf, bufLen, "%s", ecu.getValString(MUTII::ECU_PARAM_WB));
       gdispFillString(20, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
       drawHorzBarGraph (20, 57, 80, 15, 19, 9, ecu.getVal(MUTII::ECU_PARAM_WB));
 

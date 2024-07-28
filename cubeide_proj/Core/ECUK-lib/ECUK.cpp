@@ -1,4 +1,7 @@
 
+
+#include <stdio.h>
+
 #include "main.h"
 
 #include "ECUK.hpp"
@@ -135,7 +138,6 @@ void ECUK::update()
       // we received an init reply, check it
       if ( (buffer_rx[0] == buffer_tx[0] && buffer_rx[1] == 0xCC))
       {
-        initSuccess = true;
         ecuStateNext = ECU_SEND_REQUEST;
         ecuDelayFor_ms = 70;  // P3 - 55ms
         timerECU = HAL_GetTick();
@@ -283,5 +285,18 @@ const char* ECUK::getStatus()
 
 float ECUK::getVal(int paramInd)
 {
-  return getParam(paramInd).val;
+  return getParam(paramInd)->val;
+}
+
+const char * ECUK::getValString(int paramInd)
+{
+  if(
+      getParam(paramInd)->lastTime_ms<0
+      || (HAL_GetTick()-getParam(paramInd)->lastTime_ms)>1000
+      )
+  {
+    return "--";
+  }
+  snprintf(get_val_buffer, 10, "%.1f", getParam(paramInd)->val);
+  return get_val_buffer;
 }

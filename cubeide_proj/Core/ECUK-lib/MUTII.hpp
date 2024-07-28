@@ -76,8 +76,8 @@ public:
           .responseLen = 1,
           .scale = 0.0627,
           .offset = 7,
-          .val = 14.7,
-          .lastTime_ms = 0, //FIXME
+          .val = 0,
+          .lastTime_ms = -1,
           .priority = 1,
       },
 //      {
@@ -245,9 +245,9 @@ private:
 
   }
 
-  ecuParam_t getParam(int ind)
+  ecuParam_t *getParam(int ind)
   {
-    return ecuParams[ind];
+    return &ecuParams[ind];
   }
 
 };

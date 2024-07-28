@@ -48,6 +48,7 @@ public:
   void update();
 
   float getVal(int);
+  const char* getValString(int);
 
   const char* getStatus();
 
@@ -69,7 +70,7 @@ protected:
   virtual void loadRequest( uint8_t *, int &txLen, int &rxLen ) = 0;
   virtual int parseRequest( uint8_t *data) = 0;
   virtual int getNumParams() = 0;
-  virtual ecuParam_t getParam(int ind) = 0;
+  virtual ecuParam_t *getParam(int ind) = 0;
 
   UART_HandleTypeDef *_huart;
   int ecuParamInd = 0;
@@ -84,6 +85,7 @@ protected:
 
 private:
   int init_bit_ind = 0;
+  char get_val_buffer[10];
 
 };
 
