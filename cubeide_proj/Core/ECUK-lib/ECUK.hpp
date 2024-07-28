@@ -52,12 +52,12 @@ public:
   const char* getStatus();
 
 protected:
-  const char INIT_SEQ = 0xC0;
-  const int BAUDRATE = 10400;
-  const int NUM5BAUDREPLYBYTES = 3;
-  const bool HASINITRESPONSE = true;
-  const int REQUEST_BYTE_DELAY_MS = 5;
-  const int ECU_REQUEST_DELAY_MS = 55;
+  char INIT_SEQ = 0x33;
+  int BAUDRATE = 10400;
+  int NUM5BAUDREPLYBYTES = 3;
+  bool HASINITRESPONSE = true;
+  int REQUEST_BYTE_DELAY_MS = 5;
+  int ECU_REQUEST_DELAY_MS = 55;
 
   virtual int parse5BaudReply(const uint8_t *) = 0;
 
@@ -81,6 +81,9 @@ protected:
   bool initSuccess = false;
   uint8_t buffer_tx[10], buffer_rx[15];
   int delayTxInd = 0, delayTxCnt = 0;
+
+private:
+  int init_bit_ind = 0;
 
 };
 

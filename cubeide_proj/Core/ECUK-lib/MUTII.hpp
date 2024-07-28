@@ -50,7 +50,7 @@ public:
       {
           .name = "Speed",
           .units = "mph",
-          .PID = 0x0d,//0x2F,
+          .PID = 0x2F,
           .responseLen = 1,
           .scale = 1.2427424,
           .offset = 0,
@@ -189,16 +189,14 @@ public:
   MUTII(UART_HandleTypeDef *huart, bool *_txDone, bool *_rxDone) :
     ECUK(huart,_txDone,_rxDone)
   {
-
+    INIT_SEQ = 0x00;
+    BAUDRATE = 15625;
+    NUM5BAUDREPLYBYTES = 3;//4;
+    HASINITRESPONSE = false;
+    ECU_REQUEST_DELAY_MS = 0;
   }
 
 private:
-  const char INIT_SEQ = 0x01;
-  const int BAUDRATE = 15625;
-  const int NUM5BAUDREPLYBYTES = 4;
-  const bool HASINITRESPONSE = false;
-  const int ECU_REQUEST_DELAY_MS = 0;
-
   int getNumParams()
   {
     return ECU_NUM_PARAMS;
@@ -207,7 +205,7 @@ private:
   int parse5BaudReply(const uint8_t *buffer_rx )
   {
     if (
-             (buffer_rx[0]==0xC0 && buffer_rx[1]==0x55 && buffer_rx[2]==0xEf && buffer_rx[3]==0x85)
+             (buffer_rx[0]==0x55 && buffer_rx[1]==0xEf && buffer_rx[2]==0x85)
         )
     {
       return 0;

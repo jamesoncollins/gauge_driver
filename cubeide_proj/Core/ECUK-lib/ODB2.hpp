@@ -36,9 +36,6 @@ public:
   }
 
 private:
-  const char INIT_SEQ = 0xC0;
-  const int BAUDRATE = 10400;
-  const int NUM5BAUDREPLYBYTES = 3;
 
   int getNumParams()
   {

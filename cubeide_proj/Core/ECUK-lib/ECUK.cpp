@@ -48,32 +48,26 @@ void ECUK::update()
       timerECU = HAL_GetTick();
       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, HIGH); // make sure line is high for awhile
       ecuState = ECU_DELAY;
-      ecuDelayFor_ms = 1000;
+      ecuDelayFor_ms = 2000;
       ecuStateNext = ECU_5_BAUD;
       *txDone = false;
       *rxDone = false;
+      init_bit_ind = 0;
       break;
 
     // perform 5-baud init
     case ECU_5_BAUD:
+    {
+      init_bit_ind = (elapsed-200)/200;
+      char init_bit = ((~INIT_SEQ)&(1<<init_bit_ind))>>init_bit_ind;
       if(elapsed < 200*1)
+      {
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, LOW);      // start bit
-      else if(elapsed < 200*2)
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<0))>>0) );
-      else if(elapsed < 200*3)
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<1))>>1) );
-      else if(elapsed < 200*4)
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<2))>>2) );
-      else if(elapsed < 200*5)
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<3))>>3) );
-      else if(elapsed < 200*6)
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<4))>>4) );
-      else if(elapsed < 200*7)
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<5))>>5) );
-      else if(elapsed < 200*8)
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<6))>>6) );
+//        CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9); //
+//        SET_BIT(GPIOA->ODR, GPIO_PIN_9);
+      }
       else if(elapsed < 200*9)
-        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)((INIT_SEQ&(1<<7))>>7) );
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)init_bit );
       else
       {
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, HIGH);        // stop bit
@@ -84,6 +78,7 @@ void ECUK::update()
         WHILE_NOT(HAL_UART_Receive_IT( _huart,  &buffer_rx[0], NUM5BAUDREPLYBYTES )); // try to get reply data
         ecuState = ECU_5_BAUD_VERIFY;
       }
+    }
       break;
 
     case ECU_5_BAUD_VERIFY:
@@ -194,6 +189,8 @@ void ECUK::update()
       }
       else
       {
+        initSuccess = true;
+
         // move to next param, unless the load states dont match
         while(1)
         {
@@ -273,6 +270,10 @@ const char* ECUK::getStatus()
     case ECU_DELAY:
       return "INIT";
       break;
+
+    case ECU_SEND_REQUEST:
+    case ECU_PROCESS_REPLY:
+      return "OK";
 
     default:
       return "ERR";
