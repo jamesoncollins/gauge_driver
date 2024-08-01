@@ -54,7 +54,7 @@ public:
 
 protected:
   char INIT_SEQ = 0x33;
-  int BAUDRATE = 10400;
+  int BAUDRATE = 0;//10400, set 0 to do autobaud with 0x55
   int NUM5BAUDREPLYBYTES = 3;
   bool HASINITRESPONSE = true;
   int REQUEST_BYTE_DELAY_MS = 5;

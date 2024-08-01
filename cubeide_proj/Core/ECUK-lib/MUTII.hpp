@@ -190,7 +190,7 @@ public:
     ECUK(huart,_txDone,_rxDone)
   {
     INIT_SEQ = 0x00;
-    BAUDRATE = 15625;
+    BAUDRATE = 0;//15625, set to zero to autobaud with 0x55
     NUM5BAUDREPLYBYTES = 3;//4;
     HASINITRESPONSE = false;
     ECU_REQUEST_DELAY_MS = 0;
