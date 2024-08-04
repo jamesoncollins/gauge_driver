@@ -18,8 +18,8 @@ public:
   typedef enum
   {
     ECU_PARAM_TPS,
-    ECU_PARAM_SPEED,
-    ECU_PARAM_RPM,
+//    ECU_PARAM_SPEED,
+//    ECU_PARAM_RPM,
     ECU_PARAM_WB,
 //    ECU_PARAM_KNOCK,
 //    ECU_PARAM_TIMING,
@@ -47,28 +47,28 @@ public:
           .lastTime_ms = -1,
           .priority = 1,
       },
-      {
-          .name = "Speed",
-          .units = "mph",
-          .PID = 0x2F,
-          .responseLen = 1,
-          .scale = 1.2427424,
-          .offset = 0,
-          .val = 0,
-          .lastTime_ms = -1,
-          .priority = 1,
-      },
-      {
-          .name = "RPM",
-          .units = "rpm",
-          .PID = 0x21,
-          .responseLen = 1,
-          .scale = 31.25,
-          .offset = 0,
-          .val = 0,
-          .lastTime_ms = -1,
-          .priority = 1,
-      },
+//      {
+//          .name = "Speed",
+//          .units = "mph",
+//          .PID = 0x2F,
+//          .responseLen = 1,
+//          .scale = 1.2427424,
+//          .offset = 0,
+//          .val = 0,
+//          .lastTime_ms = -1,
+//          .priority = 1,
+//      },
+//      {
+//          .name = "RPM",
+//          .units = "rpm",
+//          .PID = 0x21,
+//          .responseLen = 1,
+//          .scale = 31.25,
+//          .offset = 0,
+//          .val = 0,
+//          .lastTime_ms = -1,
+//          .priority = 1,
+//      },
       {
           .name = "Wideband",
           .units = "AFT",
@@ -196,6 +196,11 @@ public:
     ECU_REQUEST_DELAY_MS = 0;
   }
 
+  ecuParam_t *getParam(int ind)
+  {
+    return &ecuParams[ind];
+  }
+
 private:
   int getNumParams()
   {
@@ -245,10 +250,7 @@ private:
 
   }
 
-  ecuParam_t *getParam(int ind)
-  {
-    return &ecuParams[ind];
-  }
+
 
 };
 

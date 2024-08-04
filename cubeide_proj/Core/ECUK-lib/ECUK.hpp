@@ -39,6 +39,7 @@ public:
     const bool inverse;         // 1 / x
     float val;
     int lastTime_ms;
+    bool isNew = false;
     int priority;
   }
   ecuParam_t;
@@ -51,6 +52,12 @@ public:
   const char* getValString(int);
 
   const char* getStatus();
+
+  bool isConnected();
+
+  uint32_t getMsgRate();
+
+  virtual ecuParam_t *getParam(int ind) = 0;
 
 protected:
   char INIT_SEQ = 0x33;
@@ -70,7 +77,6 @@ protected:
   virtual void loadRequest( uint8_t *, int &txLen, int &rxLen ) = 0;
   virtual int parseRequest( uint8_t *data) = 0;
   virtual int getNumParams() = 0;
-  virtual ecuParam_t *getParam(int ind) = 0;
 
   UART_HandleTypeDef *_huart;
   int ecuParamInd = 0;
@@ -86,6 +92,10 @@ protected:
 private:
   int init_bit_ind = 0;
   char get_val_buffer[10];
+
+  uint32_t msgCount;
+  uint32_t msgCount_ms;
+  uint32_t msgRate;
 
 };
 

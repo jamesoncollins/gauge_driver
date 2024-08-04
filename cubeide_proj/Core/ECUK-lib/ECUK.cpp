@@ -45,6 +45,8 @@ void ECUK::update()
 
     // start 5-baud init
     case ECU_RESET:
+      msgCount = 0;
+      msgRate = 0;
       initSuccess = false;
       HAL_UART_Abort(_huart);
       My_MX_USART1_UART_DeInit();       //fixme: we shouldnt call a hardware-specific function here
@@ -151,6 +153,8 @@ void ECUK::update()
       break;
 
     case ECU_SEND_REQUEST:
+      if(msgCount == 0)
+        msgCount_ms = HAL_GetTick();
       *txDone = false;
       *rxDone = false;
       {
@@ -192,6 +196,16 @@ void ECUK::update()
       else
       {
         initSuccess = true;
+
+        getParam(ecuParamInd)->isNew = true;
+
+        msgCount++;
+        if(HAL_GetTick() - msgCount_ms > 1000)
+        {
+          msgRate = (msgCount*1000) / HAL_GetTick();
+          msgCount = 0;
+          msgCount_ms = HAL_GetTick();
+        }
 
         // move to next param, unless the load states dont match
         while(1)
@@ -283,13 +297,27 @@ const char* ECUK::getStatus()
   }
 }
 
+bool ECUK::isConnected()
+{
+  /*
+   * TODO: it shouldnt be an error if we've never even tried connecting yet.
+   * this function should have a different name, like isConnectionGood or something.
+   */
+  if(initSuccess)
+    return true;
+  else
+    return false;
+}
+
 float ECUK::getVal(int paramInd)
 {
+  getParam(paramInd)->isNew = false;
   return getParam(paramInd)->val;
 }
 
 const char * ECUK::getValString(int paramInd)
 {
+  getParam(paramInd)->isNew = false;
   if(
       getParam(paramInd)->lastTime_ms<0
       || (HAL_GetTick()-getParam(paramInd)->lastTime_ms)>1000
@@ -299,4 +327,9 @@ const char * ECUK::getValString(int paramInd)
   }
   snprintf(get_val_buffer, 10, "%.1f", getParam(paramInd)->val);
   return get_val_buffer;
+}
+
+uint32_t ECUK::getMsgRate()
+{
+  return msgRate;
 }
