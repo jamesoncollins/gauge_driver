@@ -270,13 +270,13 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
   {
     TIM2_OVC[0]++;
     TIM2_OVC[1]++;
-    if(TIM2_OVC[0]*OVERFLOW_MS > 250)
+    if(TIM2_OVC[0]*OVERFLOW_MS > 1000)
     {
       TIM2_OVC[0] = 0;
       ticks[0] = 0;
       state[0] = IDLE;
     }
-    if(TIM2_OVC[1]*OVERFLOW_MS > 250)
+    if(TIM2_OVC[1]*OVERFLOW_MS > 1000)
     {
       TIM2_OVC[1] = 0;
       ticks[1] = 0;
