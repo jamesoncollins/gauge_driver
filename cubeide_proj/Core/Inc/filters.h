@@ -15,6 +15,6 @@ typedef struct
 }
 iir_ma_state_t;
 
-extern float iir_ma(iir_ma_state_t *state, float currentReading);
+float iir_ma(iir_ma_state_t *state, float currentReading);
 
 #endif /* INC_FILTER_H_ */
