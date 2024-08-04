@@ -202,7 +202,7 @@ void ECUK::update()
         msgCount++;
         if(HAL_GetTick() - msgCount_ms > 1000)
         {
-          msgRate = (msgCount*1000) / HAL_GetTick();
+          msgRate = (msgCount*1000) / (HAL_GetTick() - msgCount_ms);
           msgCount = 0;
           msgCount_ms = HAL_GetTick();
         }
