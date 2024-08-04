@@ -161,9 +161,9 @@ void linePlot(int x, int y, int width, int height, LinePlot_t *linePlot)
   if(!linePlot->isInit)
     return;
   int scalex = 3, scaley = 1;
-  int ind = (linePlot->indFirst+0) % linePlot->len;
+  int ind = linePlot->indFirst;
   int from = linePlot->data[ind];
-  for(int i=0; i<linePlot->len; i++)
+  for(int i=1; i<linePlot->len; i++)
   {
     ind = (ind+1) % linePlot->len;
     int to = linePlot->data[ind];

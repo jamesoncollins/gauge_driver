@@ -857,7 +857,7 @@ int main_cpp(void)
       gdispFillString(20, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
       drawHorzBarGraph (20, 57, 80, 15, 19, 9, ecu.getVal(MUTII::ECU_PARAM_WB));
 
-      snprintf (logBuf, bufLen, "ECU: %s %d", ecu.getStatus(), ecu.getMsgRate());
+      snprintf (logBuf, bufLen, "ECU: %s %lu", ecu.getStatus(), ecu.getMsgRate());
       gdispFillString(20, 80, logBuf, font20, GFX_AMBER, GFX_BLACK);
 
       if(!ecu.isConnected())
@@ -876,7 +876,7 @@ int main_cpp(void)
       {
         linePlotPush(&linePlotTPS, (int)ecu.getVal(MUTII::ECU_PARAM_TPS) / 3);
       }
-      linePlot(130, 140, 100, 50, &linePlotTPS);
+      linePlot(130, 150, 130, 50, &linePlotTPS);
 
 
       // check warning
