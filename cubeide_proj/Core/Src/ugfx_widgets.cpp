@@ -1,4 +1,6 @@
 
+#include "stm32wbxx_hal.h"
+
 #include "ugfx_widgets.h"
 #include "gfx.h"
 #include "math.h"
@@ -118,4 +120,59 @@ void drawGimball (int x, int y, int r, int xv, int yv)
 
 }
 
+bool flasher_fun(flasher_t *flasher)
+{
+ int now = HAL_GetTick();
+  if(flasher->last_ms+flasher->rate_ms>now)
+  {
+    flasher->last_ms = now;
+    return true;
+  }
+  return false;
 
+}
+
+
+
+
+void linePlotInit(LinePlot_t*linePlot, int *data_buffer_ptr, int data_buffer_len)
+{
+  linePlot->data = data_buffer_ptr;
+  linePlot->len = data_buffer_len;
+  linePlot->indFirst = 0;
+  linePlot->indLatest = 0;
+  linePlot->isInit = true;
+}
+
+void linePlotPush(LinePlot_t *linePlot, int val)
+{
+  if(!linePlot->isInit)
+    return;
+
+  linePlot->indLatest++;
+  linePlot->indLatest =  (linePlot->indLatest>=linePlot->len) ? 0 : linePlot->indLatest;
+  if(linePlot->indLatest == linePlot->indFirst)
+    linePlot->indFirst = (linePlot->indLatest+1) % linePlot->len;
+  linePlot->data[linePlot->indLatest] = val;
+}
+
+void linePlot(int x, int y, int width, int height, LinePlot_t *linePlot)
+{
+  if(!linePlot->isInit)
+    return;
+  int scalex = 3, scaley = 1;
+  int ind = (linePlot->indFirst+0) % linePlot->len;
+  int from = linePlot->data[ind];
+  for(int i=0; i<linePlot->len; i++)
+  {
+    ind = (ind+1) % linePlot->len;
+    int to = linePlot->data[ind];
+    gdispDrawThickLine(
+        x+i*scalex,     y-from*scaley,
+        x+(i+1)*scalex, y-to*scaley,
+        COLOR_PRIMARY,
+        2,
+        false);
+    from = to;
+  }
+}
