@@ -236,7 +236,7 @@ public:
     BAUDRATE = 0;//15625, set to zero to autobaud with 0x55
     NUM5BAUDREPLYBYTES = 3;//4;
     HASINITRESPONSE = false;
-    ECU_REQUEST_DELAY_US = 1500;
+    ECU_REQUEST_DELAY_US = 5000;
     REQUEST_BYTE_DELAY_US = 0;
   }
 
