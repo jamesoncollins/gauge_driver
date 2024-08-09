@@ -19,6 +19,7 @@ extern "C" {
 
 extern void DWT_Delay(uint32_t us);
 extern uint64_t get_micros_64();
+extern uint32_t get_us_32 ();
 extern uint32_t get_ticks_32();
 extern bool tic_toc(uint32_t *tic, uint32_t delay);
 extern void init_get_cycle_count();

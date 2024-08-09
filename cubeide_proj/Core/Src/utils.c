@@ -93,6 +93,15 @@ uint64_t get_us_64 ()
   return get_cycle_count () * US_PER_SYS_TICK ;
 }
 
+uint32_t get_us_32 ()
+{
+  /*
+   * FIXME: maybe use TIM2->CNT instead since its a 1mhz clock.
+   * only reason we dont is that we want a full 32-bit counter.
+   */
+  return DWT->CYCCNT * US_PER_SYS_TICK ;
+}
+
 gTicks gfxSystemTicks(void)
 {
     return HAL_GetTick();
