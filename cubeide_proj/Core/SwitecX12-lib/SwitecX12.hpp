@@ -52,6 +52,7 @@ public:
    * move us to closer to that desired state
    */
   void setPosition (uint32_t pos);
+  uint32_t getTargetPosition();
 
   /*
    * step the motor now if currentStep != targetStep

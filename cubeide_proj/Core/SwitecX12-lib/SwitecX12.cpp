@@ -23,6 +23,9 @@
 static uint32_t ticks_per_us =  ( 64000000 * 1e-6);
 static uint32_t defaultAccelTable[][2] =
 {
+{ 1,   (uint32_t) 1.1 * 40000 * ticks_per_us },
+{ 5,   (uint32_t) 1.1 * 20000 * ticks_per_us },
+{ 10,  (uint32_t) 1.1 * 15000 * ticks_per_us },
 { 20,  (uint32_t) 1.1 * 10000 * ticks_per_us },
 { 100, (uint32_t) 1.1 * 2000 * ticks_per_us },
 { 150, (uint32_t) 1.1 * 750  * ticks_per_us },
@@ -228,6 +231,11 @@ void SwitecX12::setPosition (uint32_t pos)
   }
 
   lock.store(false);
+}
+
+uint32_t SwitecX12::getTargetPosition()
+{
+  return targetStep;
 }
 
 void SwitecX12::update ()
