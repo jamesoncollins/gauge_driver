@@ -25,12 +25,17 @@ public:
     ECU_PARAM_TIMING,
     ECU_PARAM_AFR_TARGET,
 
+    ECU_PARAM_LOAD_LOW,
+    ECU_PARAM_LOAD,
+
     ECU_PARAM_FFTL,
     ECU_PARAM_FFTM,
     ECU_PARAM_FFTH,
     ECU_PARAM_RFTL,
     ECU_PARAM_RFTM,
     ECU_PARAM_RFTH,
+
+    ECU_PARAM_VBAT,
 
     ECU_NUM_PARAMS
   } ecuParam_e;
@@ -115,6 +120,32 @@ public:
           .priority = 1,
       },
 
+      {
+          .name = "Load (High)",
+          .units = "load",
+          .PID = 0x03,
+          .responseLen = 1,
+          .scale = 1,
+          .offset = 0,
+          .inverse = false,
+          .val = 0,
+          .lastTime_ms = -1,
+          .priority = 1,
+      },
+      {
+          .name = "Load",
+          .units = "load",
+          .PID = 0x02,
+          .responseLen = 1,
+          .numMultiByte = 2,
+          .scale = 5./16.,
+          .offset = 0,
+          .inverse = false,
+          .val = 0,
+          .lastTime_ms = -1,
+          .priority = 1,
+      },
+
 
 
       {
@@ -184,6 +215,18 @@ public:
           .lastTime_ms = -1,
           .priority = 100,
       },
+
+      {
+          .name = "Battery",
+          .units = "V",
+          .PID = 0x14,
+          .responseLen = 1,
+          .scale = 0.07333,
+          .offset = 0,
+          .val = 0,
+          .lastTime_ms = -1,
+          .priority = 100,
+      },
   };
 
   MUTII(UART_HandleTypeDef *huart, bool *_txDone, bool *_rxDone) :
@@ -193,8 +236,8 @@ public:
     BAUDRATE = 0;//15625, set to zero to autobaud with 0x55
     NUM5BAUDREPLYBYTES = 3;//4;
     HASINITRESPONSE = false;
-    ECU_REQUEST_DELAY_MS = 0;
-    REQUEST_BYTE_DELAY_MS = 0;
+    ECU_REQUEST_DELAY_US = 1500;
+    REQUEST_BYTE_DELAY_US = 0;
   }
 
   ecuParam_t *getParam(int ind)
@@ -236,10 +279,21 @@ private:
     // see loadRequest.
     data+=1;
 
-    if(ecuParam->responseLen==1)
-      val = data[0];
-    else
-      val = (uint16_t)data[0] | (uint16_t)data[1]<<8;
+    // mutiii doesnt have any other response len?
+//    if(ecuParam->responseLen==1)
+//      val = data[0];
+//    else
+//      val = (uint16_t)data[0] | (uint16_t)data[1]<<8;
+    val = data[0];
+
+    /*
+     * if this is a multibyte message then the ecuparam before this one had the high
+     * byte.
+     */
+    if(ecuParam->numMultiByte == 2)
+    {
+      val = (uint16_t)(ecuParams[ecuParamInd-1].val)<<8 | ((uint16_t)val)<<0;
+    }
 
     if(ecuParam->inverse)
       val = 1./val;

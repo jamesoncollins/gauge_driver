@@ -4,6 +4,8 @@
 
 #include "main.h"
 
+#include "utils.h"
+
 #include "ECUK.hpp"
 
 /*
@@ -18,9 +20,9 @@
 #define WHILE_NOT(ARG) while(ARG){};
 
 #define RESET \
-        timerECU = HAL_GetTick(); \
+        timerECU = get_us_32(); \
         ecuState = ECU_DELAY;     \
-        ecuDelayFor_ms = 1000;    \
+        ecuDelayFor_us = 1000*1000;    \
         ecuStateNext = ECU_RESET; \
 
 ECUK::ECUK(UART_HandleTypeDef *huart, bool *_txDone, bool *_rxDone)
@@ -38,7 +40,7 @@ void ECUK::update()
   /*
    * ecu interface
    */
-  int elapsed = HAL_GetTick() - timerECU;
+  uint32_t elapsed = get_us_32() - timerECU;
 
   switch(ecuState)
   {
@@ -50,10 +52,10 @@ void ECUK::update()
       initSuccess = false;
       HAL_UART_Abort(_huart);
       My_MX_USART1_UART_DeInit();       //fixme: we shouldnt call a hardware-specific function here
-      timerECU = HAL_GetTick();
+      timerECU = get_us_32();
       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, HIGH); // make sure line is high for awhile
       ecuState = ECU_DELAY;
-      ecuDelayFor_ms = 2000;
+      ecuDelayFor_us = 2e6;
       ecuStateNext = ECU_5_BAUD;
       *txDone = false;
       *rxDone = false;
@@ -63,22 +65,22 @@ void ECUK::update()
     // perform 5-baud init
     case ECU_5_BAUD:
     {
-      init_bit_ind = (elapsed-200)/200;
+      init_bit_ind = (elapsed-200000)/200000;
       char init_bit = ((~INIT_SEQ)&(1<<init_bit_ind))>>init_bit_ind;
-      if(elapsed < 200*1)
+      if(elapsed < 200000*1)
       {
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, LOW);      // start bit
 //        CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9); //
 //        SET_BIT(GPIOA->ODR, GPIO_PIN_9);
       }
-      else if(elapsed < 200*9)
+      else if(elapsed < 200000*9)
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)init_bit );
       else
       {
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, HIGH);        // stop bit
         *txDone = false;
         *rxDone = false;
-        timerECU = HAL_GetTick();
+        timerECU = get_us_32();
         My_MX_USART1_UART_Init(BAUDRATE);
         WHILE_NOT(HAL_UART_Receive_IT( _huart,  &buffer_rx[0], NUM5BAUDREPLYBYTES )); // try to get reply data
         ecuState = ECU_5_BAUD_VERIFY;
@@ -87,7 +89,7 @@ void ECUK::update()
       break;
 
     case ECU_5_BAUD_VERIFY:
-      if(elapsed > 1000)
+      if(elapsed > 1e6)
       {
         RESET
         break;
@@ -98,11 +100,11 @@ void ECUK::update()
 
       if( parse5BaudReply(buffer_rx)==0 )
       {
-        timerECU = HAL_GetTick();
+        timerECU = get_us_32();
         if(HASINITRESPONSE)
         {
           ecuState = ECU_DELAY;
-          ecuDelayFor_ms = 50;    // W4 - 25ms
+          ecuDelayFor_us = 50*1000;    // W4 - 25ms
           ecuStateNext = ECU_5_BAUD_TX_KW_NOT;
           buffer_tx[0] = ~buffer_rx[2];
         }
@@ -123,12 +125,12 @@ void ECUK::update()
       *rxDone = false;
       WHILE_NOT(HAL_UART_Receive_IT( _huart,  buffer_rx, 2 )); // receive what we are going to send, plus the response from ecu
       WHILE_NOT(HAL_UART_Transmit_IT( _huart,  buffer_tx, 1 ));
-      timerECU = HAL_GetTick();
+      timerECU = get_us_32();
       ecuState = ECU_5_BAUD_REPLY;
       break;
 
     case ECU_5_BAUD_REPLY:
-      if(elapsed > 1000)
+      if(elapsed > 1e6)
       {
         RESET
         break;
@@ -141,8 +143,8 @@ void ECUK::update()
       if ( (buffer_rx[0] == buffer_tx[0] && buffer_rx[1] == 0xCC))
       {
         ecuStateNext = ECU_SEND_REQUEST;
-        ecuDelayFor_ms = 70;  // P3 - 55ms
-        timerECU = HAL_GetTick();
+        ecuDelayFor_us = 70*1000;  // P3 - 55ms
+        timerECU = get_us_32();
         ecuState = ECU_DELAY;
       }
       else
@@ -161,15 +163,15 @@ void ECUK::update()
         int txLen, rxLen;
         loadRequest(buffer_tx, txLen, rxLen);
         WHILE_NOT(HAL_UART_Receive_IT( _huart,  buffer_rx, rxLen ));
-        timerECU = HAL_GetTick();
+        timerECU = get_us_32();
 
-        if(REQUEST_BYTE_DELAY_MS>0)
+        if(REQUEST_BYTE_DELAY_US>0)
         {
           ecuState = ECU_DELAY_TX;
           ecuStateNext = ECU_PROCESS_REPLY;
           delayTxInd = 0;
           delayTxCnt = txLen;
-          ecuDelayFor_ms = REQUEST_BYTE_DELAY_MS;
+          ecuDelayFor_us = REQUEST_BYTE_DELAY_US;
         }
         else
         {
@@ -180,7 +182,7 @@ void ECUK::update()
       break;
 
     case ECU_PROCESS_REPLY:
-      if(elapsed > 1000)
+      if(elapsed > 1e6)
       {
         RESET
         break;
@@ -219,8 +221,8 @@ void ECUK::update()
           {
             // we found the next valid param
             ecuStateNext = ECU_SEND_REQUEST;
-            ecuDelayFor_ms = ECU_REQUEST_DELAY_MS; // P3 - 55ms
-            timerECU = HAL_GetTick();
+            ecuDelayFor_us = ECU_REQUEST_DELAY_US; // P3 - 55ms
+            timerECU = get_us_32();
             ecuState = ECU_DELAY;
             break;
           }
@@ -233,14 +235,14 @@ void ECUK::update()
        * generic wait case.  used when we need to pause between
        * receiving a value and sending the next one
        */
-      if(elapsed < ecuDelayFor_ms)
+      if(elapsed < ecuDelayFor_us)
       {
 
       }
       else
       {
         ecuState = ecuStateNext;
-        timerECU = HAL_GetTick();
+        timerECU = get_us_32();
       }
       break;
 
@@ -248,7 +250,7 @@ void ECUK::update()
       /*
        * send tx data 1 bytes at a time after the timeout period
        */
-      if(elapsed > ecuDelayFor_ms)
+      if(elapsed > ecuDelayFor_us)
       {
         while(HAL_UART_Transmit( _huart,  &buffer_tx[delayTxInd], 1, 1000 )!=HAL_OK){};
         if(++delayTxInd>=delayTxCnt)
@@ -256,7 +258,7 @@ void ECUK::update()
           ecuState = ecuStateNext;
           *txDone = true;
         }
-        timerECU = HAL_GetTick();
+        timerECU = get_us_32();
       }
 
       break;

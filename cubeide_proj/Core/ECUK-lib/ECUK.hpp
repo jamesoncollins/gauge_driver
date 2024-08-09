@@ -35,6 +35,7 @@ public:
     const char units[16];
     const uint8_t PID;
     const uint8_t responseLen;
+    const uint8_t numMultiByte = 1;
     const float scale, offset;
     const bool inverse;         // 1 / x
     float val;
@@ -64,8 +65,8 @@ protected:
   int BAUDRATE = 0;//10400, set 0 to do autobaud with 0x55
   int NUM5BAUDREPLYBYTES = 3;
   bool HASINITRESPONSE = true;
-  int REQUEST_BYTE_DELAY_MS = 5;
-  int ECU_REQUEST_DELAY_MS = 55;
+  int REQUEST_BYTE_DELAY_US = 5000;
+  uint32_t ECU_REQUEST_DELAY_US = 55000;
 
   virtual int parse5BaudReply(const uint8_t *) = 0;
 
@@ -83,7 +84,7 @@ protected:
   uint32_t timerECU = 0;
   ecuState_e ecuState = ECU_RESET;
   ecuState_e ecuStateNext = ECU_RESET;
-  int ecuDelayFor_ms = 0;
+  uint32_t ecuDelayFor_us = 0;
   bool *txDone, *rxDone;
   bool initSuccess = false;
   uint8_t buffer_tx[10], buffer_rx[15];
