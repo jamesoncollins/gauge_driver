@@ -902,13 +902,13 @@ int main_cpp(void)
       {
         linePlotPush(&linePlotTPS, (int)ecu.getVal(MUTII::ECU_PARAM_TPS));
       }
-      linePlot(105, 155, &linePlotTPS);
+      linePlot(105, 152, &linePlotTPS);
 
       if(ecu.getParam(MUTII::ECU_PARAM_KNOCK)->isNew)
       {
         linePlotPush(&linePlotKnock, (int)ecu.getVal(MUTII::ECU_PARAM_KNOCK));
       }
-      linePlot(105, 155, &linePlotKnock);
+      linePlot(105, 152, &linePlotKnock);
 
       // check warning
       if(!bulbReadWaiting)
@@ -917,8 +917,7 @@ int main_cpp(void)
           bulbReadWaiting = true;
       }
       //bulbVals = ioexp_screen.get();
-      snprintf (logBuf, bufLen, "%d", bulbVals);
-      gdispFillString(110, 200, logBuf, font10, GFX_AMBER, GFX_BLACK);
+
       if( !(bulbVals&battMask) ) // car pulls down
         gdispImageDraw(&battImg,  20,  210, battImg.width,  battImg.height,  0, 0);
       if( !(bulbVals&brakeMask) ) // car pulls down
@@ -944,15 +943,21 @@ int main_cpp(void)
       }
 
 
-      // diag messages
+      // debug / diag messages
+      const int xdiag = 20, ydiag = 185;
+      gdispDrawBox(xdiag-1,ydiag-1,50,60,GFX_AMBER);
       snprintf (logBuf, bufLen, "ECU: %lu", ecu.getMsgRate());
-      gdispFillString(20, 200, logBuf, font10, GFX_AMBER, GFX_BLACK);
+      gdispFillString(xdiag, ydiag+00, logBuf, font10, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%d/%d", (int)loopPeriod ,(int) worstLoopPeriod);
-      gdispFillString(20, 210, logBuf, font10, GFX_AMBER, GFX_BLACK);
+      gdispFillString(xdiag, ydiag+10, logBuf, font10, GFX_AMBER, GFX_BLACK);
       if(irq_overlap_1 || irq_overlap_2)
-        gdispFillString(20, 220, "IRQERR", font10, GFX_AMBER, GFX_BLACK);
+        gdispFillString(xdiag, ydiag+20, "IRQERR", font10, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%d/%d", (int)resetCnt1 ,(int) resetCnt2);
-      gdispFillString(20, 230, logBuf, font10, GFX_AMBER, GFX_BLACK);
+      gdispFillString(xdiag, ydiag+30, logBuf, font10, GFX_AMBER, GFX_BLACK);
+      snprintf (logBuf, bufLen, "%d", bulbVals);
+      gdispFillString(xdiag, ydiag+40, logBuf, font10, GFX_AMBER, GFX_BLACK);
+      snprintf (logBuf, bufLen, "%lu / %lu", x12[0]->getTargetPosition(), x12[1]->getTargetPosition());
+      gdispFillString(xdiag, ydiag+50, logBuf, font10, GFX_AMBER, GFX_BLACK);
 
       //gdispDrawBox(0,0,screenWidth,screenHeight,GFX_AMBER);
       //gdispDrawBox(1,1,screenWidth-1,screenHeight-1,GFX_AMBER);
