@@ -64,11 +64,18 @@ typedef struct
   int len = -1;
   int indLatest = -1;
   int indFirst = -1;
+  float scalex, scaley;
   bool isInit = false;
+  uint32_t color_mode = 0; // 0 means use default, otherwise its a color
+  //uint32_t color = GFX_AMBER;
 }
 LinePlot_t;
-void linePlotInit(LinePlot_t*, int *data_buffer_ptr, int data_buffer_len);
+void linePlotInit(
+    LinePlot_t*linePlot,
+    int *data_buffer_ptr, int data_buffer_len,
+    int width, int height, int maxVal,
+    uint32_t color_mode);
 void linePlotPush(LinePlot_t *, int val);
-void linePlot(int x, int y, int width, int height, LinePlot_t *);
+void linePlot(int x, int y, LinePlot_t *);
 
 #endif /* INC_UGFX_WIDGETS_H_ */

@@ -135,13 +135,20 @@ bool flasher_fun(flasher_t *flasher)
 
 
 
-void linePlotInit(LinePlot_t*linePlot, int *data_buffer_ptr, int data_buffer_len)
+void linePlotInit(
+    LinePlot_t*linePlot,
+    int *data_buffer_ptr, int data_buffer_len,
+    int width, int height, int maxVal,
+    uint32_t color_mode)
 {
   linePlot->data = data_buffer_ptr;
   linePlot->len = data_buffer_len;
   linePlot->indFirst = 0;
   linePlot->indLatest = 0;
+  linePlot->scalex = (float)width / (float)(data_buffer_len-1);
+  linePlot->scaley = (float)height / (float)maxVal;
   linePlot->isInit = true;
+  linePlot->color_mode = color_mode;
 }
 
 void linePlotPush(LinePlot_t *linePlot, int val)
@@ -156,11 +163,13 @@ void linePlotPush(LinePlot_t *linePlot, int val)
   linePlot->data[linePlot->indLatest] = val;
 }
 
-void linePlot(int x, int y, int width, int height, LinePlot_t *linePlot)
+void linePlot(int x, int y, LinePlot_t *linePlot)
 {
   if(!linePlot->isInit)
     return;
-  int scalex = 3, scaley = 1;
+  uint32_t color = COLOR_PRIMARY;
+  if(linePlot->color_mode )
+    color = linePlot->color_mode ;
   int ind = linePlot->indFirst;
   int from = linePlot->data[ind];
   for(int i=1; i<linePlot->len; i++)
@@ -168,9 +177,9 @@ void linePlot(int x, int y, int width, int height, LinePlot_t *linePlot)
     ind = (ind+1) % linePlot->len;
     int to = linePlot->data[ind];
     gdispDrawThickLine(
-        x+i*scalex,     y-from*scaley,
-        x+(i+1)*scalex, y-to*scaley,
-        COLOR_PRIMARY,
+        x+i*linePlot->scalex,     y-from*linePlot->scaley,
+        x+(i+1)*linePlot->scalex, y-to*linePlot->scaley,
+        color,
         2,
         false);
     from = to;
