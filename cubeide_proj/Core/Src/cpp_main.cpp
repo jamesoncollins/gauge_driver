@@ -193,7 +193,8 @@ enum
   IDLE = 0,
   DONE = 1,
 };
-//#define F_CLK  (1000000)        // TIM2 uses 1MHz cock
+#define F_CLK  (1000000)        // TIM2 uses 1MHz cock
+#define TIM2_MAX_CNT 100000
 #define OVERFLOW_MS ((int)(100)) // TIM2 counts to 100000-1, so every 100ms
 const float MPH_PER_HZ = ( 0.8425872 ); //(1.11746031667) //( 1.07755102 )
 const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
@@ -214,10 +215,21 @@ iir_ma_state_t filter_state[2] = {{0.3,0}, {0.3,0}};
 #define ODO_STEPS_PER_TICK (12)
 volatile bool odo_tick_flag = false;
 
+static bool irq_in_use_1 = false, irq_in_use_2 = false;
+static bool irq_overlap_1 = false, irq_overlap_2 = false;
+static int resetCnt1 = 0, resetCnt2 = 0;
+
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 {
+  if(irq_in_use_1)
+    irq_overlap_1 = true;
+  irq_in_use_1 = true;
+
   if(htim->Instance != TIM2)
+  {
+    irq_in_use_1 = false;
     return;
+  }
 
   int ch = (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) ? SPEEDOIND : TACHIND;
   if (state[ch] == IDLE)
@@ -229,7 +241,7 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
   else if (state[ch] == DONE)
   {
     T2[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
-    float tmp = (T2[ch] + (TIM2_OVC[ch] * 100000)) - T1[ch];
+    float tmp = (T2[ch] + (TIM2_OVC[ch] * TIM2_MAX_CNT)) - T1[ch];
     state[ch] = IDLE;
     TIM2_OVC[ch] = 0;
     ticks[ch] = iir_ma( &filter_state[ch], tmp );
@@ -253,6 +265,8 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
     }
   }
 
+  irq_in_use_1 = false;
+
 }
 
 
@@ -266,21 +280,27 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
  */
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 {
+  if(irq_in_use_2)
+    irq_overlap_2 = true;
+  irq_in_use_2 = true;
+
   if(htim->Instance == TIM2)
   {
     TIM2_OVC[0]++;
     TIM2_OVC[1]++;
-    if(TIM2_OVC[0]*OVERFLOW_MS > 1000)
+    if(TIM2_OVC[0]*OVERFLOW_MS > 2000)
     {
       TIM2_OVC[0] = 0;
       ticks[0] = 0;
       state[0] = IDLE;
+      resetCnt1++;
     }
-    if(TIM2_OVC[1]*OVERFLOW_MS > 1000)
+    if(TIM2_OVC[1]*OVERFLOW_MS > 2000)
     {
       TIM2_OVC[1] = 0;
       ticks[1] = 0;
       state[1] = IDLE;
+      resetCnt2++;
     }
   }
   else if(htim->Instance == TIM16)
@@ -301,12 +321,12 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
          *
          * TODO: get rid of float division
          */
-        float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)(1000000.f / (float)ticks[TACHIND]);
+        float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)((float)F_CLK / (float)ticks[TACHIND]);
         if( tmp > 9000 )
           tmp = rpm;
         rpm = tmp;
 
-        tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)(1000000.f / (float)ticks[SPEEDOIND]);
+        tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)((float)F_CLK / (float)ticks[SPEEDOIND]);
         if( tmp > 180 )
           tmp = speed;
         speed = tmp;
@@ -348,6 +368,8 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
     }
 #endif
   }
+
+  irq_in_use_2 = false;
 }
 
 /*
@@ -711,7 +733,11 @@ int main_cpp(void)
 
   static LinePlot_t linePlotTPS;
   static int tpsPlotData[20];
-  linePlotInit(&linePlotTPS, tpsPlotData, 20);
+  linePlotInit(&linePlotTPS, tpsPlotData, 20, 110, 50, 100, 0);
+
+  static LinePlot_t linePlotKnock;
+  static int knockPlotData[20];
+  linePlotInit(&linePlotKnock, knockPlotData, 20, 110, 50, 15, GFX_RED);
 
 
   /*
@@ -857,7 +883,7 @@ int main_cpp(void)
       gdispFillString(20, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
       drawHorzBarGraph (20, 57, 80, 15, 19, 9, ecu.getVal(MUTII::ECU_PARAM_WB));
 
-      snprintf (logBuf, bufLen, "ECU: %s %lu", ecu.getStatus(), ecu.getMsgRate());
+      snprintf (logBuf, bufLen, "ECU: %s", ecu.getStatus());
       gdispFillString(20, 80, logBuf, font20, GFX_AMBER, GFX_BLACK);
 
       if(!ecu.isConnected())
@@ -874,10 +900,15 @@ int main_cpp(void)
 
       if(ecu.getParam(MUTII::ECU_PARAM_TPS)->isNew)
       {
-        linePlotPush(&linePlotTPS, (int)ecu.getVal(MUTII::ECU_PARAM_TPS) / 3);
+        linePlotPush(&linePlotTPS, (int)ecu.getVal(MUTII::ECU_PARAM_TPS));
       }
-      linePlot(130, 150, 130, 50, &linePlotTPS);
+      linePlot(105, 155, &linePlotTPS);
 
+      if(ecu.getParam(MUTII::ECU_PARAM_KNOCK)->isNew)
+      {
+        linePlotPush(&linePlotKnock, (int)ecu.getVal(MUTII::ECU_PARAM_KNOCK));
+      }
+      linePlot(105, 155, &linePlotKnock);
 
       // check warning
       if(!bulbReadWaiting)
@@ -912,8 +943,16 @@ int main_cpp(void)
         setColors(GFX_AMBER,GFX_RED,GFX_BLACK);
       }
 
+
+      // diag messages
+      snprintf (logBuf, bufLen, "ECU: %lu", ecu.getMsgRate());
+      gdispFillString(20, 200, logBuf, font10, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%d/%d", (int)loopPeriod ,(int) worstLoopPeriod);
-      gdispFillString(150, 200, logBuf, font10, GFX_AMBER, GFX_BLACK);
+      gdispFillString(20, 210, logBuf, font10, GFX_AMBER, GFX_BLACK);
+      if(irq_overlap_1 || irq_overlap_2)
+        gdispFillString(20, 220, "IRQERR", font10, GFX_AMBER, GFX_BLACK);
+      snprintf (logBuf, bufLen, "%d/%d", (int)resetCnt1 ,(int) resetCnt2);
+      gdispFillString(20, 230, logBuf, font10, GFX_AMBER, GFX_BLACK);
 
       //gdispDrawBox(0,0,screenWidth,screenHeight,GFX_AMBER);
       //gdispDrawBox(1,1,screenWidth-1,screenHeight-1,GFX_AMBER);
