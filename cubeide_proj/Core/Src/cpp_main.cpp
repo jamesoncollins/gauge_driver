@@ -201,7 +201,9 @@ const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
 volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
 volatile uint32_t T2[2] = {0,0};
+volatile float ticks_raw[2] = {0,0};
 volatile float ticks[2] = {0,0};
+volatile uint32_t rejects[2];
 volatile uint32_t TIM2_OVC[2] = {0,0};
 volatile uint32_t speed_tick_count = 0;
 iir_ma_state_t filter_state[2] = {{0.3,0}, {0.3,0}};
@@ -244,7 +246,20 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
     float tmp = (T2[ch] + (TIM2_OVC[ch] * TIM2_MAX_CNT)) - T1[ch];
     state[ch] = IDLE;
     TIM2_OVC[ch] = 0;
-    ticks[ch] = iir_ma( &filter_state[ch], tmp );
+
+    /*
+     * reject outliers that are more than X as long as the last tick
+     */
+    if( tmp>2*ticks_raw[ch] )
+    {
+      ticks[ch] = ticks[ch];
+      rejects[ch]++;
+    }
+    else
+    {
+      ticks[ch] = iir_ma( &filter_state[ch], tmp );
+      ticks_raw[ch] = ticks[ch];
+    }
   }
 
   /*
@@ -946,24 +961,18 @@ int main_cpp(void)
       // debug / diag messages
       const int xdiag = 20, ydiag = 185;
       gdispDrawBox(xdiag-1,ydiag-1,50,60,GFX_AMBER);
-      snprintf (logBuf, bufLen, "ECU: %lu", ecu.getMsgRate());
+      snprintf (logBuf, bufLen, "ECU: %lu/%lu", ecu.getMsgRate(), ecu.getMissedReplyCnt());
       gdispFillString(xdiag, ydiag+00, logBuf, font10, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%d/%d", (int)loopPeriod ,(int) worstLoopPeriod);
       gdispFillString(xdiag, ydiag+10, logBuf, font10, GFX_AMBER, GFX_BLACK);
       if(irq_overlap_1 || irq_overlap_2)
         gdispFillString(xdiag, ydiag+20, "IRQERR", font10, GFX_AMBER, GFX_BLACK);
-      snprintf (logBuf, bufLen, "%d/%d", (int)resetCnt1 ,(int) resetCnt2);
+      snprintf (logBuf, bufLen, "%d/%d/%lu/%lu", (int)resetCnt1 ,(int) resetCnt2,rejects[0],rejects[1]);
       gdispFillString(xdiag, ydiag+30, logBuf, font10, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%d", bulbVals);
       gdispFillString(xdiag, ydiag+40, logBuf, font10, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%lu / %lu", x12[0]->getTargetPosition(), x12[1]->getTargetPosition());
       gdispFillString(xdiag, ydiag+50, logBuf, font10, GFX_AMBER, GFX_BLACK);
-
-      //gdispDrawBox(0,0,screenWidth,screenHeight,GFX_AMBER);
-      //gdispDrawBox(1,1,screenWidth-1,screenHeight-1,GFX_AMBER);
-      //gdispDrawBox(2,2,screenWidth-2,screenHeight-2,GFX_AMBER);
-      //gdispDrawBox(3,3,screenWidth-3,screenHeight-3,GFX_AMBER);
-      //gdispDrawBox(4,4,screenWidth-4,screenHeight-4,GFX_AMBER);
 
       // some devices dont support this and instead they draw whenever you call a drawing function
       // but its always safe to call it
