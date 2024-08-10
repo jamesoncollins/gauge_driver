@@ -52,6 +52,7 @@ typedef struct
 {
   int rate_ms;
   int last_ms;
+  bool state;
 }
 flasher_t;
 bool flasher_fun(flasher_t*);

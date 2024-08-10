@@ -123,12 +123,12 @@ void drawGimball (int x, int y, int r, int xv, int yv)
 bool flasher_fun(flasher_t *flasher)
 {
  int now = HAL_GetTick();
-  if(flasher->last_ms+flasher->rate_ms>now)
+  if( now >= flasher->last_ms+flasher->rate_ms )
   {
     flasher->last_ms = now;
-    return true;
+    flasher->state = !flasher->state;
   }
-  return false;
+  return flasher->state;
 
 }
 
