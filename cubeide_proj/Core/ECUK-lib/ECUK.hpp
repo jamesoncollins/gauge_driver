@@ -39,9 +39,9 @@ public:
     const float scale, offset;
     const bool inverse;         // 1 / x
     float val;
-    int lastTime_ms;
+    uint32_t lastTime_ms;
     bool isNew = false;
-    int priority;
+    uint32_t priority;
   }
   ecuParam_t;
 
@@ -57,6 +57,8 @@ public:
   bool isConnected();
 
   uint32_t getMsgRate();
+
+  uint32_t getMissedReplyCnt();
 
   virtual ecuParam_t *getParam(int ind) = 0;
 
@@ -81,6 +83,7 @@ protected:
 
   UART_HandleTypeDef *_huart;
   int ecuParamInd = 0;
+  uint32_t missedReplyCnt = 0;
   uint32_t timerECU = 0;
   ecuState_e ecuState = ECU_RESET;
   ecuState_e ecuStateNext = ECU_RESET;
@@ -97,6 +100,8 @@ private:
   uint32_t msgCount;
   uint32_t msgCount_ms;
   uint32_t msgRate;
+
+  int txLen, rxLen;
 
 };
 

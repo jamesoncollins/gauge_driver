@@ -49,7 +49,7 @@ public:
           .scale = 100./255.,
           .offset = 0,
           .val = 0,
-          .lastTime_ms = -1,
+          .lastTime_ms = 0,
           .priority = 1,
       },
       {
@@ -60,7 +60,7 @@ public:
           .scale = 1.2427424,
           .offset = 0,
           .val = 0,
-          .lastTime_ms = -1,
+          .lastTime_ms = 0,
           .priority = 1,
       },
       {
@@ -71,7 +71,7 @@ public:
           .scale = 31.25,
           .offset = 0,
           .val = 0,
-          .lastTime_ms = -1,
+          .lastTime_ms = 0,
           .priority = 1,
       },
       {
@@ -82,7 +82,7 @@ public:
           .scale = 0.0627,
           .offset = 7,
           .val = 0,
-          .lastTime_ms = -1,
+          .lastTime_ms = 0,
           .priority = 1,
       },
       {
@@ -93,7 +93,7 @@ public:
           .scale = 1,
           .offset = 0,
           .val = 0,
-          .lastTime_ms = -1,
+          .lastTime_ms = 0,
           .priority = 1,
       },
       {
@@ -104,7 +104,7 @@ public:
           .scale = 1,
           .offset = -20,
           .val = 0,
-          .lastTime_ms = -1,
+          .lastTime_ms = 0,
           .priority = 1,
       },
       {
@@ -116,7 +116,7 @@ public:
           .offset = 0,
           .inverse = true,
           .val = 0,
-          .lastTime_ms = -1,
+          .lastTime_ms = 0,
           .priority = 1,
       },
 
@@ -129,7 +129,7 @@ public:
           .offset = 0,
           .inverse = false,
           .val = 0,
-          .lastTime_ms = -1,
+          .lastTime_ms = 0,
           .priority = 1,
       },
       {
@@ -142,7 +142,7 @@ public:
           .offset = 0,
           .inverse = false,
           .val = 0,
-          .lastTime_ms = -1,
+          .lastTime_ms = 0,
           .priority = 1,
       },
 
@@ -156,8 +156,8 @@ public:
           .scale = 0.1953125,
           .offset = -25,
           .val = 0,
-          .lastTime_ms = -1,
-          .priority = 100,
+          .lastTime_ms = 0,
+          .priority = 1000,
       },
       {
           .name = "FFTM",
@@ -167,8 +167,8 @@ public:
           .scale = 0.1953125,
           .offset = -25,
           .val = 0,
-          .lastTime_ms = -1,
-          .priority = 100,
+          .lastTime_ms = 0,
+          .priority = 1001,
       },
       {
           .name = "FFTH",
@@ -178,8 +178,8 @@ public:
           .scale = 0.1953125,
           .offset = -25,
           .val = 0,
-          .lastTime_ms = -1,
-          .priority = 100,
+          .lastTime_ms = 0,
+          .priority = 1002,
       },
 
       {
@@ -190,8 +190,8 @@ public:
           .scale = 0.1953125,
           .offset = -25,
           .val = 0,
-          .lastTime_ms = -1,
-          .priority = 100,
+          .lastTime_ms = 0,
+          .priority = 1003,
       },
       {
           .name = "RFTM",
@@ -201,8 +201,8 @@ public:
           .scale = 0.1953125,
           .offset = -25,
           .val = 0,
-          .lastTime_ms = -1,
-          .priority = 100,
+          .lastTime_ms = 0,
+          .priority = 1004,
       },
       {
           .name = "RFTH",
@@ -212,8 +212,8 @@ public:
           .scale = 0.1953125,
           .offset = -25,
           .val = 0,
-          .lastTime_ms = -1,
-          .priority = 100,
+          .lastTime_ms = 0,
+          .priority = 1005,
       },
 
       {
@@ -224,8 +224,8 @@ public:
           .scale = 0.07333,
           .offset = 0,
           .val = 0,
-          .lastTime_ms = -1,
-          .priority = 100,
+          .lastTime_ms = 0,
+          .priority = 1006,
       },
   };
 
@@ -236,7 +236,7 @@ public:
     BAUDRATE = 0;//15625, set to zero to autobaud with 0x55
     NUM5BAUDREPLYBYTES = 3;//4;
     HASINITRESPONSE = false;
-    ECU_REQUEST_DELAY_US = 5000;
+    ECU_REQUEST_DELAY_US = 0;
     REQUEST_BYTE_DELAY_US = 0;
   }
 

@@ -70,8 +70,6 @@ void ECUK::update()
       if(elapsed < 200000*1)
       {
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, LOW);      // start bit
-//        CLEAR_BIT(GPIOA->ODR, GPIO_PIN_9); //
-//        SET_BIT(GPIOA->ODR, GPIO_PIN_9);
       }
       else if(elapsed < 200000*9)
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)init_bit );
@@ -89,7 +87,7 @@ void ECUK::update()
       break;
 
     case ECU_5_BAUD_VERIFY:
-      if(elapsed > 1e6)
+      if(elapsed > 250e3)
       {
         RESET
         break;
@@ -130,7 +128,7 @@ void ECUK::update()
       break;
 
     case ECU_5_BAUD_REPLY:
-      if(elapsed > 1e6)
+      if(elapsed > 250e3)
       {
         RESET
         break;
@@ -159,31 +157,30 @@ void ECUK::update()
         msgCount_ms = HAL_GetTick();
       *txDone = false;
       *rxDone = false;
-      {
-        int txLen, rxLen;
-        loadRequest(buffer_tx, txLen, rxLen);
-        WHILE_NOT(HAL_UART_Receive_IT( _huart,  buffer_rx, rxLen ));
-        timerECU = get_us_32();
+      loadRequest(buffer_tx, txLen, rxLen);
+      WHILE_NOT(HAL_UART_Receive_IT( _huart,  buffer_rx, rxLen ));
+      timerECU = get_us_32();
 
-        if(REQUEST_BYTE_DELAY_US>0)
-        {
-          ecuState = ECU_DELAY_TX;
-          ecuStateNext = ECU_PROCESS_REPLY;
-          delayTxInd = 0;
-          delayTxCnt = txLen;
-          ecuDelayFor_us = REQUEST_BYTE_DELAY_US;
-        }
-        else
-        {
-          WHILE_NOT(HAL_UART_Transmit_IT( _huart,  buffer_tx, txLen ));
-          ecuState = ECU_PROCESS_REPLY;
-        }
+      if(REQUEST_BYTE_DELAY_US>0)
+      {
+        ecuState = ECU_DELAY_TX;
+        ecuStateNext = ECU_PROCESS_REPLY;
+        delayTxInd = 0;
+        delayTxCnt = txLen;
+        ecuDelayFor_us = REQUEST_BYTE_DELAY_US;
+      }
+      else
+      {
+        WHILE_NOT(HAL_UART_Transmit_IT( _huart,  buffer_tx, txLen ));
+        ecuState = ECU_PROCESS_REPLY;
       }
       break;
 
     case ECU_PROCESS_REPLY:
-      if(elapsed > 1e6)
+      if(elapsed > 250e3)
       {
+        missedReplyCnt++;
+        ECU_REQUEST_DELAY_US += 250;
         RESET
         break;
       }
@@ -213,9 +210,11 @@ void ECUK::update()
         while(1)
         {
           ecuParamInd = (ecuParamInd+1==getNumParams()) ? 0 : ecuParamInd+1;
-          if(false) // TODO: priority / load calculation
+          if(HAL_GetTick()-getParam(ecuParamInd)->lastTime_ms < getParam(ecuParamInd)->priority)
           {
-
+            /*
+             * we recently got this low priority value, skip it
+             */
           }
           else
           {
@@ -334,4 +333,9 @@ const char * ECUK::getValString(int paramInd)
 uint32_t ECUK::getMsgRate()
 {
   return msgRate;
+}
+
+uint32_t ECUK::getMissedReplyCnt()
+{
+  return missedReplyCnt;
 }
