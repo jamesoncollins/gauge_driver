@@ -87,7 +87,7 @@ void ECUK::update()
       break;
 
     case ECU_5_BAUD_VERIFY:
-      if(elapsed > 250e3)
+      if(elapsed > 1000e3)
       {
         RESET
         break;
@@ -128,7 +128,7 @@ void ECUK::update()
       break;
 
     case ECU_5_BAUD_REPLY:
-      if(elapsed > 250e3)
+      if(elapsed > 1000e3)
       {
         RESET
         break;
