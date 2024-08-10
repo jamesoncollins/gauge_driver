@@ -24,14 +24,14 @@
 
 #define GDISP_HARDWARE_FLUSH                    GFXON           // This controller requires flushing
 #define GDISP_HARDWARE_DRAWPIXEL                GFXON
-#define GDISP_HARDWARE_PIXELREAD                GFXON
-#define GDISP_HARDWARE_CONTROL                  GFXON
+//#define GDISP_HARDWARE_PIXELREAD                GFXON
+//#define GDISP_HARDWARE_CONTROL                  GFXON
 #define GDISP_HARDWARE_FILLS                    GFXON
 #define GDISP_HARDWARE_CLEARS                   GFXON
 
 #define GDISP_LLD_PIXELFORMAT                   GDISP_PIXELFORMAT_RGB565
 
-#define GDISP_CONTROL_INVERSE                   (GDISP_CONTROL_LLD+0)
+//#define GDISP_CONTROL_INVERSE                   (GDISP_CONTROL_LLD+0)
 
 #endif	/* GFX_USE_GDISP */
 

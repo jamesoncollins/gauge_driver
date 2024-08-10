@@ -261,12 +261,13 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
 LLDSPEC void gdisp_lld_flush (GDisplay *g)
 {
   uint16_t *ram;
-  if (bus_busy ())
+  while (bus_busy ())
   {
     // if the bus is still busy then we're running very slow
     // dont bother flushing, becuase we know we haven't written
     // anything
-    return;
+    asm("nop");
+    //return;
   }
   ram = RAM(g);
 
@@ -285,14 +286,12 @@ LLDSPEC void gdisp_lld_flush (GDisplay *g)
     // let the screen actually display something
     pwr_en(true);
 
-    once = true;
+
   }
 
   // Don't flush if we don't need it.
   if (!(g->flags & GDISP_FLG_NEEDFLUSH))
     return;
-
-
 
   /*
    * transfer the entire screen at once
@@ -303,6 +302,8 @@ LLDSPEC void gdisp_lld_flush (GDisplay *g)
   write_data_one_leave_low(g, ram[0], true, true); // sends start byte and leaves CS low
   write_data (g, (uint8_t*)&ram[1],  GDISP_SCREEN_WIDTH * GDISP_SCREEN_HEIGHT * sizeof(*RAM(g)) - 1);
   release_bus (g);
+
+  once = true;
 
   g->flags &= ~GDISP_FLG_NEEDFLUSH;
 }
@@ -369,11 +370,14 @@ LLDSPEC void gdisp_lld_fill_area (GDisplay *g)
 LLDSPEC void gdisp_lld_clear (GDisplay *g)
 {
 
-  // dont restroy the ram if we're still reading it for the spi transfer
+  // dont destroy the ram if we're still reading it for the spi transfer
   while (bus_busy ())
   {
     asm("nop");
   }
+
+  // dont actually clear, it happened automatically during flushing
+  return;
 
   //memset( ramBuffer, 0x00, ramSize );
   uint16_t color = map_color(gdispColor2Native(g->p.color));

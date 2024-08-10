@@ -16,6 +16,7 @@
 extern SPI_HandleTypeDef hspi2;
 extern I2C_HandleTypeDef hi2c3;
 extern DMA_HandleTypeDef hdma_spi2_tx;
+extern DMA_HandleTypeDef hdma_memtomem_dma2_channel1;
 
 #define SPIDEV     hspi2
 
@@ -46,9 +47,18 @@ extern DMA_HandleTypeDef hdma_spi2_tx;
 #define SET_PWR_EN SET_BIT(PWR_EN_PORT->ODR, PWR_EN_PIN)
 #define GET_PWR_EN READ_BIT(PWR_EN_PORT->IDR, PWR_EN_PIN)
 
+void DMA_TxCpltCallback (DMA_HandleTypeDef *);
+
 bool busy = false;
 uint8_t *data_ptr;
 uint32_t size_left = 0;
+uint16_t xfer_len;
+bool autoClear = false;
+
+void setAutoClear()
+{
+  autoClear = true;
+}
 
 bool bus_busy ()
 {
@@ -161,6 +171,11 @@ static GFXINLINE void init_board (GDisplay *g)
   CLR_PWR_EN;
   CLR_RST;
   SET_CS;
+
+  HAL_DMA_RegisterCallback(
+      &hdma_memtomem_dma2_channel1,
+      HAL_DMA_XFER_CPLT_CB_ID,
+      DMA_TxCpltCallback);
 
   // dummy transmit, makes MOSI idle high.  seems to be required
   // in order for the display to pick the SPI interface.
@@ -320,7 +335,7 @@ static GFXINLINE void write_data (GDisplay *g, uint8_t *data, unsigned int lengt
     size_left = length - 65535;
   else
     size_left = 0;
-  uint16_t xfer_len = (length > 65535) ? 65535 : length;
+  xfer_len = (length > 65535) ? 65535 : length;
   data_ptr = data + xfer_len;
   HAL_SPI_Transmit_DMA (&SPIDEV, data, xfer_len);
 
@@ -330,6 +345,33 @@ void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
 {
   if (hspi->Instance == hspi2.Instance)
   {
+    /*
+     * start mem2mem dma transfer to clear source memory thats
+     * already been transfered.  we have to poll to see if we finished
+     * clearing the last section before doing the next.
+     *
+     * note, we're always a buffer behind.  we clear the buffer that just finished
+     * going out the SPI.
+     *
+     * becuase the other transfer is SPI I cant imagine we'll ever hit this.
+     */
+//    while(
+//        HAL_DMA_GetState (&hdma_memtomem_dma2_channel1) != HAL_DMA_STATE_READY
+//      )
+//    {
+//      asm("nop");
+//    };
+    if(autoClear)
+    {
+      static uint32_t null_int = 0;
+      HAL_DMA_Start_IT(
+          &hdma_memtomem_dma2_channel1,
+          (uint32_t)&null_int,
+          (uint32_t)(uint8_t*)(data_ptr - xfer_len),
+          xfer_len
+          );
+    }
+
     if (size_left)
     {
       write_data (NULL, data_ptr, size_left);
@@ -337,8 +379,17 @@ void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
     else
     {
       SET_CS;
-      busy = false;
+      if(!autoClear)
+        busy = false;
     }
+  }
+}
+
+void DMA_TxCpltCallback(DMA_HandleTypeDef *hdma)
+{
+  if(size_left==0 && busy)
+  {
+    busy = false;
   }
 }
 
