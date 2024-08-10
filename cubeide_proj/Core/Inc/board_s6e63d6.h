@@ -327,8 +327,13 @@ static GFXINLINE void write_data (GDisplay *g, uint8_t *data, unsigned int lengt
 {
   (void) g;
   busy = true;
-  while (HAL_SPI_GetState (&SPIDEV) != HAL_SPI_STATE_READY);
-  while (HAL_DMA_GetState (&hdma_spi2_tx) != HAL_DMA_STATE_READY);
+
+  /*
+   * dont spinlock in a function that gets called from an interrupt
+   */
+  //while (HAL_SPI_GetState (&SPIDEV) != HAL_SPI_STATE_READY);
+  //while (HAL_DMA_GetState (&hdma_spi2_tx) != HAL_DMA_STATE_READY);
+  //while (HAL_DMA_GetState (&hdma_memtomem_dma2_channel1) != HAL_DMA_STATE_READY);
 //  SET_DC;
   CLR_CS;
   if (length > 65536)
@@ -347,20 +352,17 @@ void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
   {
     /*
      * start mem2mem dma transfer to clear source memory thats
-     * already been transfered.  we have to poll to see if we finished
-     * clearing the last section before doing the next.
+     * already been transfered.
+     *
+     * we should be polling to make sure the job was done, but thats
+     * dangerous in an interrupt, so i guess we just live with a possible
+     * temporary screen curruption.
      *
      * note, we're always a buffer behind.  we clear the buffer that just finished
      * going out the SPI.
      *
      * becuase the other transfer is SPI I cant imagine we'll ever hit this.
      */
-//    while(
-//        HAL_DMA_GetState (&hdma_memtomem_dma2_channel1) != HAL_DMA_STATE_READY
-//      )
-//    {
-//      asm("nop");
-//    };
     if(autoClear)
     {
       static uint32_t null_int = 0;
@@ -379,18 +381,22 @@ void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
     else
     {
       SET_CS;
-      if(!autoClear)
-        busy = false;
+
+      /*
+       * we're assuming that the xfer always finishes after
+       * the clearing
+       */
+      busy = false;
     }
   }
 }
 
+/*
+ * a clearing job is done
+ */
 void DMA_TxCpltCallback(DMA_HandleTypeDef *hdma)
 {
-  if(size_left==0 && busy)
-  {
-    busy = false;
-  }
+
 }
 
 static GFXINLINE void setreadmode (GDisplay *g)
