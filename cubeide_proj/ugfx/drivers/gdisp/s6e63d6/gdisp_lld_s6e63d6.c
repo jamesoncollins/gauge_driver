@@ -376,6 +376,10 @@ LLDSPEC void gdisp_lld_clear (GDisplay *g)
     asm("nop");
   }
 
+  uint16_t c = map_color(gdispColor2Native(g->p.color));
+  uint32_t c2 = c | c<<16;
+  setClearColor(c2);
+
   // dont actually clear, it happened automatically during flushing
   return;
 

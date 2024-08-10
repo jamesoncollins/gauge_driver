@@ -54,6 +54,15 @@ uint8_t *data_ptr;
 uint32_t size_left = 0;
 uint16_t xfer_len;
 bool autoClear = false;
+uint32_t clear_int = 0;
+
+/*
+ * pack two into this, becuase its 32bit instead of 16
+ */
+void setClearColor(uint32_t color)
+{
+  clear_int = color;
+}
 
 void setAutoClear()
 {
@@ -365,10 +374,9 @@ void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
      */
     if(autoClear)
     {
-      static uint32_t null_int = 0;
       HAL_DMA_Start_IT(
           &hdma_memtomem_dma2_channel1,
-          (uint32_t)&null_int,
+          (uint32_t)&clear_int,
           (uint32_t)(uint8_t*)(data_ptr - xfer_len),
           xfer_len
           );
