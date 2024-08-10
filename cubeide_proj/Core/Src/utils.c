@@ -6,6 +6,18 @@
 #include "assert.h"
 #include "stdbool.h"
 
+static uint32_t tic_val = 0;
+
+void tic()
+{
+  tic_val = HAL_GetTick();
+}
+
+uint32_t toc()
+{
+  return HAL_GetTick() - tic_val;
+}
+
 bool tic_toc (uint32_t *tic, uint32_t delay)
 {
   uint32_t toc = HAL_GetTick ();
