@@ -31,7 +31,10 @@ int get_x12_ticks_rpm( float  );
  */
 #define SAMPLE_TIME_MS_LED       1000
 #define SAMPLE_TIME_MS_PRINT     750
-#define SAMPLE_TIME_MS_UPDATES   50     // 20fps
+#define TARGET_FPS               10
+#define SAMPLE_TIME_MS_UPDATES   (1000/TARGET_FPS) // it takes 60ms to refresh the screen
+                                                   // with -O2 you can draw in about 10.
+                                                   // so 70ms seems to be ablout the best you can do here
 
 uint16_t screenWidth;
 uint16_t screenHeight;
@@ -80,6 +83,10 @@ const uint16_t brakeMask        = 1<<4;
 bool bulbReadWaiting = false;
 
 extern "C" {
+
+// low level display driver functions
+extern bool bus_busy ();
+extern void setAutoClear();
 
 // flags used by accelerometer in IT mode
 volatile bool acc_int_rdy = false;	// we got exti saying data ready
@@ -357,6 +364,19 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
     ecu.update();
 
 #if 0 // we arent using this yet
+    /*
+     * FIXME: this is the wrong way to do this.
+     * we should be using a DMA tied to a timer.
+     * That dma will perform a memory to memory transfer where teh dest
+     * is the data register of the I2C.
+     *
+     * This is similar, although its for GPIO not I2C:
+     * https://community.st.com/t5/stm32-mcus-products/hal-dma-start-it-call-back/td-p/630134
+     *
+     * Additionally, here is a guide for using the i2c peripheral directlly without the hal,
+     * which I think will make working with the TXDR register easier:
+     * https://www.edwinfairchild.com/p/stm32l0f0f3-i2c-tutorial.html
+     */
     if(rpm_alert && rpm_alert_has_lock)
     {
     // tim16?
@@ -720,6 +740,15 @@ int main_cpp(void)
 #endif
   }
   gdispImageClose (&startupAnim);
+  
+  /*
+   * gif animations rely on persistant pixels, so we need autoClearing
+   * to be off. until its done.
+   * 
+   * auto clearing the screen buffer will happen any time the display 
+   * is flushed.
+   */
+  setAutoClear();
 
   /*
    * tell the interrupt it should start setting needle pos based on rpm is calcs
@@ -767,8 +796,6 @@ int main_cpp(void)
   uint32_t timerIGN = timerLoop;
   uint32_t timerPrint = timerLoop;
   uint32_t timerUpdates = timerLoop;
-  //uint32_t timerECU = timerLoop;
-  bool flagSlow = false;
   bool firstAcc = false;
   uint32_t loopPeriod = 0, worstLoopPeriod = 0;
   while (1)
@@ -841,10 +868,6 @@ int main_cpp(void)
 //      ind += snprintf (logBuf+ind, bufLen-ind, "\033[1J");
       ind += snprintf (logBuf+ind, bufLen-ind, " tach: %d , speedo %d  \n",  (int)rpm,  (int)speed);
 //      ind += snprintf (logBuf+ind, bufLen-ind, " acc: %.1f, %.1f, %.1f \n", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
-      if(flagSlow)
-      {
-//	ind += snprintf (logBuf+ind, bufLen-ind, "main loop running slow \n");
-      }
 #ifdef PRINT_TO_USB
       CDC_Transmit_FS ((uint8_t*) logBuf, ind);
 #else
@@ -869,8 +892,6 @@ int main_cpp(void)
 
     /*
      * Any updates we want presented to the user.
-     *  Currently this is 20fps
-     *
      */
 #ifndef SWEEP_GAUGES
     if ((HAL_GetTick () - timerUpdates) >= SAMPLE_TIME_MS_UPDATES)
@@ -885,6 +906,10 @@ int main_cpp(void)
       // instead of doing this maybe we should be using "widgets",
       // either from ugfx or our own, that track their state and clear
       // themselves if they need.
+      // update: current implementation automatically clears after each
+      // flush, so this clear call below basically just blocks us until
+      // busy operations are done and its safe to draw.
+      // but the drawing operations do that too, so wahtever.
       gdispClear(GFX_BLACK); // if the device doesnt support flushing, then this is immediate
 
       // fixme: unnecessary float division
@@ -904,7 +929,7 @@ int main_cpp(void)
       if(!ecu.isConnected())
       {
         static flasher_t ecuGoodFlasher = {.rate_ms = 500, .last_ms = 0};
-        flasher(&ecuGoodFlasher, gdispFillString(20, 90, "ECU ERR", font20, GFX_RED, GFX_BLACK));
+        flasher(&ecuGoodFlasher, gdispFillString(20, 80, "ECU ERR", font20, GFX_RED, GFX_BLACK));
       }
 
 
@@ -936,9 +961,9 @@ int main_cpp(void)
       if( !(bulbVals&battMask) ) // car pulls down
         gdispImageDraw(&battImg,  20,  210, battImg.width,  battImg.height,  0, 0);
       if( !(bulbVals&brakeMask) ) // car pulls down
-        gdispImageDraw(&brakeImg, 140,  210, brakeImg.width, brakeImg.height, 0, 0);
+        gdispImageDraw(&brakeImg, 140,  225, brakeImg.width, brakeImg.height, 0, 0);
       if(  (bulbVals&psMask) ) // car pulls HIGH
-        gdispFillString(95, 210, "4WS", font10, GFX_YELLOW, GFX_BLACK);
+        gdispFillString(95, 225, "4WS", font20, GFX_YELLOW, GFX_BLACK);
       if (bulbVals&lampMask )
       {
         // headlights are on
@@ -957,13 +982,13 @@ int main_cpp(void)
         setColors(GFX_AMBER,GFX_RED,GFX_BLACK);
       }
 
-
       // debug / diag messages
-      const int xdiag = 20, ydiag = 185;
-      gdispDrawBox(xdiag-1,ydiag-1,50,60,GFX_AMBER);
+      static uint32_t displayTime = 0;
+      const int xdiag = 30, ydiag = 192;
+      gdispDrawBox(xdiag-1,ydiag-1,60,62,GFX_AMBER);
       snprintf (logBuf, bufLen, "ECU: %lu/%lu", ecu.getMsgRate(), ecu.getMissedReplyCnt());
       gdispFillString(xdiag, ydiag+00, logBuf, font10, GFX_AMBER, GFX_BLACK);
-      snprintf (logBuf, bufLen, "%d/%d", (int)loopPeriod ,(int) worstLoopPeriod);
+      snprintf (logBuf, bufLen, "%d/%d/%lu", (int)loopPeriod ,(int) worstLoopPeriod, HAL_GetTick() - displayTime);
       gdispFillString(xdiag, ydiag+10, logBuf, font10, GFX_AMBER, GFX_BLACK);
       if(irq_overlap_1 || irq_overlap_2)
         gdispFillString(xdiag, ydiag+20, "IRQERR", font10, GFX_AMBER, GFX_BLACK);
@@ -977,6 +1002,7 @@ int main_cpp(void)
       // some devices dont support this and instead they draw whenever you call a drawing function
       // but its always safe to call it
       gdispFlush();
+      displayTime = HAL_GetTick();
 
 
     }
@@ -1053,17 +1079,13 @@ int main_cpp(void)
      */
     loopPeriod = (HAL_GetTick () - timerLoop);
     worstLoopPeriod = (loopPeriod>worstLoopPeriod) ? loopPeriod : worstLoopPeriod;
-    if(loopPeriod>5)
-    {
-      flagSlow = true;
-    }
     timerLoop = HAL_GetTick ();
 
   }
 
 
   gdispClear(GFX_BLACK);
-  gdispFillString(60, 60, "PWR", fontLCD, GFX_AMBER, GFX_BLACK);
+  gdispFillString((screenWidth>>1)-30, (screenHeight>>1), "PWR", fontLCD, GFX_AMBER, GFX_BLACK);
   gdispFlush();
 
 
@@ -1090,6 +1112,7 @@ int main_cpp(void)
   HAL_PWR_EnableBkUpAccess ();
   HAL_RTCEx_BKUPWrite (&hrtc, RTC_BKP_DR1, 0xBEEF);
   HAL_PWR_DisableBkUpAccess ();
+  HAL_Delay(1000);
 
   /*
    * we left the main loop, we can power down
