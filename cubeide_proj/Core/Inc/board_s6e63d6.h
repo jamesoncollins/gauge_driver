@@ -16,7 +16,8 @@
 extern SPI_HandleTypeDef hspi2;
 extern I2C_HandleTypeDef hi2c3;
 extern DMA_HandleTypeDef hdma_spi2_tx;
-extern DMA_HandleTypeDef hdma_memtomem_dma2_channel1;
+extern DMA_HandleTypeDef hdma_memtomem_dma2_channel1, hdma_memtomem_dma1_channel2;
+#define dma_memtomem hdma_memtomem_dma2_channel1
 
 #define SPIDEV     hspi2
 
@@ -52,7 +53,7 @@ void DMA_TxCpltCallback (DMA_HandleTypeDef *);
 bool busy = false;
 uint8_t *data_ptr;
 uint32_t size_left = 0;
-uint16_t xfer_len;
+uint32_t xfer_len;
 bool autoClear = false;
 uint32_t clear_int = 0;
 bool isLastClear = false;
@@ -191,7 +192,7 @@ static GFXINLINE void init_board (GDisplay *g)
   SET_CS;
 
   HAL_DMA_RegisterCallback(
-      &hdma_memtomem_dma2_channel1,
+      &dma_memtomem,
       HAL_DMA_XFER_CPLT_CB_ID,
       DMA_TxCpltCallback);
 
@@ -354,7 +355,7 @@ static GFXINLINE void write_data (GDisplay *g, uint8_t *data, unsigned int lengt
   //while (HAL_DMA_GetState (&hdma_memtomem_dma2_channel1) != HAL_DMA_STATE_READY);
 //  SET_DC;
   CLR_CS;
-  if (length > 65536)
+  if (length >= 65536)
     size_left = length - 65535;
   else
     size_left = 0;
@@ -389,9 +390,9 @@ void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
       else
         isLastClear = true;
       HAL_DMA_Start_IT(
-          &hdma_memtomem_dma2_channel1,
+          &dma_memtomem,
           (uint32_t)&clear_int,
-          (uint32_t)(uint8_t*)(data_ptr - xfer_len),
+          ((uint32_t)data_ptr - xfer_len),
           xfer_len
           );
     }

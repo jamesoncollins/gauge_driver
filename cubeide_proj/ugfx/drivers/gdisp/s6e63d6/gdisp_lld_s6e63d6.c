@@ -55,6 +55,14 @@ const int ramSize = sizeof(ramBuffer);
 uint32_t *ramBufferInt = (uint32_t*)ramBuffer;
 const int ramSizeInt = sizeof(ramBuffer) / 4;
 
+/*
+ * a flag we use to tell if we've turned the display and regulators on yet.
+ *
+ * fixme: why do we even do this?  why dont we turn it all on when the board first
+ * comes up?  why do we wait for the first flush?
+ */
+static bool initOnce = false;
+
 /*===========================================================================*/
 /* Driver local functions.                                                   */
 /*===========================================================================*/
@@ -275,17 +283,18 @@ LLDSPEC void gdisp_lld_flush (GDisplay *g)
    * now that we are again filling the screen buffer during init
    * we could move this code back to init as well
    */
-  static bool once = false;
-  if(!once)
+
+  if(!initOnce)
   {
     // display on
     write_index(g, 0x05);
     write_data_one(g, 0x0001);
-    gfxSleepMilliseconds (100);
+    gfxSleepMilliseconds (200);
     // enable the negative rail of the regulator, this should
     // let the screen actually display something
     pwr_en(true);
 
+    initOnce = true;
 
   }
 
@@ -300,10 +309,8 @@ LLDSPEC void gdisp_lld_flush (GDisplay *g)
   set_viewport (g, H_start_address, H_end_address, V_start_address, V_end_address);
   write_index (g, 0x22);        // start data
   write_data_one_leave_low(g, ram[0], true, true); // sends start byte and leaves CS low
-  write_data (g, (uint8_t*)&ram[1],  GDISP_SCREEN_WIDTH * GDISP_SCREEN_HEIGHT * sizeof(*RAM(g)) - 1);
+  write_data (g, (uint8_t*)&ram[1],  GDISP_SCREEN_WIDTH * GDISP_SCREEN_HEIGHT * sizeof(*RAM(g)) - 1*sizeof(*RAM(g)));
   release_bus (g);
-
-  once = true;
 
   g->flags &= ~GDISP_FLG_NEEDFLUSH;
 }
