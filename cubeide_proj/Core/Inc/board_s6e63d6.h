@@ -55,6 +55,7 @@ uint32_t size_left = 0;
 uint16_t xfer_len;
 bool autoClear = false;
 uint32_t clear_int = 0;
+bool isLastClear = false;
 
 /*
  * pack two into this, becuase its 32bit instead of 16
@@ -374,6 +375,10 @@ void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
      */
     if(autoClear)
     {
+      if(size_left)
+        isLastClear = false;
+      else
+        isLastClear = true;
       HAL_DMA_Start_IT(
           &hdma_memtomem_dma2_channel1,
           (uint32_t)&clear_int,
@@ -389,12 +394,12 @@ void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
     else
     {
       SET_CS;
-
       /*
-       * we're assuming that the xfer always finishes after
-       * the clearing
+       * if autoclear is on then the clear interrupt should turn off
+       * busy becuase we know it will happen after the data is done.
        */
-      busy = false;
+      if(!autoClear)
+        busy = false;
     }
   }
 }
@@ -404,7 +409,10 @@ void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
  */
 void DMA_TxCpltCallback(DMA_HandleTypeDef *hdma)
 {
-
+  if(isLastClear)
+  {
+    busy = false;
+  }
 }
 
 static GFXINLINE void setreadmode (GDisplay *g)
