@@ -56,6 +56,12 @@ uint16_t xfer_len;
 bool autoClear = false;
 uint32_t clear_int = 0;
 bool isLastClear = false;
+bool txPending = false;
+
+bool getAutoClear()
+{
+  return autoClear;
+}
 
 /*
  * pack two into this, becuase its 32bit instead of 16
@@ -75,9 +81,9 @@ bool bus_busy ()
   return busy;
 }
 
-static void setup_regulator()
+static int setup_regulator()
 {
-
+  HAL_StatusTypeDef status = HAL_OK;
   /*
    * configure the off-board programable regulator for an oled display
    * to be +4.6V and -4.4V
@@ -91,7 +97,7 @@ static void setup_regulator()
       0b01000011,
   };
   uint8_t data_have[4];
-  HAL_I2C_Mem_Read(
+  status = HAL_I2C_Mem_Read(
       &hi2c3,
       PWR_ADDR,
       0x00, 1,
@@ -109,7 +115,7 @@ static void setup_regulator()
     /*
      * load the values we want and flash eeprom
      */
-    HAL_I2C_Mem_Write(
+    status = HAL_I2C_Mem_Write(
         &hi2c3,
         PWR_ADDR,
         0x00, 1,
@@ -121,7 +127,7 @@ static void setup_regulator()
      * flash them to eeprom
      */
     uint8_t val = 0b10000000;
-    HAL_I2C_Mem_Write(
+    status = HAL_I2C_Mem_Write(
         &hi2c3,
         PWR_ADDR,
         0xFF, 1,
@@ -137,7 +143,7 @@ static void setup_regulator()
     /*
      * verify
      */
-    HAL_I2C_Mem_Read(
+    status = HAL_I2C_Mem_Read(
         &hi2c3,
         PWR_ADDR,
         0x00, 1,
@@ -145,6 +151,8 @@ static void setup_regulator()
         1000
         );
   }
+  
+  return status;
 }
 
 static GFXINLINE void init_board (GDisplay *g)
@@ -352,6 +360,7 @@ static GFXINLINE void write_data (GDisplay *g, uint8_t *data, unsigned int lengt
     size_left = 0;
   xfer_len = (length > 65535) ? 65535 : length;
   data_ptr = data + xfer_len;
+  txPending = true;
   HAL_SPI_Transmit_DMA (&SPIDEV, data, xfer_len);
 
 }
@@ -399,7 +408,10 @@ void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
        * busy becuase we know it will happen after the data is done.
        */
       if(!autoClear)
+      {
         busy = false;
+      }
+      txPending = false;
     }
   }
 }
