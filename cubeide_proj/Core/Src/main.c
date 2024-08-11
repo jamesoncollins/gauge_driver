@@ -192,6 +192,13 @@ int main(void)
 
   /* USER CODE BEGIN Init */
 
+  /*
+   * uncomment this code to reset the backup domain,
+   * which ive had get locked up becuase of CSS.
+   */
+//  LL_PWR_EnableBkUpAccess ();
+//  LL_RCC_ForceBackupDomainReset ();
+//  LL_RCC_ReleaseBackupDomainReset ();
   /* USER CODE END Init */
 
   /* Configure the system clock */
