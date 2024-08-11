@@ -504,12 +504,12 @@ int main_cpp(void)
    *
    * clear the register so we are forced to reset it later
    */
-  bool cleanPwr = false;
-  HAL_PWR_EnableBkUpAccess ();
+  bool cleanPwr = false;  
   if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == 0xBEEF)
   {
     cleanPwr = true;
   }
+  HAL_PWR_EnableBkUpAccess ();
   HAL_RTCEx_BKUPWrite (&hrtc, RTC_BKP_DR1, 0x0000);
   HAL_PWR_DisableBkUpAccess ();
 
@@ -749,6 +749,9 @@ int main_cpp(void)
    * is flushed.
    */
   setAutoClear();
+  gdispClear(GFX_BLACK); // prevent temporary display of logo over gauges
+  gdispFlush();
+  gdispFlush();
 
   /*
    * tell the interrupt it should start setting needle pos based on rpm is calcs
@@ -1085,7 +1088,7 @@ int main_cpp(void)
 
 
   gdispClear(GFX_BLACK);
-  gdispFillString((screenWidth>>1)-30, (screenHeight>>1), "PWR", fontLCD, GFX_AMBER, GFX_BLACK);
+  gdispFillString((screenWidth>>1)-50, (screenHeight>>1), "PWR", fontLCD, GFX_AMBER, GFX_BLACK);
   gdispFlush();
 
 
@@ -1112,7 +1115,6 @@ int main_cpp(void)
   HAL_PWR_EnableBkUpAccess ();
   HAL_RTCEx_BKUPWrite (&hrtc, RTC_BKP_DR1, 0xBEEF);
   HAL_PWR_DisableBkUpAccess ();
-  HAL_Delay(1000);
 
   /*
    * we left the main loop, we can power down
