@@ -992,6 +992,7 @@ int main_cpp(void)
       snprintf (logBuf, bufLen, "ECU: %lu/%lu", ecu.getMsgRate(), ecu.getMissedReplyCnt());
       gdispFillString(xdiag, ydiag+00, logBuf, font10, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%d/%d/%lu", (int)loopPeriod ,(int) worstLoopPeriod, HAL_GetTick() - displayTime);
+      displayTime = HAL_GetTick();
       gdispFillString(xdiag, ydiag+10, logBuf, font10, GFX_AMBER, GFX_BLACK);
       if(irq_overlap_1 || irq_overlap_2)
         gdispFillString(xdiag, ydiag+20, "IRQERR", font10, GFX_AMBER, GFX_BLACK);
@@ -1005,8 +1006,6 @@ int main_cpp(void)
       // some devices dont support this and instead they draw whenever you call a drawing function
       // but its always safe to call it
       gdispFlush();
-      displayTime = HAL_GetTick();
-
 
     }
 
