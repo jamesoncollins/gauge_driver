@@ -6,7 +6,7 @@
 #include "assert.h"
 #include "stdbool.h"
 
-static uint32_t tic_val = 0, toc_val, toc_val_worst = 0;
+uint32_t tic_val = 0, toc_val, toc_val_worst = 0;
 
 void tic()
 {
