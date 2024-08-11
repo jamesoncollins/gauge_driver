@@ -6,7 +6,7 @@
 #include "assert.h"
 #include "stdbool.h"
 
-static uint32_t tic_val = 0;
+static uint32_t tic_val = 0, toc_val, toc_val_worst = 0;
 
 void tic()
 {
@@ -15,7 +15,10 @@ void tic()
 
 uint32_t toc()
 {
-  return HAL_GetTick() - tic_val;
+  toc_val = HAL_GetTick() - tic_val;
+  if(toc_val>toc_val_worst)
+    toc_val_worst = toc_val;
+  return toc_val;
 }
 
 bool tic_toc (uint32_t *tic, uint32_t delay)
