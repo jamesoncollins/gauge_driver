@@ -381,7 +381,8 @@ LLDSPEC void gdisp_lld_clear (GDisplay *g)
   setClearColor(c2);
 
   // dont actually clear, it happened automatically during flushing
-  return;
+  if(getAutoClear())
+    return;
 
   //memset( ramBuffer, 0x00, ramSize );
   uint16_t color = map_color(gdispColor2Native(g->p.color));
