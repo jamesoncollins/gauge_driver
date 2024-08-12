@@ -208,7 +208,7 @@ const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
 volatile uint8_t state[2] = {IDLE, IDLE};
 volatile uint32_t T1[2] = {0,0};
 volatile uint32_t T2[2] = {0,0};
-volatile float ticks_raw[2] = {0,0};
+volatile float ticks_raw[2] = {1e9,1e9};
 volatile float ticks[2] = {0,0};
 volatile uint32_t rejects[2];
 volatile uint32_t TIM2_OVC[2] = {0,0};
@@ -257,7 +257,7 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
     /*
      * reject outliers that are more than X as long as the last tick
      */
-    if( tmp>2*ticks_raw[ch] )
+    if( tmp>10*ticks_raw[ch] )
     {
       ticks[ch] = ticks[ch];
       rejects[ch]++;
@@ -962,11 +962,11 @@ int main_cpp(void)
       //bulbVals = ioexp_screen.get();
 
       if( !(bulbVals&battMask) ) // car pulls down
-        gdispImageDraw(&battImg,  20,  210, battImg.width,  battImg.height,  0, 0);
+        gdispImageDraw(&battImg,  140,  210, battImg.width,  battImg.height,  0, 0);
       if( !(bulbVals&brakeMask) ) // car pulls down
-        gdispImageDraw(&brakeImg, 140,  225, brakeImg.width, brakeImg.height, 0, 0);
+        gdispImageDraw(&brakeImg, 100,  230, brakeImg.width, brakeImg.height, 0, 0);
       if(  (bulbVals&psMask) ) // car pulls HIGH
-        gdispFillString(95, 225, "4WS", font20, GFX_YELLOW, GFX_BLACK);
+        gdispFillString(140, 215, "4WS", font20, GFX_YELLOW, GFX_BLACK);
       if (bulbVals&lampMask )
       {
         // headlights are on
@@ -975,7 +975,7 @@ int main_cpp(void)
         if( !(bulbVals&beamMask) )
         {
           // high beam on
-          gdispImageDraw(&beamImg, 62-5,  212, beamImg.width,  beamImg.height,  0, 0);
+          gdispImageDraw(&beamImg, 190,  225, beamImg.width,  beamImg.height,  0, 0);
         }
       }
       else
