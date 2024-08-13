@@ -58,7 +58,11 @@ public:
 
   uint32_t getMsgRate();
 
-  uint32_t getMissedReplyCnt();
+  /*
+   * How many times have we rseet the interface becuase we hit the max
+   * threshold of failed request-repliess
+   */
+  uint32_t getMissedReplyResetCnt();
 
   virtual ecuParam_t *getParam(int ind) = 0;
 
@@ -67,8 +71,34 @@ protected:
   int BAUDRATE = 0;//10400, set 0 to do autobaud with 0x55
   int NUM5BAUDREPLYBYTES = 3;
   bool HASINITRESPONSE = true;
+
+  /*
+   * time between bytes in a request packet.
+   *
+   * in ODB2 this is 5ms, which is why the interface is so slow.
+   */
   int REQUEST_BYTE_DELAY_US = 5000;
+
+  /*
+   * The time between an ECU response and the next request.
+   *
+   * In ODB2 this is ~55ms, another reason its so slow.
+   *
+   * MUT3 seems to tolerate about 5ms.
+   */
   uint32_t ECU_REQUEST_DELAY_US = 55000;
+
+  /*
+   * How long to wait for an ECU reply before we assume it was missed.
+   */
+  uint32_t ECU_REPLY_TIMEOUT_US = 500000;
+
+  /*
+   * How many missed replies will we tolerate before we terminate the connection
+   * and start over.
+   */
+  uint32_t MISSED_REPLY_THRESHOLD = 0;
+
 
   virtual int parse5BaudReply(const uint8_t *) = 0;
 
@@ -84,6 +114,7 @@ protected:
   UART_HandleTypeDef *_huart;
   int ecuParamInd = 0;
   uint32_t missedReplyCnt = 0;
+  uint32_t missedReplyResetCnt = 0;
   uint32_t timerECU = 0;
   ecuState_e ecuState = ECU_RESET;
   ecuState_e ecuStateNext = ECU_RESET;

@@ -236,8 +236,17 @@ public:
     BAUDRATE = 0;//15625, set to zero to autobaud with 0x55
     NUM5BAUDREPLYBYTES = 3;//4;
     HASINITRESPONSE = false;
+
+    // time from a reply to the next request
     ECU_REQUEST_DELAY_US = 500;
+
     REQUEST_BYTE_DELAY_US = 0;
+
+    // testing has shown that most replies come within 1/400=2.5ms
+    ECU_REPLY_TIMEOUT_US = 3000;
+
+    // try any request twice before failing
+    MISSED_REPLY_THRESHOLD = 2;
   }
 
   ecuParam_t *getParam(int ind)

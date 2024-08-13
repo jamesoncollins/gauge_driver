@@ -23,7 +23,7 @@
         timerECU = get_us_32(); \
         ecuState = ECU_DELAY;     \
         ecuDelayFor_us = 1000*1000;    \
-        ecuStateNext = ECU_RESET; \
+        ecuStateNext = ECU_RESET;
 
 ECUK::ECUK(UART_HandleTypeDef *huart, bool *_txDone, bool *_rxDone)
 {
@@ -47,6 +47,7 @@ void ECUK::update()
 
     // start 5-baud init
     case ECU_RESET:
+      missedReplyCnt = 0;
       msgCount = 0;
       msgRate = 0;
       initSuccess = false;
@@ -177,11 +178,19 @@ void ECUK::update()
       break;
 
     case ECU_PROCESS_REPLY:
-      if(elapsed > 250e3)
+      if(elapsed > ECU_REPLY_TIMEOUT_US)
       {
         missedReplyCnt++;
-        ECU_REQUEST_DELAY_US += 250;
-        RESET
+        if(missedReplyCnt>=MISSED_REPLY_THRESHOLD)
+        {
+          /*
+           * every time we hit this threshold we increase the delay between a
+           * good reply and the next request
+           */
+          ECU_REQUEST_DELAY_US += (ECU_REQUEST_DELAY_US/2);
+          missedReplyResetCnt++;
+          RESET
+        }
         break;
       }
 
@@ -195,6 +204,7 @@ void ECUK::update()
       else
       {
         initSuccess = true;
+        missedReplyCnt = 0;
 
         getParam(ecuParamInd)->isNew = true;
 
@@ -335,7 +345,7 @@ uint32_t ECUK::getMsgRate()
   return msgRate;
 }
 
-uint32_t ECUK::getMissedReplyCnt()
+uint32_t ECUK::getMissedReplyResetCnt()
 {
-  return missedReplyCnt;
+  return missedReplyResetCnt;
 }
