@@ -68,6 +68,7 @@ typedef struct
   float scalex, scaley;
   bool isInit = false;
   uint32_t color_mode = 0; // 0 means use default, otherwise its a color
+  int lineWidth = 2;
   //uint32_t color = GFX_AMBER;
 }
 LinePlot_t;

@@ -780,10 +780,12 @@ int main_cpp(void)
 
   static LinePlot_t linePlotTPS;
   static int tpsPlotData[20];
+  linePlotTPS.lineWidth = 4;
   linePlotInit(&linePlotTPS, tpsPlotData, 20, 110, 50, 100, 0);
 
   static LinePlot_t linePlotKnock;
   static int knockPlotData[20];
+  linePlotKnock.lineWidth = 4;
   linePlotInit(&linePlotKnock, knockPlotData, 20, 110, 50, 15, GFX_RED);
 
 

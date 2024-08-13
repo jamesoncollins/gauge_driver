@@ -180,7 +180,7 @@ void linePlot(int x, int y, LinePlot_t *linePlot)
         x+i*linePlot->scalex,     y-from*linePlot->scaley,
         x+(i+1)*linePlot->scalex, y-to*linePlot->scaley,
         color,
-        2,
+        linePlot->lineWidth,
         false);
     from = to;
   }
