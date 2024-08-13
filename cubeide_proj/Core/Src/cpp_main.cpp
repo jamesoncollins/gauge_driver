@@ -988,6 +988,7 @@ int main_cpp(void)
       }
 
       // debug / diag messages
+#if DIAG_SQUARE
       static uint32_t displayTime = 0;
       const int xdiag = 30, ydiag = 192;
       gdispDrawBox(xdiag-1,ydiag-1,60,62,GFX_AMBER);
@@ -1004,6 +1005,7 @@ int main_cpp(void)
       gdispFillString(xdiag, ydiag+40, logBuf, font10, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%lu / %lu", x12[0]->getTargetPosition(), x12[1]->getTargetPosition());
       gdispFillString(xdiag, ydiag+50, logBuf, font10, GFX_AMBER, GFX_BLACK);
+#endif
 
       // some devices dont support this and instead they draw whenever you call a drawing function
       // but its always safe to call it
