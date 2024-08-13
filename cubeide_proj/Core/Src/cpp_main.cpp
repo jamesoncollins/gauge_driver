@@ -988,7 +988,8 @@ int main_cpp(void)
       }
 
       // debug / diag messages
-#if DIAG_SQUARE
+#define DIAG_SQUARE
+#ifdef DIAG_SQUARE
       static uint32_t displayTime = 0;
       const int xdiag = 30, ydiag = 192;
       gdispDrawBox(xdiag-1,ydiag-1,60,62,GFX_AMBER);
