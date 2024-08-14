@@ -993,7 +993,7 @@ int main_cpp(void)
       static uint32_t displayTime = 0;
       const int xdiag = 30, ydiag = 192;
       gdispDrawBox(xdiag-1,ydiag-1,60,62,GFX_AMBER);
-      snprintf (logBuf, bufLen, "ECU: %lu/%lu", ecu.getMsgRate(), ecu.getMissedReplyCnt());
+      snprintf (logBuf, bufLen, "ECU: %lu/%lu", ecu.getMsgRate(), ecu.getMissedReplyResetCnt());
       gdispFillString(xdiag, ydiag+00, logBuf, font10, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%d/%d/%lu", (int)loopPeriod ,(int) worstLoopPeriod, HAL_GetTick() - displayTime);
       displayTime = HAL_GetTick();
