@@ -41,6 +41,7 @@ void ECUK::update()
    * ecu interface
    */
   uint32_t elapsed = get_us_32() - timerECU;
+  char init_bit;
 
   switch(ecuState)
   {
@@ -65,15 +66,16 @@ void ECUK::update()
 
     // perform 5-baud init
     case ECU_5_BAUD:
-    {
       init_bit_ind = (elapsed-200000)/200000;
-      char init_bit = ((~INIT_SEQ)&(1<<init_bit_ind))>>init_bit_ind;
+      init_bit = ((~INIT_SEQ)&(1<<init_bit_ind))>>init_bit_ind;
       if(elapsed < 200000*1)
       {
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, LOW);      // start bit
       }
       else if(elapsed < 200000*9)
+      {
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (GPIO_PinState)init_bit );
+      }
       else
       {
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, HIGH);        // stop bit
@@ -84,20 +86,18 @@ void ECUK::update()
         WHILE_NOT(HAL_UART_Receive_IT( _huart,  &buffer_rx[0], NUM5BAUDREPLYBYTES )); // try to get reply data
         ecuState = ECU_5_BAUD_VERIFY;
       }
-    }
       break;
 
     case ECU_5_BAUD_VERIFY:
       if(elapsed > 1000e3)
       {
         RESET
-        break;
       }
+      else if(!*rxDone)
+      {
 
-      if(!*rxDone)
-        break;
-
-      if( parse5BaudReply(buffer_rx)==0 )
+      }
+      else if( parse5BaudReply(buffer_rx)==0 )
       {
         timerECU = get_us_32();
         if(HASINITRESPONSE)
@@ -115,7 +115,6 @@ void ECUK::update()
       else
       {
         RESET
-        break;
       }
       break;
 
@@ -132,14 +131,13 @@ void ECUK::update()
       if(elapsed > 1000e3)
       {
         RESET
-        break;
       }
+      else if( !(*txDone && *rxDone))
+      {
 
-      if( !(*txDone && *rxDone))
-        break;
-
+      }
       // we received an init reply, check it
-      if ( (buffer_rx[0] == buffer_tx[0] && buffer_rx[1] == 0xCC))
+      else if ( (buffer_rx[0] == buffer_tx[0] && buffer_rx[1] == 0xCC))
       {
         ecuStateNext = ECU_SEND_REQUEST;
         ecuDelayFor_us = 70*1000;  // P3 - 55ms
@@ -149,7 +147,6 @@ void ECUK::update()
       else
       {
         RESET
-        break;
       }
       break;
 
@@ -187,17 +184,25 @@ void ECUK::update()
            * every time we hit this threshold we increase the delay between a
            * good reply and the next request
            */
-          ECU_REQUEST_DELAY_US += (ECU_REQUEST_DELAY_US/2);
+          ECU_REQUEST_DELAY_US += (ECU_REQUEST_DELAY_US/2) + 100;
           missedReplyResetCnt++;
           RESET
         }
-        break;
+        else
+        {
+          // if we didnt hit the thresold then just go back to the
+          // state where we send a request
+          ecuStateNext = ECU_SEND_REQUEST;
+          ecuDelayFor_us = ECU_REQUEST_DELAY_US; // P3 - 55ms
+          timerECU = get_us_32();
+          ecuState = ECU_DELAY;
+        }
       }
+      else if( !(*txDone && *rxDone))
+      {
 
-      if( !(*txDone && *rxDone))
-        break;
-
-      if( parseRequest( buffer_rx ) )
+      }
+      else if( parseRequest( buffer_rx ) )
       {
         RESET
       }
@@ -233,7 +238,6 @@ void ECUK::update()
             ecuDelayFor_us = ECU_REQUEST_DELAY_US; // P3 - 55ms
             timerECU = get_us_32();
             ecuState = ECU_DELAY;
-            break;
           }
         }
       }
@@ -269,10 +273,7 @@ void ECUK::update()
         }
         timerECU = get_us_32();
       }
-
       break;
-
-
   }
 }
 

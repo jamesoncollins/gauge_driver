@@ -238,12 +238,13 @@ public:
     HASINITRESPONSE = false;
 
     // time from a reply to the next request
-    ECU_REQUEST_DELAY_US = 500;
+    ECU_REQUEST_DELAY_US = 50;
 
+    // request bytes go as fast as possible, no delay.
     REQUEST_BYTE_DELAY_US = 0;
 
     // testing has shown that most replies come within 1/400=2.5ms
-    ECU_REPLY_TIMEOUT_US = 3000;
+    ECU_REPLY_TIMEOUT_US = 5000;
 
     // try any request twice before failing
     MISSED_REPLY_THRESHOLD = 2;
