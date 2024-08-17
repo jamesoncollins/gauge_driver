@@ -116,9 +116,8 @@ void drawGimball ( Gimball_t *gimball, int x, int y, int r, int xv, int yv)
     gdispDrawCircle (x, y, r, COLOR_PRIMARY);
     r = r>>1;
   }
-  gdispFillCircle (x+xv, y+yv, w<<3, COLOR_SECONDARY);
 
-  int r2 = xv*yv;
+  int r2 = xv*xv+yv*yv;
   if(r2>gimball->r2Max)
   {
     gimball->r2Max = r2;
@@ -126,7 +125,9 @@ void drawGimball ( Gimball_t *gimball, int x, int y, int r, int xv, int yv)
     gimball->yMax = yv;
   }
 
-  gdispFillCircle (x+gimball->xMax, y+gimball->yMax, w<<3, GFX_ORANGE);
+  int ball_r = w*8;
+  gdispFillCircle (x+gimball->xMax, y+gimball->yMax, ball_r, GFX_ORANGE);
+  gdispFillCircle (x+xv, y+yv, ball_r, COLOR_SECONDARY);
 
 }
 
