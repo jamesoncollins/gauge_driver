@@ -748,9 +748,10 @@ int main_cpp(void)
    * auto clearing the screen buffer will happen any time the display 
    * is flushed.
    */
+  gdispClear(GFX_BLACK); // not sure if this clear fixes the temporary display of the logo over the gauges
   setAutoClear();
-  gdispClear(GFX_BLACK); // prevent temporary display of logo over gauges
-  gdispFlush();
+  gdispClear(GFX_BLACK); // or if its this one
+  gdispFlush(); // not sure why we flush twice here, maybe becuase its required by autoflush somehow
   gdispFlush();
 
   /*
@@ -941,7 +942,7 @@ int main_cpp(void)
       if(!ecu.isConnected())
       {
         static flasher_t ecuGoodFlasher = {.rate_ms = 500, .last_ms = 0};
-        flasher(&ecuGoodFlasher, gdispFillString(20, 80, "ECU ERR   ", font20, GFX_RED, GFX_BLACK));
+        flasher(&ecuGoodFlasher, gdispFillString(20, 80, "ECU ERR     ", font20, GFX_RED, GFX_BLACK));
       }
 
 
@@ -973,7 +974,7 @@ int main_cpp(void)
       if( !(bulbVals&battMask) ) // car pulls down
         gdispImageDraw(&battImg,  145,  210, battImg.width,  battImg.height,  0, 0);
       if( !(bulbVals&brakeMask) ) // car pulls down
-        gdispFillString(145, 215, "BRAKE", font20, GFX_RED, GFX_BLACK);
+        gdispFillString(120, 233, "BRAKE", font20, GFX_RED, GFX_BLACK);
        //gdispImageDraw(&brakeImg, 100,  230, brakeImg.width, brakeImg.height, 0, 0);
       if(  (bulbVals&psMask) ) // car pulls HIGH
         gdispFillString(145, 215, "4WS", font20, GFX_YELLOW, GFX_BLACK);
@@ -985,7 +986,7 @@ int main_cpp(void)
         if( !(bulbVals&beamMask) )
         {
           // high beam on
-          gdispImageDraw(&beamImg, 190,  225, beamImg.width,  beamImg.height,  0, 0);
+          gdispImageDraw(&beamImg, 190,  223, beamImg.width,  beamImg.height,  0, 0);
         }
       }
       else
