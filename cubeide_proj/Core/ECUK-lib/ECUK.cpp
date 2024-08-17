@@ -42,6 +42,7 @@ void ECUK::update()
    */
   uint32_t elapsed = get_us_32() - timerECU;
   char init_bit;
+  bool cont;
 
   switch(ecuState)
   {
@@ -191,7 +192,9 @@ void ECUK::update()
         else
         {
           // if we didnt hit the thresold then just go back to the
-          // state where we send a request
+          // state where we send a request.  but we have to abort becuase
+          // we have an outstanding read still.
+          HAL_UART_Abort(_huart);
           ecuStateNext = ECU_SEND_REQUEST;
           ecuDelayFor_us = ECU_REQUEST_DELAY_US; // P3 - 55ms
           timerECU = get_us_32();
@@ -222,10 +225,11 @@ void ECUK::update()
         }
 
         // move to next param, unless the load states dont match
-        while(1)
+        cont = true;
+        while(cont)
         {
           ecuParamInd = (ecuParamInd+1==getNumParams()) ? 0 : ecuParamInd+1;
-          if(HAL_GetTick()-getParam(ecuParamInd)->lastTime_ms < getParam(ecuParamInd)->priority)
+          if((cont=HAL_GetTick()-getParam(ecuParamInd)->lastTime_ms < getParam(ecuParamInd)->priority))
           {
             /*
              * we recently got this low priority value, skip it

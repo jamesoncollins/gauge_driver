@@ -237,8 +237,14 @@ public:
     NUM5BAUDREPLYBYTES = 3;//4;
     HASINITRESPONSE = false;
 
-    // time from a reply to the next request
-    ECU_REQUEST_DELAY_US = 50;
+    // time from a reply to the next request.
+    // we derrived this expirmentally.  it should be higher but we
+    // get away with it becuase of our 5ms retry below which means that
+    // we wait 5ms for a response to fail then we try again very quickly.
+    // turns out this almost always works at getting us the value the second try.
+    // so instead of ALWAYS needing 5ms between commands we just need it sometimes,
+    // but usually its only 175us.
+    ECU_REQUEST_DELAY_US = 175;
 
     // request bytes go as fast as possible, no delay.
     REQUEST_BYTE_DELAY_US = 0;
