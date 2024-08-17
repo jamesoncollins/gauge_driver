@@ -104,7 +104,7 @@ void drawHorzBarGraph (
  * r, radius of outtermost ring
  * xy and yv, wher ethe gimbal is
  */
-void drawGimball (int x, int y, int r, int xv, int yv)
+void drawGimball ( Gimball_t *gimball, int x, int y, int r, int xv, int yv)
 {
   const int w = 1;
   gdispDrawThickLine( x, y, x+r, y+0, COLOR_PRIMARY, w, false);
@@ -116,7 +116,17 @@ void drawGimball (int x, int y, int r, int xv, int yv)
     gdispDrawCircle (x, y, r, COLOR_PRIMARY);
     r = r>>1;
   }
-  gdispFillCircle (x+xv, y+yv, w<<2, COLOR_SECONDARY);
+  gdispFillCircle (x+xv, y+yv, w<<3, COLOR_SECONDARY);
+
+  int r2 = xv*yv;
+  if(r2>gimball->r2Max)
+  {
+    gimball->r2Max = r2;
+    gimball->xMax = xv;
+    gimball->yMax = yv;
+  }
+
+  gdispFillCircle (x+gimball->xMax, y+gimball->yMax, w<<3, GFX_ORANGE);
 
 }
 

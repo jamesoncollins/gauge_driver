@@ -41,7 +41,13 @@ void drawHorzBarGraph (
 
 bool dissolve(int x, int y, int width, int height, int iter);
 
-void drawGimball (int x, int y, int r, int xv, int yv);
+
+typedef struct
+{
+  int r2Max, xMax, yMax;
+}
+Gimball_t;
+void drawGimball ( Gimball_t*, int x, int y, int r, int xv, int yv);
 
 
 /* a routine for flashing a widget
