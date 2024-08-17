@@ -761,33 +761,40 @@ int main_cpp(void)
   /*
    * load image resources for warning indicators
    */
-  gImage battImg, beamImg, brakeImg;
+  gImage battImg, beamImg; //brakeImg;
   gdispImageOpenMemory(&battImg, batt);
   gdispImageOpenMemory(&beamImg, beam);
-  gdispImageOpenMemory(&brakeImg, brake);
+  //gdispImageOpenMemory(&brakeImg, brake);
 
+  /*
+   * setup graphics structs
+   */
+  LinePlot_t linePlotTPS;
+  int tpsPlotData[20];
+  linePlotTPS.lineWidth = 3;
+  linePlotInit(&linePlotTPS, tpsPlotData,
+               20,
+               200, 50,
+               100,
+               0);
+
+  LinePlot_t linePlotKnock;
+  int knockPlotData[20];
+  linePlotKnock.lineWidth = 3;
+  linePlotInit(&linePlotKnock, knockPlotData,
+               20,
+               200,
+               50,
+               15,
+               GFX_RED);
+
+  Gimball_t gimball;
 
   /*
    * assume that the board is mounted with a known pitch angle, but that there is no yaw or roll
    */
   constexpr float pitch = 75. * M_PI / 180.0;
   constexpr float cosPitch = cos(pitch), sinPitch = sin(pitch);
-
-
-  /*
-   * setup line plots
-   */
-
-  static LinePlot_t linePlotTPS;
-  static int tpsPlotData[20];
-  linePlotTPS.lineWidth = 4;
-  linePlotInit(&linePlotTPS, tpsPlotData, 20, 110, 50, 100, 0);
-
-  static LinePlot_t linePlotKnock;
-  static int knockPlotData[20];
-  linePlotKnock.lineWidth = 4;
-  linePlotInit(&linePlotKnock, knockPlotData, 20, 110, 50, 15, GFX_RED);
-
 
   /*
    * Main while loop.
@@ -919,7 +926,7 @@ int main_cpp(void)
 
       // fixme: unnecessary float division
       const int gimbal_radius = 35;
-      drawGimball (168, 48, gimbal_radius,
+      drawGimball ( &gimball, 168, 48, gimbal_radius,
                     -imu.acc_mps2[1] / (9.8f / 1.f) * gimbal_radius,
                     -imu.acc_mps2[0] / (9.8f / 1.f) * gimbal_radius
                    );
@@ -928,32 +935,32 @@ int main_cpp(void)
       gdispFillString(20, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
       drawHorzBarGraph (20, 57, 80, 15, 19, 9, ecu.getVal(MUTII::ECU_PARAM_WB));
 
-      snprintf (logBuf, bufLen, "ECU: %s", ecu.getStatus());
+      snprintf (logBuf, bufLen, "ECU:%s-%ld", ecu.getStatus(), ecu.getMsgRate());
       gdispFillString(20, 80, logBuf, font20, GFX_AMBER, GFX_BLACK);
 
       if(!ecu.isConnected())
       {
         static flasher_t ecuGoodFlasher = {.rate_ms = 500, .last_ms = 0};
-        flasher(&ecuGoodFlasher, gdispFillString(20, 80, "ECU ERR", font20, GFX_RED, GFX_BLACK));
+        flasher(&ecuGoodFlasher, gdispFillString(20, 80, "ECU ERR   ", font20, GFX_RED, GFX_BLACK));
       }
 
 
       snprintf (logBuf, bufLen, "%d", (int)speed);
-      gdispFillString(25, 110, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+      gdispFillString(15, 110+42, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
       snprintf (logBuf, bufLen, "%d", (int)rpm);
-      gdispFillString(25, 155, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+      gdispFillString(15, 155+42, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
 
       if(ecu.getParam(MUTII::ECU_PARAM_TPS)->isNew)
       {
         linePlotPush(&linePlotTPS, (int)ecu.getVal(MUTII::ECU_PARAM_TPS));
       }
-      linePlot(105, 152, &linePlotTPS);
+      linePlot(10, 149, &linePlotTPS);
 
       if(ecu.getParam(MUTII::ECU_PARAM_KNOCK)->isNew)
       {
         linePlotPush(&linePlotKnock, (int)ecu.getVal(MUTII::ECU_PARAM_KNOCK));
       }
-      linePlot(105, 152, &linePlotKnock);
+      linePlot(10, 149, &linePlotKnock);
 
       // check warning
       if(!bulbReadWaiting)
@@ -964,11 +971,12 @@ int main_cpp(void)
       //bulbVals = ioexp_screen.get();
 
       if( !(bulbVals&battMask) ) // car pulls down
-        gdispImageDraw(&battImg,  140,  210, battImg.width,  battImg.height,  0, 0);
+        gdispImageDraw(&battImg,  145,  210, battImg.width,  battImg.height,  0, 0);
       if( !(bulbVals&brakeMask) ) // car pulls down
-        gdispImageDraw(&brakeImg, 100,  230, brakeImg.width, brakeImg.height, 0, 0);
+        gdispFillString(145, 215, "BRAKE", font20, GFX_RED, GFX_BLACK);
+       //gdispImageDraw(&brakeImg, 100,  230, brakeImg.width, brakeImg.height, 0, 0);
       if(  (bulbVals&psMask) ) // car pulls HIGH
-        gdispFillString(140, 215, "4WS", font20, GFX_YELLOW, GFX_BLACK);
+        gdispFillString(145, 215, "4WS", font20, GFX_YELLOW, GFX_BLACK);
       if (bulbVals&lampMask )
       {
         // headlights are on
@@ -984,11 +992,11 @@ int main_cpp(void)
       {
         // headlights are off
         GFX_AMBER = GFX_AMBER_YEL;
-        setColors(GFX_AMBER,GFX_RED,GFX_BLACK);
+        setColors( GFX_AMBER, GFX_RED, GFX_BLACK );
       }
 
       // debug / diag messages
-#define DIAG_SQUARE
+//#define DIAG_SQUARE
 #ifdef DIAG_SQUARE
       static uint32_t displayTime = 0;
       const int xdiag = 30, ydiag = 192;
