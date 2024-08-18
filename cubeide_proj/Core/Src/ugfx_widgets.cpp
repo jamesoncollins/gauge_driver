@@ -160,6 +160,9 @@ void linePlotInit(
   linePlot->scaley = (float)height / (float)maxVal;
   linePlot->isInit = true;
   linePlot->color_mode = color_mode;
+
+  for(int i=0; i<data_buffer_len; i++)
+    data_buffer_ptr[i] = 0;
 }
 
 void linePlotPush(LinePlot_t *linePlot, int val)
