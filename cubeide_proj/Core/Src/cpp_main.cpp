@@ -489,6 +489,7 @@ int main_cpp(void)
   // init our 64-bit system-tick counter based on teh DWT timer
   init_get_cycle_count ();
 
+  MX_APPE_Init();
 
   /* USB data buffer */
   const int bufLen = 256;
@@ -813,6 +814,8 @@ int main_cpp(void)
   uint32_t loopPeriod = 0, worstLoopPeriod = 0;
   while (1)
   {
+
+    MX_APPE_Process();
 
     /* Toggle LED */
     if ((HAL_GetTick () - timerLED) >= SAMPLE_TIME_MS_LED)
