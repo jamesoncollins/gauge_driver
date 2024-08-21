@@ -45,6 +45,8 @@ bool dissolve(int x, int y, int width, int height, int iter);
 typedef struct
 {
   int r2Max, xMax, yMax;
+  uint32_t peakHold_ms = 2000;
+  uint32_t peakHold_ms_last = 0;
 }
 Gimball_t;
 void drawGimball ( Gimball_t*, int x, int y, int r, int xv, int yv);

@@ -46,6 +46,7 @@
 #define GDISP_NEED_CLIP                              GFXON
 #define GDISP_NEED_TEXT                          GFXON
 #define GDISP_NEED_CIRCLE                       GFXON
+#define GDISP_NEED_DUALCIRCLE                   GFXON
 #define GDISP_NEED_CONVEX_POLYGON               GFXON // thick lines
 #define GDISP_INCLUDE_FONT_DEJAVUSANS10          GFXON
 #define GDISP_INCLUDE_FONT_DEJAVUSANS20          GFXON

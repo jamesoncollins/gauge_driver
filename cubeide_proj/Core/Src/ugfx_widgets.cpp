@@ -118,15 +118,16 @@ void drawGimball ( Gimball_t *gimball, int x, int y, int r, int xv, int yv)
   }
 
   int r2 = xv*xv+yv*yv;
-  if(r2>gimball->r2Max)
+  if(r2>gimball->r2Max || HAL_GetTick() - gimball->peakHold_ms_last > gimball->peakHold_ms)
   {
     gimball->r2Max = r2;
     gimball->xMax = xv;
     gimball->yMax = yv;
+    gimball->peakHold_ms_last = HAL_GetTick();
   }
 
   int ball_r = w*8;
-  gdispFillCircle (x+gimball->xMax, y+gimball->yMax, ball_r, GFX_ORANGE);
+  gdispFillDualCircle (x+gimball->xMax, y+gimball->yMax, ball_r, GFX_ORANGE, ball_r>>1, GFX_BLACK);
   gdispFillCircle (x+xv, y+yv, ball_r, COLOR_SECONDARY);
 
 }
