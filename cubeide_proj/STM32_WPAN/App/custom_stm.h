@@ -34,14 +34,20 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 typedef enum
 {
-  /* bpService */
-  CUSTOM_STM_CHARWRITE,
+  /* UserButtonService */
+  CUSTOM_STM_BUTTONPRESS,
+  /* ClientReadService */
+  CUSTOM_STM_READNEXT,
 } Custom_STM_Char_Opcode_t;
 
 typedef enum
 {
-  /* charWrite */
-  CUSTOM_STM_CHARWRITE_WRITE_EVT,
+  /* buttonPress */
+  CUSTOM_STM_BUTTONPRESS_WRITE_NO_RESP_EVT,
+  /* readNext */
+  CUSTOM_STM_READNEXT_READ_EVT,
+  CUSTOM_STM_READNEXT_NOTIFY_ENABLED_EVT,
+  CUSTOM_STM_READNEXT_NOTIFY_DISABLED_EVT,
 
   CUSTOM_STM_BOOT_REQUEST_EVT
 } Custom_STM_Opcode_evt_t;
@@ -65,7 +71,8 @@ typedef struct
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
-extern uint8_t SizeCharwrite;
+extern uint8_t SizeButtonpress;
+extern uint8_t SizeReadnext;
 
 /* USER CODE BEGIN EC */
 

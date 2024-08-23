@@ -253,7 +253,7 @@ public:
     ECU_REPLY_TIMEOUT_US = 5000;
 
     // try any request twice before failing
-    MISSED_REPLY_THRESHOLD = 2;
+    MISSED_REPLY_THRESHOLD = 3;
   }
 
   ecuParam_t *getParam(int ind)

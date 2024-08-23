@@ -4,6 +4,10 @@
 
 #include "main.h"
 
+#include "ble.h"
+#include "custom_app.h"
+#include "custom_stm.h"
+
 #include "utils.h"
 
 #include "ECUK.hpp"
@@ -215,6 +219,11 @@ void ECUK::update()
         missedReplyCnt = 0;
 
         getParam(ecuParamInd)->isNew = true;
+
+        Custom_STM_App_Update_Char(
+            CUSTOM_STM_READNEXT,
+            (uint8_t*)getParam(ecuParamInd)
+            );
 
         msgCount++;
         if(HAL_GetTick() - msgCount_ms > 1000)

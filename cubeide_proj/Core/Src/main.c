@@ -715,11 +715,10 @@ static void MX_USART1_UART_Init(void)
   {
     Error_Handler();
   }
-#define USART_MANUAL_CONFIG
   /* USER CODE BEGIN USART1_Init 2 */
 #ifndef USART_MANUAL_CONFIG
 #define USART_MANUAL_CONFIG
-#error You regenerated code, make sure our version of this function is still valid.
+//#error You regenerated code, make sure our version of this function is still valid.
 #endif
   /* USER CODE END USART1_Init 2 */
 

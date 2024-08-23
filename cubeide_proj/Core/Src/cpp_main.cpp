@@ -1,9 +1,13 @@
 
 #include "main.h"
+
 #include "usb_device.h"
 
 #include "usbd_cdc_if.h"
 extern "C" {
+#include "ble.h"
+#include "custom_app.h"
+#include "custom_stm.h"
 #include "../MCP4725-lib/MCP4725.h"
 #include "../BMI088-lib/BMI088.h"
 #include "filters.h"
@@ -825,6 +829,10 @@ int main_cpp(void)
 
       HAL_GPIO_TogglePin ( LED_GPIO_Port, LED_Pin );
       timerLED = HAL_GetTick ();
+
+      static uint8_t data = 0;
+      Custom_STM_App_Update_Char(CUSTOM_STM_READNEXT, &data);
+      data++;
     }
 
     /**

@@ -35,7 +35,9 @@
 /* Private typedef -----------------------------------------------------------*/
 typedef struct
 {
-  /* bpService */
+  /* UserButtonService */
+  /* ClientReadService */
+  uint8_t               Readnext_Notification_Status;
   /* USER CODE BEGIN CUSTOM_APP_Context_t */
 
   /* USER CODE END CUSTOM_APP_Context_t */
@@ -76,7 +78,10 @@ uint8_t NotifyCharData[247];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
-/* bpService */
+/* UserButtonService */
+/* ClientReadService */
+static void Custom_Readnext_Update_Char(void);
+static void Custom_Readnext_Send_Notification(void);
 
 /* USER CODE BEGIN PFP */
 
@@ -94,11 +99,30 @@ void Custom_STM_App_Notification(Custom_STM_App_Notification_evt_t *pNotificatio
 
     /* USER CODE END CUSTOM_STM_App_Notification_Custom_Evt_Opcode */
 
-    /* bpService */
-    case CUSTOM_STM_CHARWRITE_WRITE_EVT:
-      /* USER CODE BEGIN CUSTOM_STM_CHARWRITE_WRITE_EVT */
+    /* UserButtonService */
+    case CUSTOM_STM_BUTTONPRESS_WRITE_NO_RESP_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_BUTTONPRESS_WRITE_NO_RESP_EVT */
 
-      /* USER CODE END CUSTOM_STM_CHARWRITE_WRITE_EVT */
+      /* USER CODE END CUSTOM_STM_BUTTONPRESS_WRITE_NO_RESP_EVT */
+      break;
+
+    /* ClientReadService */
+    case CUSTOM_STM_READNEXT_READ_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_READNEXT_READ_EVT */
+
+      /* USER CODE END CUSTOM_STM_READNEXT_READ_EVT */
+      break;
+
+    case CUSTOM_STM_READNEXT_NOTIFY_ENABLED_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_READNEXT_NOTIFY_ENABLED_EVT */
+
+      /* USER CODE END CUSTOM_STM_READNEXT_NOTIFY_ENABLED_EVT */
+      break;
+
+    case CUSTOM_STM_READNEXT_NOTIFY_DISABLED_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_READNEXT_NOTIFY_DISABLED_EVT */
+
+      /* USER CODE END CUSTOM_STM_READNEXT_NOTIFY_DISABLED_EVT */
       break;
 
     default:
@@ -168,7 +192,46 @@ void Custom_APP_Init(void)
  *
  *************************************************************/
 
-/* bpService */
+/* UserButtonService */
+/* ClientReadService */
+void Custom_Readnext_Update_Char(void) /* Property Read */
+{
+  uint8_t updateflag = 0;
+
+  /* USER CODE BEGIN Readnext_UC_1*/
+
+  /* USER CODE END Readnext_UC_1*/
+
+  if (updateflag != 0)
+  {
+    Custom_STM_App_Update_Char(CUSTOM_STM_READNEXT, (uint8_t *)UpdateCharData);
+  }
+
+  /* USER CODE BEGIN Readnext_UC_Last*/
+
+  /* USER CODE END Readnext_UC_Last*/
+  return;
+}
+
+void Custom_Readnext_Send_Notification(void) /* Property Notification */
+{
+  uint8_t updateflag = 0;
+
+  /* USER CODE BEGIN Readnext_NS_1*/
+
+  /* USER CODE END Readnext_NS_1*/
+
+  if (updateflag != 0)
+  {
+    Custom_STM_App_Update_Char(CUSTOM_STM_READNEXT, (uint8_t *)NotifyCharData);
+  }
+
+  /* USER CODE BEGIN Readnext_NS_Last*/
+
+  /* USER CODE END Readnext_NS_Last*/
+
+  return;
+}
 
 /* USER CODE BEGIN FD_LOCAL_FUNCTIONS*/
 
