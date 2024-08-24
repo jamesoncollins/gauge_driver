@@ -89,7 +89,6 @@ bool bulbReadWaiting = false;
 extern "C" {
 
 // low level display driver functions
-extern bool bus_busy ();
 extern void setAutoClear();
 
 // flags used by accelerometer in IT mode
@@ -101,6 +100,31 @@ bool rpm_alert = false;
 bool rpm_alert_has_lock = false;
 bool acc_has_lock = false;
 volatile unsigned i2c_lock = 0;
+
+/*
+ * bluetooth notification handler
+ */
+typedef enum
+{
+  BTN_OK = 0,
+  BTN_U, BTN_D, BTN_L, BTN_R,
+  BTN_INV = 255
+}
+button_e;
+button_e btnCmd = BTN_INV;
+void handleButton(uint8_t button_char)
+{
+  button_e btn;
+  btnCmd = (button_e)button_char;
+
+  // do whatever
+
+  btn = BTN_INV;
+  Custom_STM_App_Update_Char(
+      CUSTOM_STM_BUTTONPRESS,
+      (uint8_t*)&btn
+      );
+}
 
 
 /*
@@ -310,6 +334,9 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
     irq_overlap_2 = true;
   irq_in_use_2 = true;
 
+  static int worst_timing = 0;
+  int end, start = HAL_GetTick();
+
   if(htim->Instance == TIM2)
   {
     TIM2_OVC[0]++;
@@ -407,6 +434,10 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
     }
 #endif
   }
+
+  end = HAL_GetTick();
+  if(end-start>worst_timing)
+    worst_timing = end-start;
 
   irq_in_use_2 = false;
 }
@@ -955,6 +986,34 @@ int main_cpp(void)
         static flasher_t ecuGoodFlasher = {.rate_ms = 500, .last_ms = 0};
         flasher(&ecuGoodFlasher, gdispFillString(20, 80, "ECU ERR     ", font20, GFX_RED, GFX_BLACK));
       }
+
+      static char tmpString[4] = {'N',0,0,0};
+      switch(btnCmd)
+      {
+        case BTN_OK:
+          tmpString[0] = 'O';
+          break;
+        case BTN_U:
+          tmpString[0] = 'U';
+          break;
+        case BTN_D:
+          tmpString[0] = 'D';
+          break;
+        case BTN_L:
+          tmpString[0] = 'L';
+          break;
+        case BTN_R:
+          tmpString[0] = 'R';
+          break;
+        default:
+          break;
+      }
+      gdispFillString(20, 100, tmpString, font20, GFX_AMBER, GFX_BLACK);
+
+              Custom_STM_App_Update_Char(
+                  CUSTOM_STM_READNEXT,
+                  (uint8_t*)ecu.getParam(0)
+                  );
 
 
       snprintf (logBuf, bufLen, "%d", (int)speed);

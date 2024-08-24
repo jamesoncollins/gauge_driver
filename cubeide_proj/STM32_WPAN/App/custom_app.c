@@ -29,7 +29,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+extern void handleButton(uint8_t button_char);
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -100,10 +100,10 @@ void Custom_STM_App_Notification(Custom_STM_App_Notification_evt_t *pNotificatio
     /* USER CODE END CUSTOM_STM_App_Notification_Custom_Evt_Opcode */
 
     /* UserButtonService */
-    case CUSTOM_STM_BUTTONPRESS_WRITE_NO_RESP_EVT:
-      /* USER CODE BEGIN CUSTOM_STM_BUTTONPRESS_WRITE_NO_RESP_EVT */
-
-      /* USER CODE END CUSTOM_STM_BUTTONPRESS_WRITE_NO_RESP_EVT */
+    case CUSTOM_STM_BUTTONPRESS_WRITE_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_BUTTONPRESS_WRITE_EVT */
+      handleButton(pNotification->DataTransfered.pPayload[0]);
+      /* USER CODE END CUSTOM_STM_BUTTONPRESS_WRITE_EVT */
       break;
 
     /* ClientReadService */
