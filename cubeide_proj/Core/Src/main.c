@@ -235,7 +235,6 @@ int main(void)
   MX_RF_Init();
   /* USER CODE BEGIN 2 */
 
-  main_cpp_c();
 
   /* USER CODE END 2 */
 
@@ -244,6 +243,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  main_cpp_c();
   while (1)
   {
     /* USER CODE END WHILE */

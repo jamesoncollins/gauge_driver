@@ -1,8 +1,7 @@
 
 #include "main.h"
-
+#include "cpp_main.h"
 #include "usb_device.h"
-
 #include "usbd_cdc_if.h"
 extern "C" {
 #include "ble.h"
@@ -24,42 +23,9 @@ extern "C" {
 #include "../PI4IOE5V6416/PI4IOE5V6416.hpp"
 #include "../ECUK-lib/MUTII.hpp"
 
-uint32_t GFX_AMBER = GFX_AMBER_YEL;
-
-int get_x12_ticks_speed( float  );
-int get_x12_ticks_rpm( float  );
-
-/*
- * Milisecond timers, controlled by the main while loop, for various
- * slow functions
- */
-#define SAMPLE_TIME_MS_LED       1000
-#define SAMPLE_TIME_MS_PRINT     750
-#define TARGET_FPS               10
-#define SAMPLE_TIME_MS_UPDATES   (1000/TARGET_FPS) // it takes 60ms to refresh the screen
-                                                   // with -O2 you can draw in about 10.
-                                                   // so 70ms seems to be ablout the best you can do here
-
-uint16_t screenWidth;
-uint16_t screenHeight;
-const int DPI = 240. / 1.4456693; //166
-const int DPMM = 240. / 36.72; // 6.53 dots per mm
-
-// define this if you want to use an interrupt to update needle
-// positions, otherwise the main loop does it
-#define USE_NEEDLE_CALLBACK
-
-/*
- * #defines used to control what happens in teh main loop
- */
-//#define PRINT_TO_USB
-
-//#define SWEEP_GAUGES  // sweep needles forever
-//#define SIM_GAUGES       // generate simulated rpm and mph
-
-// enable one of these to get acceleromter data
-//#define ACC_USE_BLOCK   // use blocking calls
-#define ACC_USE_IT    // use interrupt calls (not wokring)
+extern "C" {
+extern void setAutoClear();
+}
 
 extern I2C_HandleTypeDef hi2c1, hi2c3;
 extern SPI_HandleTypeDef hspi1;
@@ -68,467 +34,74 @@ extern TIM_HandleTypeDef htim16;
 extern UART_HandleTypeDef huart1;
 extern RTC_HandleTypeDef hrtc;
 
-MCP4725 dac;
-BMI088 imu;
-uint8_t regAddr;
+static uint16_t screenWidth;
+static uint16_t screenHeight;
 
-bool ecuTxDone = false;
-bool ecuRxDone = false;
-MUTII ecu(&huart1, &ecuTxDone, &ecuRxDone);
+static MCP4725 dac;
+static BMI088 imu;
+static uint8_t regAddr;
 
-float rpm, speed;
+volatile static bool ecuTxDone = false;
+volatile static bool ecuRxDone = false;
+static MUTII ecu(&huart1, &ecuTxDone, &ecuRxDone);
 
-uint16_t bulbVals = 0;
-const uint16_t lampMask         = 1<<1;
-const uint16_t beamMask         = 1<<0;
-const uint16_t psMask           = 1<<3;
-const uint16_t battMask         = 1<<2;
-const uint16_t brakeMask        = 1<<4;
-bool bulbReadWaiting = false;
+volatile static float rpm, speed;
 
-extern "C" {
-
-// low level display driver functions
-extern void setAutoClear();
+volatile static bool bulbReadWaiting = false;
+static const uint16_t lampMask         = 1<<1;
+static const uint16_t beamMask         = 1<<0;
+static const uint16_t psMask           = 1<<3;
+static const uint16_t battMask         = 1<<2;
+static const uint16_t brakeMask        = 1<<4;
 
 // flags used by accelerometer in IT mode
-volatile bool acc_int_rdy = false;	// we got exti saying data ready
-volatile bool do_convert = false;	// we received the raw data
-volatile bool i2c_error = false;
+volatile static bool acc_int_rdy = false;       // we got exti saying data ready
+volatile static bool do_convert = false;        // we received the raw data
 
-bool rpm_alert = false;
-bool rpm_alert_has_lock = false;
-bool acc_has_lock = false;
-volatile unsigned i2c_lock = 0;
-
-/*
- * bluetooth notification handler
- */
-typedef enum
-{
-  BTN_OK = 0,
-  BTN_U, BTN_D, BTN_L, BTN_R,
-  BTN_INV = 255
-}
-button_e;
-button_e btnCmd = BTN_INV;
-void handleButton(uint8_t button_char)
-{
-  button_e btn;
-  btnCmd = (button_e)button_char;
-
-  // do whatever
-
-  btn = BTN_INV;
-  Custom_STM_App_Update_Char(
-      CUSTOM_STM_BUTTONPRESS,
-      (uint8_t*)&btn
-      );
-}
-
+volatile static bool rpm_alert = false;
+volatile static bool rpm_alert_has_lock = false;
+volatile static bool acc_has_lock = false;
+volatile static unsigned i2c_lock = 0;
 
 /*
- * call by a tier to update needle positions regularly
- */
-SwitecX12 *x12[3];
-bool needles_ready = false;
-bool measure_freq = false;
-void update_needles ()
-{
-  x12[0]->update ();
-  x12[1]->update ();
-  x12[2]->update ();
-}
-
-/*
- * exti interrupts from IMU
- */
-void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
-{
-  if (GPIO_Pin == INT_ACC_Pin)
-  {
-    acc_int_rdy = true;
-  }
-  else if (GPIO_Pin == INT_GYR_Pin)
-  {
-    //BMI088_ReadGyroscopeDMA (&imu);
-  }
-}
-
-
-/*
- * this callback fires when the acceleromter read finishes
- * or the iio expander on the display board.
- */
-void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
-{
-  if(hi2c->Instance==hi2c3.Instance)
-  {
-    // this is the screen io expander
-    bulbReadWaiting = false;
-    return;
-  }
-
-  do_convert = true;
-
-  bool was_locked = acc_has_lock;
-  acc_has_lock = false;
-  if(was_locked)
-    unlock_mutex(&i2c_lock);
-}
-
-void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
-{
-
-}
-
-/*
- * fires when DAC write finishes.  currently the only thing using
- * master transmits
- */
-void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
-{
-  bool was_locked = rpm_alert_has_lock;
-  rpm_alert_has_lock = false;
-  if(was_locked)
-    unlock_mutex(&i2c_lock);
-}
-
-void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
-{
-  i2c_error = true;
-}
-
-/*
+ * frequency measurement settings for rpm and speed
  *
- * Speed and Tach exti
- *
- * at 100hz it takes 288 seconds to go 7 miles (4114 ticks / mile)
- * 4114 ticks = 1 mile, 4114 hz = 1 mile per second, 4114hz/3600s = 1.143hz = 1 mph
- *
- * the gauge face says 1025rev=1mile, so that would be 4100 ticks, that would be 1.38888hz/mph
- *
- * See https://www.3si.org/threads/speed-sensor-gear-ratio.831219/#post-1056408948
- *
- * 27 tooth variant (trans pre feb 1993?) 1.117hz/mph
- * 28 tooth 1.078 hz/mp
- * Initial testing is showing this to be way off.  I display 100mph,
- * but gps says 60mph.
- *
- * speed and RPM are measured by TIM2, which is 1MHz and ticks 100000 times (100ms) per overflow
- *
- */
-enum
-{
-  SPEEDOIND = 0,
-  TACHIND = 1,
-};
-enum
-{
-  IDLE = 0,
-  DONE = 1,
-};
-#define F_CLK  (1000000)        // TIM2 uses 1MHz cock
-#define TIM2_MAX_CNT 100000
-#define OVERFLOW_MS ((int)(100)) // TIM2 counts to 100000-1, so every 100ms
-const float MPH_PER_HZ = ( 0.8425872 ); //(1.11746031667) //( 1.07755102 )
-const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
-volatile uint8_t state[2] = {IDLE, IDLE};
-volatile uint32_t T1[2] = {0,0};
-volatile uint32_t T2[2] = {0,0};
-volatile float ticks_raw[2] = {1e9,1e9};
-volatile float ticks[2] = {0,0};
-volatile uint32_t rejects[2];
-volatile uint32_t TIM2_OVC[2] = {0,0};
-volatile uint32_t speed_tick_count = 0;
-iir_ma_state_t filter_state[2] = {{0.3,0}, {0.3,0}};
-
-/* i originally measured that every 3 ticks of the speedo, the odo was stepped once.
+ * i originally measured that every 3 ticks of the speedo, the odo was stepped once.
  * and with our stepper i think a full step is actually 12 micro steps.
  * so the numbers below should be 3 and 12.  but those aren't looking right.
  * so i tweaked it.  well, i will tweak it once i get some measurements again.
  */
 #define SPEED_TICKS_PER_ODO_TICK (3)
 #define ODO_STEPS_PER_TICK (12)
-volatile bool odo_tick_flag = false;
-
-static bool irq_in_use_1 = false, irq_in_use_2 = false;
-static bool irq_overlap_1 = false, irq_overlap_2 = false;
-static int resetCnt1 = 0, resetCnt2 = 0;
-
-void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
-{
-  if(irq_in_use_1)
-    irq_overlap_1 = true;
-  irq_in_use_1 = true;
-
-  if(htim->Instance != TIM2)
-  {
-    irq_in_use_1 = false;
-    return;
-  }
-
-  int ch = (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) ? SPEEDOIND : TACHIND;
-  if (state[ch] == IDLE)
-  {
-    T1[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
-    TIM2_OVC[ch] = 0;
-    state[ch] = DONE;
-  }
-  else if (state[ch] == DONE)
-  {
-    T2[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
-    float tmp = (T2[ch] + (TIM2_OVC[ch] * TIM2_MAX_CNT)) - T1[ch];
-    state[ch] = IDLE;
-    TIM2_OVC[ch] = 0;
-
-    /*
-     * reject outliers that are more than X as long as the last tick
-     */
-    if( tmp>10*ticks_raw[ch] )
-    {
-      ticks[ch] = ticks[ch];
-      rejects[ch]++;
-    }
-    else
-    {
-      ticks[ch] = iir_ma( &filter_state[ch], tmp );
-      ticks_raw[ch] = ticks[ch];
-    }
-  }
-
-  /*
-   * flag for an odo tick every 3 (or whatever) speedo ticks
-   * as this is a unidirectional flag we dont need a mutex
-   *
-   * todo: this is a a single threaded devies, use an odo tick
-   * count instead of a flag, and just incrment it here and decrement
-   * it elsewhere
-   */
-  if(ch == SPEEDOIND && !odo_tick_flag)
-  {
-    speed_tick_count ++;
-    if(speed_tick_count >= SPEED_TICKS_PER_ODO_TICK)
-    {
-      speed_tick_count = 0;
-      odo_tick_flag = true;
-    }
-  }
-
-  irq_in_use_1 = false;
-
-}
-
-
+volatile int odo_tick_flag = 0;
+volatile static int resetCnt1 = 0, resetCnt2 = 0;
 
 /*
- * keep track of how many times the timer elapsed so we can use
- * that to calc the actual time between ticks.
- *
- * note, if this gets too high then assume no more ticks are coming
- * and we need to say the freq is 0
+ * needle and odo steppers plus
+ * control variables to start the measurements.
  */
-void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
-{
-  if(irq_in_use_2)
-    irq_overlap_2 = true;
-  irq_in_use_2 = true;
-
-  static int worst_timing = 0;
-  int end, start = HAL_GetTick();
-
-  if(htim->Instance == TIM2)
-  {
-    TIM2_OVC[0]++;
-    TIM2_OVC[1]++;
-    if(TIM2_OVC[0]*OVERFLOW_MS > 2000)
-    {
-      TIM2_OVC[0] = 0;
-      ticks[0] = 0;
-      state[0] = IDLE;
-      resetCnt1++;
-    }
-    if(TIM2_OVC[1]*OVERFLOW_MS > 2000)
-    {
-      TIM2_OVC[1] = 0;
-      ticks[1] = 0;
-      state[1] = IDLE;
-      resetCnt2++;
-    }
-  }
-  else if(htim->Instance == TIM16)
-  {
-    /*
-     * we should be here every
-     * 1 / (10000 * (1/64000000 seconds)) = 6.4kHz
-     */
-
-    if(needles_ready)
-    {
-      if(measure_freq)
-      {
-#ifndef SWEEP_GAUGES
-#ifndef SIM_GAUGES
-        /*
-         * convert ticks, to Hz, to RPM and Speed
-         *
-         * TODO: get rid of float division
-         */
-        float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)((float)F_CLK / (float)ticks[TACHIND]);
-        if( tmp > 9000 )
-          tmp = rpm;
-        rpm = tmp;
-
-        tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)((float)F_CLK / (float)ticks[SPEEDOIND]);
-        if( tmp > 180 )
-          tmp = speed;
-        speed = tmp;
-#endif
-        x12[0]->setPosition( get_x12_ticks_rpm(rpm) );
-        x12[1]->setPosition( get_x12_ticks_speed(speed) );
-#endif
-      }
-      update_needles();
-    }
-
-
-    ecu.update();
-
-#if 0 // we arent using this yet
-    /*
-     * FIXME: this is the wrong way to do this.
-     * we should be using a DMA tied to a timer.
-     * That dma will perform a memory to memory transfer where teh dest
-     * is the data register of the I2C.
-     *
-     * This is similar, although its for GPIO not I2C:
-     * https://community.st.com/t5/stm32-mcus-products/hal-dma-start-it-call-back/td-p/630134
-     *
-     * Additionally, here is a guide for using the i2c peripheral directlly without the hal,
-     * which I think will make working with the TXDR register easier:
-     * https://www.edwinfairchild.com/p/stm32l0f0f3-i2c-tutorial.html
-     */
-    if(rpm_alert && rpm_alert_has_lock)
-    {
-    // tim16?
-//    static uint16_t valarr[16] =
-//    { 0+2048, 383+2048, 707+2048, 924+2048, 1000+2048, 924+2048, 707+2048, 383+2048, 0+2048, -383+2048, -707+2048, -924+2048, -1000+2048, -924+2048,
-//        -707+2048, -383+2048 };
-//    static int16_t valarr[16] =
-//    { -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000, -1000, 1000,  };
-    static int16_t valarr[16] =
-    { 0, 707, 1000, 707, 0, -707, -1000, -707,  0, 707, 1000, 707, 0, -707, -1000, -707, };
-    static uint16_t valarr_ctr = 0;
-    int16_t val = ( valarr[valarr_ctr & 0xf]  * 2 + 2048 ) & 0x0fff;
-    valarr_ctr++;
-#define lowByte(x)            ((uint8_t)(x%256))
-#define highByte(x)             ((uint8_t)(x/256))
-    static uint8_t arr[2];
-    arr[1] = lowByte(val);
-    arr[0] = highByte(val);
-    HAL_I2C_Master_Transmit_IT(
-      &hi2c1,
-      dac._i2cAddress,
-      arr,
-      2);
-    }
-#endif
-  }
-
-  end = HAL_GetTick();
-  if(end-start>worst_timing)
-    worst_timing = end-start;
-
-  irq_in_use_2 = false;
-}
+SwitecX12 *x12[3];
+volatile static bool needles_ready = false;
+volatile static bool measure_freq = false;
 
 /*
- * override the _weak definition in the hal
- * this code is used for printf and puts to do trhough teh jtag interface
+ * holds the button value sent by bluetooth
  */
-int _write(int32_t file, uint8_t *ptr, int32_t len)
-{
-    int i = 0;
-    for (i = 0; i < len; i++)
-    {
-        ITM_SendChar((*ptr++));
-    }
-    return len;
-}
+volatile static  button_e btnCmd = BTN_INV;
 
-void HAL_UART_AbortCpltCallback(UART_HandleTypeDef *huart)
-{
-
-}
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-  ecuRxDone = true;
-}
-
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
-{
-  ecuTxDone = true;
-}
-
-
-} // extern C
-
-int get_x12_ticks_rpm( float rpm )
-{
-  const float MIN_RPM = 500;
-  const float ZERO_ANGLE = 1;    // degrees beyond the stopper to get to 0
-  const float MIN_RPM_ANGLE = 4.5; // degrees from zero to MIN_RPM
-  const float DEGREES_PER_RPM = 21.9 / 1000.;
-
-  if( rpm <= 1 )
-    return ZERO_ANGLE * 12.;
-  else if( rpm<=MIN_RPM )
-    return (MIN_RPM_ANGLE + ZERO_ANGLE) * 12.;
-  else
-    return ((rpm-MIN_RPM) * DEGREES_PER_RPM + ZERO_ANGLE + MIN_RPM_ANGLE ) * 12.;
-}
-
-int get_x12_ticks_speed( float speed )
-{
-  const float MIN_MPH = 10;
-  const float ZERO_ANGLE = 1;    // degrees beyond the stopper to get to 0
-  const float MIN_MPH_ANGLE = 3.5; // degrees from zero to MIN_MPH
-  const float DEGREES_PER_MPH = 1.35;
-
-  if( speed <= 1 )
-    return ZERO_ANGLE * 12.;
-  else if( speed<=MIN_MPH )
-    return (MIN_MPH_ANGLE + ZERO_ANGLE) * 12.;
-  else
-    return ((speed-MIN_MPH) * DEGREES_PER_MPH + ZERO_ANGLE + MIN_MPH_ANGLE ) * 12.;
-}
-
-int movingAvg(int *ptrArrNumbers, int *ptrSum, int *pos, int len, int nextNum)
-{
-  //Subtract the oldest number from the prev sum, add the new number
-  *ptrSum = *ptrSum - ptrArrNumbers[*pos] + nextNum;
-  //Assign the nextNum to the position in the array
-  ptrArrNumbers[*pos] = nextNum;
-
-  (*pos)++;
-  if((*pos)>=len)
-    (*pos) = 0;
-
-  //return the average
-  return *ptrSum / len;
-}
 
 int main_cpp(void)
 {
   // init our 64-bit system-tick counter based on teh DWT timer
   init_get_cycle_count ();
 
-  MX_APPE_Init();
-
-  /* USB data buffer */
+  /*
+   * string buffer for logging and/or printing
+   */
   const int bufLen = 256;
+  int logBufInd = 0;
   char logBuf[bufLen];
+  (void) logBufInd;
 
   /*
    * Turn on mcu-controlled pwr-en signal.
@@ -557,8 +130,9 @@ int main_cpp(void)
   gdispFlush();
   screenWidth = gdispGetWidth();
   screenHeight = gdispGetHeight();
+  uint32_t GFX_AMBER = GFX_AMBER_YEL;
 
-  font_t font10 = gdispOpenFont("DejaVuSans10");
+  //font_t font10 = gdispOpenFont("DejaVuSans10");
   font_t font20 = gdispOpenFont("DejaVuSans20");
   font_t fontLCD = gdispOpenFont("lcddot_tr80");
 
@@ -593,6 +167,7 @@ int main_cpp(void)
   /*
    * screen pcb io expander
    */
+  uint16_t bulbVals = 0;
   PI4IOE5V6416 ioexp_screen(&hi2c3);
   if(ioexp_screen.init(
         0x0000
@@ -662,8 +237,10 @@ int main_cpp(void)
       DIR_ODO_GPIO_Port,
       DIR_ODO_Pin,
       slowTable, 1,
-      true
+      true      // reverse direction for odometer ticks
       );
+  odoX12.currentStep = 0xFFFFFFFE;
+  odoX12.targetStep = 0xFFFFFFFE;
 
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );
   HAL_Delay(10);
@@ -696,9 +273,8 @@ int main_cpp(void)
   x12[0] = &tachX12;
   x12[1] = &speedX12;
   x12[2] = &odoX12;
-#ifdef USE_NEEDLE_CALLBACK
   needles_ready = true;  // dont turn this on if you dont want to use the timer
-#endif
+
 
   /*
    * load startup animation resources
@@ -767,12 +343,6 @@ int main_cpp(void)
       gdispFlush();
       displayCnt--;
     }
-
-    // do these updates as fast as possible, the driver will take care of timing.
-#ifndef USE_NEEDLE_CALLBACK
-    tachX12.update();
-    speedX12.update();
-#endif
   }
   gdispImageClose (&startupAnim);
   
@@ -868,13 +438,6 @@ int main_cpp(void)
     /**
      * bmi088 triggered us that data is available, start reading it
      */
-#ifdef ACC_USE_BLOCK
-    if( acc_int_rdy )
-    {
-      // ~245us
-      BMI088_ReadAccelerometer(&imu);
-    }
-#elif defined ACC_USE_IT
     if( do_convert )
     {
       BMI088_ConvertAccData(&imu); // converts raw buffered data to accel floats
@@ -910,44 +473,22 @@ int main_cpp(void)
         acc_int_rdy = false;
       }
     }
-#endif
-
-
 
     /* Print */
+
     if ((HAL_GetTick () - timerPrint) >= SAMPLE_TIME_MS_PRINT)
     {
-      timerPrint = HAL_GetTick ();
-      int ind = 0;
-//      ind += snprintf (logBuf+ind, bufLen-ind, "\033[1J");
-      ind += snprintf (logBuf+ind, bufLen-ind, " tach: %d , speedo %d  \n",  (int)rpm,  (int)speed);
-//      ind += snprintf (logBuf+ind, bufLen-ind, " acc: %.1f, %.1f, %.1f \n", imu.acc_mps2[0],imu.acc_mps2[1],imu.acc_mps2[2]);
 #ifdef PRINT_TO_USB
+      timerPrint = HAL_GetTick ();
+      logBufInd += snprintf (logBuf+logBufInd, bufLen-logBufInd, " tach: %d , speedo %d  \n",  (int)rpm,  (int)speed);
       CDC_Transmit_FS ((uint8_t*) logBuf, ind);
-#else
-      printf("%s", logBuf);
 #endif
     }
 
-#ifdef SIM_GAUGES
-    static int lastTime = 0;
-    int diff = HAL_GetTick () - lastTime;
-    rpm += (float) diff / 1000. * 3000; // 3000rpm per second
-    if (rpm > 9000)
-      rpm = 3000;
-    speed += (float) diff / 1000. * 20; // 20 mph per second
-    if (speed > 180)
-    {
-      speed = 0;
-      rpm = 1000;
-    }
-    lastTime = HAL_GetTick ();
-#endif
 
     /*
      * Any updates we want presented to the user.
      */
-#ifndef SWEEP_GAUGES
     if ((HAL_GetTick () - timerUpdates) >= SAMPLE_TIME_MS_UPDATES)
     {
       timerUpdates = HAL_GetTick ();
@@ -1009,11 +550,10 @@ int main_cpp(void)
       }
       gdispFillString(20, 100, tmpString, font20, GFX_AMBER, GFX_BLACK);
 
-              Custom_STM_App_Update_Char(
-                  CUSTOM_STM_READNEXT,
-                  (uint8_t*)ecu.getParam(0)
-                  );
-
+      //Custom_STM_App_Update_Char(
+      //    CUSTOM_STM_READNEXT,
+      //    (uint8_t*)ecu.getParam(0)
+      //    );
 
       snprintf (logBuf, bufLen, "%d", (int)speed);
       gdispFillString(15, 110+42, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
@@ -1098,9 +638,10 @@ int main_cpp(void)
     if(odo_tick_flag && odoX12.atTarget())
     {
       odoX12.setPosition(odoX12.targetStep+ODO_STEPS_PER_TICK);
-      odo_tick_flag = false;
+      odo_tick_flag--;
     }
-#else
+
+#ifdef SWEEP_GAUGES
     /*
      * temporarily sweep needle back and forth
      */
@@ -1117,17 +658,23 @@ int main_cpp(void)
       tachX12.setPosition (0);
       speedX12.setPosition (0);
     }
-#endif
-
+#elif defined(SIM_GAUGES)
     /*
-     * called as fast as possible, moves the motors if they need to be moved
+     * simulate reasonable speed and rpm signals
      */
-#ifndef USE_NEEDLE_CALLBACK
-    tachX12.update();
-    speedX12.update();
-    odoX12.update();
+    static int lastTime = 0;
+    int diff = HAL_GetTick () - lastTime;
+    rpm += (float) diff / 1000. * 3000; // 3000rpm per second
+    if (rpm > 9000)
+      rpm = 3000;
+    speed += (float) diff / 1000. * 20; // 20 mph per second
+    if (speed > 180)
+    {
+      speed = 0;
+      rpm = 1000;
+    }
+    lastTime = HAL_GetTick ();
 #endif
-
 
     /*
      * shift alert
@@ -1166,7 +713,7 @@ int main_cpp(void)
     worstLoopPeriod = (loopPeriod>worstLoopPeriod) ? loopPeriod : worstLoopPeriod;
     timerLoop = HAL_GetTick ();
 
-  }
+  } // main while loop.  we leave when ignition signal goes low.
 
 
   gdispClear(GFX_BLACK);
@@ -1178,15 +725,11 @@ int main_cpp(void)
    * Power-down loop, do anything we need to in order to cleanup before
    * we power off.
    */
-  measure_freq = false;
+  measure_freq = false; // stop seting rpm & speed from measured data
   speedX12.setPosition(0);
   tachX12.setPosition(0);
   while(1)
   {
-#ifndef USE_NEEDLE_CALLBACK
-    tachX12.update();
-    speedX12.update();
-#endif
     if(speedX12.atTarget() && tachX12.atTarget())
       break;
   }
@@ -1199,7 +742,9 @@ int main_cpp(void)
   HAL_PWR_DisableBkUpAccess ();
 
   /*
-   * we left the main loop, we can power down
+   * we left the main loop, we can power down.
+   *
+   * this command will disable the 3.3v and 5v regulators.
    */
   HAL_GPIO_WritePin ( PWREN_GPIO_Port, PWREN_Pin, GPIO_PIN_RESET );
   HAL_Delay(1000);
@@ -1207,3 +752,317 @@ int main_cpp(void)
   return 0;
 }
 
+
+
+int get_x12_ticks_speed( float speed )
+{
+  const float MIN_MPH = 10;
+  const float ZERO_ANGLE = 1;    // degrees beyond the stopper to get to 0
+  const float MIN_MPH_ANGLE = 3.5; // degrees from zero to MIN_MPH
+  const float DEGREES_PER_MPH = 1.35;
+
+  if( speed <= 1 )
+    return ZERO_ANGLE * 12.;
+  else if( speed<=MIN_MPH )
+    return (MIN_MPH_ANGLE + ZERO_ANGLE) * 12.;
+  else
+    return ((speed-MIN_MPH) * DEGREES_PER_MPH + ZERO_ANGLE + MIN_MPH_ANGLE ) * 12.;
+}
+
+
+int get_x12_ticks_rpm( float rpm )
+{
+  const float MIN_RPM = 500;
+  const float ZERO_ANGLE = 1;    // degrees beyond the stopper to get to 0
+  const float MIN_RPM_ANGLE = 4.5; // degrees from zero to MIN_RPM
+  const float DEGREES_PER_RPM = 21.9 / 1000.;
+
+  if( rpm <= 1 )
+    return ZERO_ANGLE * 12.;
+  else if( rpm<=MIN_RPM )
+    return (MIN_RPM_ANGLE + ZERO_ANGLE) * 12.;
+  else
+    return ((rpm-MIN_RPM) * DEGREES_PER_RPM + ZERO_ANGLE + MIN_RPM_ANGLE ) * 12.;
+}
+
+/*
+ * These functions are all extern becuase they are generally
+ * callbacks for interrupts from c.
+ */
+extern "C"
+{
+
+/*
+ * bluetooth notification handler
+ */
+void handleButton(uint8_t button_char)
+{
+  button_e btn;
+  btnCmd = (button_e)button_char;
+  btn = BTN_INV;
+  Custom_STM_App_Update_Char(
+      CUSTOM_STM_BUTTONPRESS,
+      (uint8_t*)&btn
+      );
+}
+
+/*
+ * call by a timer to update needle positions regularly
+ */
+void update_needles ()
+{
+  x12[0]->update ();
+  x12[1]->update ();
+  x12[2]->update ();
+}
+
+/*
+ * exti interrupts from IMU
+ */
+void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin == INT_ACC_Pin)
+  {
+    acc_int_rdy = true;
+  }
+  else if (GPIO_Pin == INT_GYR_Pin)
+  {
+    //BMI088_ReadGyroscopeDMA (&imu);
+  }
+}
+
+/*
+ * this callback fires when the acceleromter read finishes
+ * or the iio expander on the display board.
+ */
+void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+  if(hi2c->Instance==hi2c3.Instance)
+  {
+    // this is the screen io expander
+    bulbReadWaiting = false;
+    return;
+  }
+
+  do_convert = true;
+
+  bool was_locked = acc_has_lock;
+  acc_has_lock = false;
+  if(was_locked)
+    unlock_mutex(&i2c_lock);
+}
+
+/*
+ * fires when DAC write finishes.  currently the only thing using
+ * master transmits
+ */
+void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+  bool was_locked = rpm_alert_has_lock;
+  rpm_alert_has_lock = false;
+  if(was_locked)
+    unlock_mutex(&i2c_lock);
+}
+
+/*
+ *
+ * Speed and Tach exti
+ *
+ * at 100hz it takes 288 seconds to go 7 miles (4114 ticks / mile)
+ * 4114 ticks = 1 mile, 4114 hz = 1 mile per second, 4114hz/3600s = 1.143hz = 1 mph
+ *
+ * the gauge face says 1025rev=1mile, so that would be 4100 ticks, that would be 1.38888hz/mph
+ *
+ * See https://www.3si.org/threads/speed-sensor-gear-ratio.831219/#post-1056408948
+ *
+ * 27 tooth variant (trans pre feb 1993?) 1.117hz/mph
+ * 28 tooth 1.078 hz/mp
+ * Initial testing is showing this to be way off.  I display 100mph,
+ * but gps says 60mph.
+ *
+ * speed and RPM are measured by TIM2, which is 1MHz and ticks 100000 times (100ms) per overflow
+ *
+ */
+enum
+{
+  SPEEDOIND = 0,
+  TACHIND = 1,
+};
+enum
+{
+  IDLE = 0,
+  DONE = 1,
+};
+#define F_CLK  (1000000)        // TIM2 uses 1MHz cock
+#define TIM2_MAX_CNT 100000
+#define OVERFLOW_MS ((int)(100)) // TIM2 counts to 100000-1, so every 100ms
+const float MPH_PER_HZ = ( 0.8425872 ); //(1.11746031667) //( 1.07755102 )
+const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
+volatile static uint8_t state[2] = {IDLE, IDLE};
+volatile static uint32_t T1[2] = {0,0};
+volatile static uint32_t T2[2] = {0,0};
+volatile static float ticks_raw[2] = {1e9,1e9};
+volatile static float ticks[2] = {0,0};
+volatile static uint32_t rejects[2];
+volatile static uint32_t TIM2_OVC[2] = {0,0};
+volatile static uint32_t speed_tick_count = 0;
+static iir_ma_state_t filter_state[2] = {{0.3,0}, {0.3,0}};
+
+void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
+{
+  int ch = (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) ? SPEEDOIND : TACHIND;
+  if (state[ch] == IDLE)
+  {
+    T1[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
+    TIM2_OVC[ch] = 0;
+    state[ch] = DONE;
+  }
+  else if (state[ch] == DONE)
+  {
+    T2[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
+    float tmp = (T2[ch] + (TIM2_OVC[ch] * TIM2_MAX_CNT)) - T1[ch];
+    state[ch] = IDLE;
+    TIM2_OVC[ch] = 0;
+
+    /*
+     * reject outliers that are more than X as long as the last tick
+     */
+    if( tmp>10*ticks_raw[ch] )
+    {
+      ticks[ch] = ticks[ch];
+      rejects[ch]++;
+    }
+    else
+    {
+      ticks[ch] = iir_ma( &filter_state[ch], tmp );
+      ticks_raw[ch] = ticks[ch];
+    }
+  }
+
+  /*
+   * flag for an odo tick every 3 (or whatever) speedo ticks
+   * as this is a unidirectional flag we dont need a mutex
+   *
+   * todo: this is a a single threaded devies, use an odo tick
+   * count instead of a flag, and just incrment it here and decrement
+   * it elsewhere
+   */
+  if(ch == SPEEDOIND)
+  {
+    speed_tick_count++;
+    if(speed_tick_count >= SPEED_TICKS_PER_ODO_TICK)
+    {
+      speed_tick_count = 0;
+      odo_tick_flag++;
+    }
+  }
+}
+
+
+
+/*
+ * keep track of how many times the timer elapsed so we can use
+ * that to calc the actual time between ticks.
+ *
+ * note, if this gets too high then assume no more ticks are coming
+ * and we need to say the freq is 0
+ */
+void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
+{
+  static int worst_timing = 0;
+  int end, start = HAL_GetTick();
+
+  if(htim->Instance == TIM2)
+  {
+    TIM2_OVC[0]++;
+    TIM2_OVC[1]++;
+    if(TIM2_OVC[0]*OVERFLOW_MS > 2000)
+    {
+      TIM2_OVC[0] = 0;
+      ticks[0] = 0;
+      state[0] = IDLE;
+      resetCnt1++;
+    }
+    if(TIM2_OVC[1]*OVERFLOW_MS > 2000)
+    {
+      TIM2_OVC[1] = 0;
+      ticks[1] = 0;
+      state[1] = IDLE;
+      resetCnt2++;
+    }
+  }
+  else if(htim->Instance == TIM16)
+  {
+    /*
+     * we should be here every
+     * 1 / (10000 * (1/64000000 seconds)) = 6.4kHz
+     */
+
+    if(needles_ready)
+    {
+      if(measure_freq)
+      {
+#ifndef SWEEP_GAUGES
+#ifndef SIM_GAUGES
+        /*
+         * convert ticks, to Hz, to RPM and Speed
+         *
+         * TODO: get rid of float division
+         */
+        float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)F_CLK / (float)ticks[TACHIND];
+        if( tmp > 9000 )
+          tmp = rpm;
+        rpm = tmp;
+
+        tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)F_CLK / (float)ticks[SPEEDOIND];
+        if( tmp > 180 )
+          tmp = speed;
+        speed = tmp;
+#endif
+        x12[0]->setPosition( get_x12_ticks_rpm(rpm) );
+        x12[1]->setPosition( get_x12_ticks_speed(speed) );
+#endif
+      }
+      update_needles();
+    }
+
+
+    ecu.update();
+  }
+
+  end = HAL_GetTick();
+  if(end-start>worst_timing)
+    worst_timing = end-start;
+}
+
+/*
+ * override the _weak definition in the hal
+ * this code is used for printf and puts to do trhough teh jtag interface
+ */
+int _write(int32_t file, uint8_t *ptr, int32_t len)
+{
+    int i = 0;
+    for (i = 0; i < len; i++)
+    {
+        ITM_SendChar((*ptr++));
+    }
+    return len;
+}
+
+void HAL_UART_AbortCpltCallback(UART_HandleTypeDef *huart)
+{
+
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  ecuRxDone = true;
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+  ecuTxDone = true;
+}
+
+
+} // extern C
