@@ -29,7 +29,7 @@
         ecuDelayFor_us = 1000*1000;    \
         ecuStateNext = ECU_RESET;
 
-ECUK::ECUK(UART_HandleTypeDef *huart, bool *_txDone, bool *_rxDone)
+ECUK::ECUK(UART_HandleTypeDef *huart, volatile bool *_txDone, volatile bool *_rxDone)
 {
   _huart = huart;
   timerECU = HAL_GetTick ();

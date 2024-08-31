@@ -229,7 +229,7 @@ public:
       },
   };
 
-  MUTII(UART_HandleTypeDef *huart, bool *_txDone, bool *_rxDone) :
+  MUTII(UART_HandleTypeDef *huart, volatile bool *_txDone, volatile bool *_rxDone) :
     ECUK(huart,_txDone,_rxDone)
   {
     INIT_SEQ = 0x00;

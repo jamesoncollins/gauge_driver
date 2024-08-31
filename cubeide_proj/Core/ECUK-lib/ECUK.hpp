@@ -45,7 +45,7 @@ public:
   }
   ecuParam_t;
 
-  ECUK(UART_HandleTypeDef *huart, bool *_txDone, bool *_rxDone);
+  ECUK(UART_HandleTypeDef *huart, volatile bool *_txDone, volatile bool *_rxDone);
 
   void update();
 
@@ -119,7 +119,7 @@ protected:
   ecuState_e ecuState = ECU_RESET;
   ecuState_e ecuStateNext = ECU_RESET;
   uint32_t ecuDelayFor_us = 0;
-  bool *txDone, *rxDone;
+  volatile bool *txDone, *rxDone;
   bool initSuccess = false;
   uint8_t buffer_tx[10], buffer_rx[15];
   int delayTxInd = 0, delayTxCnt = 0;
