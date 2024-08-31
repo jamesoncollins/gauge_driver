@@ -661,10 +661,9 @@ int main_cpp(void)
       STEP_ODO_Pin,
       DIR_ODO_GPIO_Port,
       DIR_ODO_Pin,
-      slowTable, 1
+      slowTable, 1,
+      true
       );
-  odoX12.currentStep = 0xFFFFFFFE;
-  odoX12.targetStep = 0xFFFFFFFE;
 
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );
   HAL_Delay(10);
@@ -1098,7 +1097,7 @@ int main_cpp(void)
      */
     if(odo_tick_flag && odoX12.atTarget())
     {
-      odoX12.setPosition(odoX12.targetStep-ODO_STEPS_PER_TICK);
+      odoX12.setPosition(odoX12.targetStep+ODO_STEPS_PER_TICK);
       odo_tick_flag = false;
     }
 #else
