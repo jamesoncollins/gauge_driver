@@ -12,6 +12,7 @@ public:
   int pinDir;
   GPIO_TypeDef* portStep;
   GPIO_TypeDef* portDir;
+  bool reverseDir;
   uint32_t currentStep;      // step we are currently at
   uint32_t targetStep;       // target we are moving to
   uint32_t steps;            // total steps available
@@ -26,7 +27,8 @@ public:
 	     GPIO_TypeDef*, int,
 	     GPIO_TypeDef*, int,
 	     uint32_t accelTable[][2] = NULL,
-	     int tableLen = 0);
+	     int tableLen = 0,
+	     bool reverse_step = false);
   bool atTarget();
 
   /*

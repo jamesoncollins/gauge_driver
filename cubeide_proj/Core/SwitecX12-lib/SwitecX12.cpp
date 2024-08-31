@@ -69,14 +69,15 @@ bool SwitecX12::atTarget()
 SwitecX12::SwitecX12 (uint32_t steps,
 		      GPIO_TypeDef* portStep, int pinStep,
 		      GPIO_TypeDef* portDir, int pinDir,
-		      uint32_t _accelTable[][2],
-                      int tableLen)
+		      uint32_t _accelTable[][2], int tableLen,
+		      bool reverseDir)
 {
   this->steps = steps;
   this->pinStep = pinStep;
   this->pinDir = pinDir;
   this->portStep = portStep;
   this->portDir = portDir;
+  this->reverseDir = reverseDir;
 
   HAL_GPIO_WritePin (portStep, pinStep, LOW);
   HAL_GPIO_WritePin (portDir, pinDir, LOW);
@@ -101,7 +102,7 @@ void SwitecX12::step (int dir)
 {
   // the chip is actually active-high = CW as the pin is labeled CW-/CCW
   // but its flipped here becuase the schematic is flipped
-  HAL_GPIO_WritePin (portDir, pinDir, dir > 0 ? LOW : HIGH);
+  HAL_GPIO_WritePin (portDir, pinDir, (dir > 0) && !reverseDir ? LOW : HIGH);
   HAL_GPIO_WritePin (portStep, pinStep, HIGH);
   delay (stepPulseTicks);
   HAL_GPIO_WritePin (portStep, pinStep, LOW);
