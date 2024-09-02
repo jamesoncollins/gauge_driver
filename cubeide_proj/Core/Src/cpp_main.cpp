@@ -10,6 +10,9 @@ extern "C" {
 #include "../MCP4725-lib/MCP4725.h"
 #include "../BMI088-lib/BMI088.h"
 #include "filters.h"
+//#include "board_s6e63d6.h" // cant include this
+extern bool bus_busy();
+extern void setAutoClear();
 }
 #include "../SwitecX12-lib/SwitecX12.hpp"
 #include "utils.h"
@@ -22,10 +25,8 @@ extern "C" {
 #include "../../res/beam.c"
 #include "../PI4IOE5V6416/PI4IOE5V6416.hpp"
 #include "../ECUK-lib/MUTII.hpp"
+#include "../BTbuffer-lib/BTBuffer.hpp"
 
-extern "C" {
-extern void setAutoClear();
-}
 
 extern I2C_HandleTypeDef hi2c1, hi2c3;
 extern SPI_HandleTypeDef hspi1;
@@ -413,7 +414,8 @@ int main_cpp(void)
   uint32_t timerLED     = timerLoop;
   uint32_t timerIGN = timerLoop;
   uint32_t timerPrint = timerLoop;
-  uint32_t timerUpdates = timerLoop;
+  uint32_t timerDraw = timerLoop;
+  int drawStep = 0; // breakup drawing into multtiple steps so avoid doing too much in one loop
   bool firstAcc = false;
   uint32_t loopPeriod = 0, worstLoopPeriod = 0;
   while (1)
@@ -487,149 +489,173 @@ int main_cpp(void)
 
 
     /*
-     * Any updates we want presented to the user.
+     * Draw to the screen
      */
-    if ((HAL_GetTick () - timerUpdates) >= SAMPLE_TIME_MS_UPDATES)
+    if ((HAL_GetTick () - timerDraw) >= SAMPLE_TIME_MS_DRAW && !bus_busy())
     {
-      timerUpdates = HAL_GetTick ();
-
+      drawStep++;
       /*
-       * display updates
+       * do draw operations in a bunch of smaller steps
        */
-
-      // fixme: this forces a write to ram of 320x240*2 bytes.
-      // instead of doing this maybe we should be using "widgets",
-      // either from ugfx or our own, that track their state and clear
-      // themselves if they need.
-      // update: current implementation automatically clears after each
-      // flush, so this clear call below basically just blocks us until
-      // busy operations are done and its safe to draw.
-      // but the drawing operations do that too, so wahtever.
-      gdispClear(GFX_BLACK); // if the device doesnt support flushing, then this is immediate
-
-      // fixme: unnecessary float division
-      const int gimbal_radius = 35;
-      drawGimball ( &gimball, 168, 48, gimbal_radius,
-                    -imu.acc_mps2[1] / (9.8f / 1.f) * gimbal_radius,
-                    -imu.acc_mps2[0] / (9.8f / 1.f) * gimbal_radius
-                   );
-
-      snprintf (logBuf, bufLen, "%s", ecu.getValString(MUTII::ECU_PARAM_WB));
-      gdispFillString(20, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
-      drawHorzBarGraph (20, 57, 80, 15, 19, 9, ecu.getVal(MUTII::ECU_PARAM_WB));
-
-      snprintf (logBuf, bufLen, "ECU:%s-%ld", ecu.getStatus(), ecu.getMsgRate());
-      gdispFillString(20, 80, logBuf, font20, GFX_AMBER, GFX_BLACK);
-
-      if(!ecu.isConnected())
+      switch(drawStep-1)
       {
-        static flasher_t ecuGoodFlasher = {.rate_ms = 500, .last_ms = 0};
-        flasher(&ecuGoodFlasher, gdispFillString(20, 80, "ECU ERR     ", font20, GFX_RED, GFX_BLACK));
-      }
+        case 0:
+          // fixme: this forces a write to ram of 320x240*2 bytes.
+          // instead of doing this maybe we should be using "widgets",
+          // either from ugfx or our own, that track their state and clear
+          // themselves if they need.
+          // update: current implementation automatically clears after each
+          // flush, so this clear call below basically just blocks us until
+          // busy operations are done and its safe to draw.
+          // but the drawing operations do that too, so wahtever.
+          gdispClear(GFX_BLACK); // if the device doesnt support flushing, then this is immediate
+          break;
 
-      static char tmpString[4] = {'N',0,0,0};
-      switch(btnCmd)
-      {
-        case BTN_OK:
-          tmpString[0] = 'O';
+        case 1:
+          static const int gimbal_radius = 35;
+          drawGimball ( &gimball, 168, 48, gimbal_radius,
+                        -imu.acc_mps2[1] * 1.f / (9.8f / 1.f) * gimbal_radius,
+                        -imu.acc_mps2[0] * 1.f / (9.8f / 1.f) * gimbal_radius
+                       );
           break;
-        case BTN_U:
-          tmpString[0] = 'U';
+
+        case 2:
+          snprintf (logBuf, bufLen, "%s", ecu.getValString(MUTII::ECU_PARAM_WB));
+          gdispFillString(20, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+          drawHorzBarGraph (20, 57, 80, 15, 19, 9, ecu.getVal(MUTII::ECU_PARAM_WB));
+
+          snprintf (logBuf, bufLen, "ECU:%s-%ld", ecu.getStatus(), ecu.getMsgRate());
+          gdispFillString(20, 80, logBuf, font20, GFX_AMBER, GFX_BLACK);
+
+          if(!ecu.isConnected())
+          {
+            static flasher_t ecuGoodFlasher = {.rate_ms = 500, .last_ms = 0};
+            flasher(&ecuGoodFlasher, gdispFillString(20, 80, "ECU ERR     ", font20, GFX_RED, GFX_BLACK));
+          }
           break;
-        case BTN_D:
-          tmpString[0] = 'D';
+
+        case 3:
+        {
+          static char tmpString[4] = {'N',0,0,0};
+          switch(btnCmd)
+          {
+            case BTN_OK:
+              tmpString[0] = 'O';
+              break;
+            case BTN_U:
+              tmpString[0] = 'U';
+              break;
+            case BTN_D:
+              tmpString[0] = 'D';
+              break;
+            case BTN_L:
+              tmpString[0] = 'L';
+              break;
+            case BTN_R:
+              tmpString[0] = 'R';
+              break;
+            default:
+              break;
+          }
+          gdispFillString(20, 100, tmpString, font20, GFX_AMBER, GFX_BLACK);
+
+          //Custom_STM_App_Update_Char(
+          //    CUSTOM_STM_READNEXT,
+          //    (uint8_t*)ecu.getParam(0)
+          //    );
+        }
+        break;
+
+        case 4:
+          snprintf (logBuf, bufLen, "%d", (int)speed);
+          gdispFillString(15, 110+42, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+          snprintf (logBuf, bufLen, "%d", (int)rpm);
+          gdispFillString(15, 155+42, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
           break;
-        case BTN_L:
-          tmpString[0] = 'L';
+
+        case 5:
+          if(ecu.getParam(MUTII::ECU_PARAM_TPS)->isNew)
+          {
+            linePlotPush(&linePlotTPS, (int)ecu.getVal(MUTII::ECU_PARAM_TPS));
+          }
+          linePlot(10, 149, &linePlotTPS);
+
+          if(ecu.getParam(MUTII::ECU_PARAM_KNOCK)->isNew)
+          {
+            linePlotPush(&linePlotKnock, (int)ecu.getVal(MUTII::ECU_PARAM_KNOCK));
+          }
+          linePlot(10, 149, &linePlotKnock);
           break;
-        case BTN_R:
-          tmpString[0] = 'R';
+
+        case 6:
+          // check warning
+          if(!bulbReadWaiting)
+          {
+            if(ioexp_screen.get_IT(&bulbVals)==0) //we dont know when this will finish, dont care
+              bulbReadWaiting = true;
+          }
+          //bulbVals = ioexp_screen.get();
+
+          if( !(bulbVals&battMask) ) // car pulls down
+            gdispImageDraw(&battImg,  145,  210, battImg.width,  battImg.height,  0, 0);
+          if( !(bulbVals&brakeMask) ) // car pulls down
+            gdispFillString(120, 233, "BRAKE", font20, GFX_RED, GFX_BLACK);
+           //gdispImageDraw(&brakeImg, 100,  230, brakeImg.width, brakeImg.height, 0, 0);
+          if(  (bulbVals&psMask) ) // car pulls HIGH
+            gdispFillString(145, 215, "4WS", font20, GFX_YELLOW, GFX_BLACK);
+          if (bulbVals&lampMask )
+          {
+            // headlights are on
+            GFX_AMBER = GFX_AMBER_SAE;
+            setColors(GFX_AMBER,GFX_RED,GFX_BLACK);
+            if( !(bulbVals&beamMask) )
+            {
+              // high beam on
+              gdispImageDraw(&beamImg, 190,  223, beamImg.width,  beamImg.height,  0, 0);
+            }
+          }
+          else
+          {
+            // headlights are off
+            GFX_AMBER = GFX_AMBER_YEL;
+            setColors( GFX_AMBER, GFX_RED, GFX_BLACK );
+          }
           break;
+
+        case 7:
+          // debug / diag messages
+//#define DIAG_SQUARE
+#ifdef DIAG_SQUARE
+                static uint32_t displayTime = 0;
+                const int xdiag = 30, ydiag = 192;
+                gdispDrawBox(xdiag-1,ydiag-1,60,62,GFX_AMBER);
+                snprintf (logBuf, bufLen, "ECU: %lu/%lu", ecu.getMsgRate(), ecu.getMissedReplyResetCnt());
+                gdispFillString(xdiag, ydiag+00, logBuf, font10, GFX_AMBER, GFX_BLACK);
+                snprintf (logBuf, bufLen, "%d/%d/%lu", (int)loopPeriod ,(int) worstLoopPeriod, HAL_GetTick() - displayTime);
+                displayTime = HAL_GetTick();
+                gdispFillString(xdiag, ydiag+10, logBuf, font10, GFX_AMBER, GFX_BLACK);
+                if(irq_overlap_1 || irq_overlap_2)
+                  gdispFillString(xdiag, ydiag+20, "IRQERR", font10, GFX_AMBER, GFX_BLACK);
+                snprintf (logBuf, bufLen, "%d/%d/%lu/%lu", (int)resetCnt1 ,(int) resetCnt2,rejects[0],rejects[1]);
+                gdispFillString(xdiag, ydiag+30, logBuf, font10, GFX_AMBER, GFX_BLACK);
+                snprintf (logBuf, bufLen, "%d", bulbVals);
+                gdispFillString(xdiag, ydiag+40, logBuf, font10, GFX_AMBER, GFX_BLACK);
+                snprintf (logBuf, bufLen, "%lu / %lu", x12[0]->getTargetPosition(), x12[1]->getTargetPosition());
+                gdispFillString(xdiag, ydiag+50, logBuf, font10, GFX_AMBER, GFX_BLACK);
+#endif
+                break;
+
+        case 8:
+          // some devices dont support this and instead they draw whenever you call a drawing function
+          // but its always safe to call it
+          gdispFlush();
+          drawStep = 0;
+          timerDraw = HAL_GetTick ();
+          break;
+
         default:
           break;
       }
-      gdispFillString(20, 100, tmpString, font20, GFX_AMBER, GFX_BLACK);
-
-      //Custom_STM_App_Update_Char(
-      //    CUSTOM_STM_READNEXT,
-      //    (uint8_t*)ecu.getParam(0)
-      //    );
-
-      snprintf (logBuf, bufLen, "%d", (int)speed);
-      gdispFillString(15, 110+42, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
-      snprintf (logBuf, bufLen, "%d", (int)rpm);
-      gdispFillString(15, 155+42, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
-
-      if(ecu.getParam(MUTII::ECU_PARAM_TPS)->isNew)
-      {
-        linePlotPush(&linePlotTPS, (int)ecu.getVal(MUTII::ECU_PARAM_TPS));
-      }
-      linePlot(10, 149, &linePlotTPS);
-
-      if(ecu.getParam(MUTII::ECU_PARAM_KNOCK)->isNew)
-      {
-        linePlotPush(&linePlotKnock, (int)ecu.getVal(MUTII::ECU_PARAM_KNOCK));
-      }
-      linePlot(10, 149, &linePlotKnock);
-
-      // check warning
-      if(!bulbReadWaiting)
-      {
-        if(ioexp_screen.get_IT(&bulbVals)==0) //we dont know when this will finish, dont care
-          bulbReadWaiting = true;
-      }
-      //bulbVals = ioexp_screen.get();
-
-      if( !(bulbVals&battMask) ) // car pulls down
-        gdispImageDraw(&battImg,  145,  210, battImg.width,  battImg.height,  0, 0);
-      if( !(bulbVals&brakeMask) ) // car pulls down
-        gdispFillString(120, 233, "BRAKE", font20, GFX_RED, GFX_BLACK);
-       //gdispImageDraw(&brakeImg, 100,  230, brakeImg.width, brakeImg.height, 0, 0);
-      if(  (bulbVals&psMask) ) // car pulls HIGH
-        gdispFillString(145, 215, "4WS", font20, GFX_YELLOW, GFX_BLACK);
-      if (bulbVals&lampMask )
-      {
-        // headlights are on
-        GFX_AMBER = GFX_AMBER_SAE;
-        setColors(GFX_AMBER,GFX_RED,GFX_BLACK);
-        if( !(bulbVals&beamMask) )
-        {
-          // high beam on
-          gdispImageDraw(&beamImg, 190,  223, beamImg.width,  beamImg.height,  0, 0);
-        }
-      }
-      else
-      {
-        // headlights are off
-        GFX_AMBER = GFX_AMBER_YEL;
-        setColors( GFX_AMBER, GFX_RED, GFX_BLACK );
-      }
-
-      // debug / diag messages
-//#define DIAG_SQUARE
-#ifdef DIAG_SQUARE
-      static uint32_t displayTime = 0;
-      const int xdiag = 30, ydiag = 192;
-      gdispDrawBox(xdiag-1,ydiag-1,60,62,GFX_AMBER);
-      snprintf (logBuf, bufLen, "ECU: %lu/%lu", ecu.getMsgRate(), ecu.getMissedReplyResetCnt());
-      gdispFillString(xdiag, ydiag+00, logBuf, font10, GFX_AMBER, GFX_BLACK);
-      snprintf (logBuf, bufLen, "%d/%d/%lu", (int)loopPeriod ,(int) worstLoopPeriod, HAL_GetTick() - displayTime);
-      displayTime = HAL_GetTick();
-      gdispFillString(xdiag, ydiag+10, logBuf, font10, GFX_AMBER, GFX_BLACK);
-      if(irq_overlap_1 || irq_overlap_2)
-        gdispFillString(xdiag, ydiag+20, "IRQERR", font10, GFX_AMBER, GFX_BLACK);
-      snprintf (logBuf, bufLen, "%d/%d/%lu/%lu", (int)resetCnt1 ,(int) resetCnt2,rejects[0],rejects[1]);
-      gdispFillString(xdiag, ydiag+30, logBuf, font10, GFX_AMBER, GFX_BLACK);
-      snprintf (logBuf, bufLen, "%d", bulbVals);
-      gdispFillString(xdiag, ydiag+40, logBuf, font10, GFX_AMBER, GFX_BLACK);
-      snprintf (logBuf, bufLen, "%lu / %lu", x12[0]->getTargetPosition(), x12[1]->getTargetPosition());
-      gdispFillString(xdiag, ydiag+50, logBuf, font10, GFX_AMBER, GFX_BLACK);
-#endif
-
-      // some devices dont support this and instead they draw whenever you call a drawing function
-      // but its always safe to call it
-      gdispFlush();
-
     }
 
     /*
