@@ -129,7 +129,7 @@ gTicks gfxMillisecondsToTicks(gDelay ms)
 
 bool lock_mutex (volatile unsigned *lock)
 {
-  static unsigned compare = 0, exchange = 1;
+  unsigned compare = 0, exchange = 1;
   if(*lock==1)
     compare = 0;
   return __atomic_compare_exchange_n (lock, &compare, exchange, false,
@@ -139,7 +139,7 @@ bool lock_mutex (volatile unsigned *lock)
 
 void unlock_mutex (volatile unsigned *lock)
 {
-  static unsigned compare = 1, exchange = 0;
+  unsigned compare = 1, exchange = 0;
   if (*lock == 0)
     compare = 1;
   assert(
