@@ -124,6 +124,19 @@ int main_cpp(void)
   HAL_PWR_DisableBkUpAccess ();
 
   /*
+   * Setup the bluetooth buffer.
+   *
+   * Used to allows interrupts to push data into a buffer
+   * that the main loop can then send to the bluetooth.
+   *
+   * If multiple interrupts are going to add data to this then
+   * we need to give the ffunction a list of those interrupts
+   * so that it knows to disable them during critical sections of
+   * code.
+   */
+  BTBuffer::CreateInstance( NULL, 0 );
+
+  /*
    * init graphics library
    */
   gfxInit();
@@ -133,7 +146,8 @@ int main_cpp(void)
   screenHeight = gdispGetHeight();
   uint32_t GFX_AMBER = GFX_AMBER_YEL;
 
-  //font_t font10 = gdispOpenFont("DejaVuSans10");
+  font_t font10 = gdispOpenFont("DejaVuSans10");
+  (void) font10;
   font_t font20 = gdispOpenFont("DejaVuSans20");
   font_t fontLCD = gdispOpenFont("lcddot_tr80");
 
@@ -151,7 +165,9 @@ int main_cpp(void)
   }
 
   /*
-   * dac output timer
+   * Time-sensitive operation timer.
+   *
+   * COuld do the DAC.  Currently does ECU.
    */
   HAL_TIM_Base_Start_IT(&htim16);
 
@@ -188,12 +204,6 @@ int main_cpp(void)
   {
     //exit(-1);
   }
-
-  /*
-   * USART and ECU ISO9141 init/control
-   */
-  // deinit the uart to allow gpio control
-  My_MX_USART1_UART_DeInit();
 
   /*
    * tach and speedo freq measurement setup
@@ -416,7 +426,6 @@ int main_cpp(void)
   uint32_t timerPrint = timerLoop;
   uint32_t timerDraw = timerLoop;
   int drawStep = 0; // breakup drawing into multtiple steps so avoid doing too much in one loop
-  bool firstAcc = false;
   uint32_t loopPeriod = 0, worstLoopPeriod = 0;
   while (1)
   {
@@ -438,6 +447,17 @@ int main_cpp(void)
     }
 
     /**
+     * spend a fixed amount of time sending data to the bluetooth stack
+     */
+    uint32_t start = HAL_GetTick();
+    while(
+        HAL_GetTick() < start + 2
+        && BTBuffer::popBuffer() )
+    {
+
+    }
+
+    /**
      * bmi088 triggered us that data is available, start reading it
      */
     if( do_convert )
@@ -445,10 +465,6 @@ int main_cpp(void)
       BMI088_ConvertAccData(&imu); // converts raw buffered data to accel floats
       do_convert = false;
       rotateVectorKnownPitch(imu.acc_mps2, cosPitch, sinPitch);
-      if(!firstAcc)
-      {
-        firstAcc = true;
-      }
     }
 
     /*
@@ -490,25 +506,41 @@ int main_cpp(void)
 
     /*
      * Draw to the screen
+     *
+     * But only if its time to draw, and if there isn't a pending action
+     * between the screen buffer and the SPI interface.
+     *
+     * Best possible rate is (16 mbps) / (240*255*2 bytes) = 16.3Hz
+     *
+     * In practice you can get about 13 if you draw nothing at all
+     * and currently, about 9.5fps if you draw what's here.
      */
-    if ((HAL_GetTick () - timerDraw) >= SAMPLE_TIME_MS_DRAW && !bus_busy())
+    if (
+        //(HAL_GetTick () - timerDraw) >= SAMPLE_TIME_MS_DRAW
+         !bus_busy()
+        )
     {
-      drawStep++;
+
       /*
        * do draw operations in a bunch of smaller steps
        */
-      switch(drawStep-1)
+      switch(drawStep++)
       {
         case 0:
-          // fixme: this forces a write to ram of 320x240*2 bytes.
-          // instead of doing this maybe we should be using "widgets",
-          // either from ugfx or our own, that track their state and clear
-          // themselves if they need.
-          // update: current implementation automatically clears after each
-          // flush, so this clear call below basically just blocks us until
-          // busy operations are done and its safe to draw.
-          // but the drawing operations do that too, so wahtever.
-          gdispClear(GFX_BLACK); // if the device doesnt support flushing, then this is immediate
+          /*
+           * There are a few ways that clearing the screen can behaves.
+           *
+           * Some screens dont support it, and this will return immediatly.
+           *
+           * Other times, like the default for our screen, this will for a memset
+           * of the entire display buffer, which can take awhile.
+           *
+           * Also for our screen, if its in auto-clear mode, this function will
+           * return immediatly as long as that has already finished.  Given that
+           * we dont enter this section of code uncless the display bus isn't busy
+           * then we know this function call below will always return immediatly
+           */
+          gdispClear(GFX_BLACK);
           break;
 
         case 1:
@@ -530,7 +562,7 @@ int main_cpp(void)
           if(!ecu.isConnected())
           {
             static flasher_t ecuGoodFlasher = {.rate_ms = 500, .last_ms = 0};
-            flasher(&ecuGoodFlasher, gdispFillString(20, 80, "ECU ERR     ", font20, GFX_RED, GFX_BLACK));
+            flasher(&ecuGoodFlasher, gdispFillString(20, 80, "ECU ERR      ", font20, GFX_RED, GFX_BLACK));
           }
           break;
 
@@ -558,11 +590,6 @@ int main_cpp(void)
               break;
           }
           gdispFillString(20, 100, tmpString, font20, GFX_AMBER, GFX_BLACK);
-
-          //Custom_STM_App_Update_Char(
-          //    CUSTOM_STM_READNEXT,
-          //    (uint8_t*)ecu.getParam(0)
-          //    );
         }
         break;
 
@@ -622,38 +649,35 @@ int main_cpp(void)
           }
           break;
 
-        case 7:
+        default:
           // debug / diag messages
 //#define DIAG_SQUARE
 #ifdef DIAG_SQUARE
-                static uint32_t displayTime = 0;
-                const int xdiag = 30, ydiag = 192;
-                gdispDrawBox(xdiag-1,ydiag-1,60,62,GFX_AMBER);
-                snprintf (logBuf, bufLen, "ECU: %lu/%lu", ecu.getMsgRate(), ecu.getMissedReplyResetCnt());
-                gdispFillString(xdiag, ydiag+00, logBuf, font10, GFX_AMBER, GFX_BLACK);
-                snprintf (logBuf, bufLen, "%d/%d/%lu", (int)loopPeriod ,(int) worstLoopPeriod, HAL_GetTick() - displayTime);
-                displayTime = HAL_GetTick();
-                gdispFillString(xdiag, ydiag+10, logBuf, font10, GFX_AMBER, GFX_BLACK);
-                if(irq_overlap_1 || irq_overlap_2)
-                  gdispFillString(xdiag, ydiag+20, "IRQERR", font10, GFX_AMBER, GFX_BLACK);
-                snprintf (logBuf, bufLen, "%d/%d/%lu/%lu", (int)resetCnt1 ,(int) resetCnt2,rejects[0],rejects[1]);
-                gdispFillString(xdiag, ydiag+30, logBuf, font10, GFX_AMBER, GFX_BLACK);
-                snprintf (logBuf, bufLen, "%d", bulbVals);
-                gdispFillString(xdiag, ydiag+40, logBuf, font10, GFX_AMBER, GFX_BLACK);
-                snprintf (logBuf, bufLen, "%lu / %lu", x12[0]->getTargetPosition(), x12[1]->getTargetPosition());
-                gdispFillString(xdiag, ydiag+50, logBuf, font10, GFX_AMBER, GFX_BLACK);
-#endif
-                break;
+          static uint32_t displayTime = 0;
+          static const int xdiag = 30, ydiag = 192;
+          gdispDrawBox(xdiag-1,ydiag-1,60,62,GFX_AMBER);
 
-        case 8:
-          // some devices dont support this and instead they draw whenever you call a drawing function
-          // but its always safe to call it
+          snprintf (logBuf, bufLen, "ECU: %lu/%lu", ecu.getMsgRate(), ecu.getMissedReplyResetCnt());
+          gdispFillString(xdiag, ydiag+00, logBuf, font10, GFX_AMBER, GFX_BLACK);
+
+          snprintf (logBuf, bufLen, "%d/%d/%lu/%lu",
+                    (int)loopPeriod ,
+                    (int) worstLoopPeriod,
+                    HAL_GetTick() - displayTime,
+                    1000/(HAL_GetTick() - displayTime)    // FPS
+                    );
+          displayTime = HAL_GetTick();
+          gdispFillString(xdiag, ydiag+10, logBuf, font10, GFX_AMBER, GFX_BLACK);
+
+          snprintf (logBuf, bufLen, "%d", bulbVals);
+          gdispFillString(xdiag, ydiag+40, logBuf, font10, GFX_AMBER, GFX_BLACK);
+
+          snprintf (logBuf, bufLen, "%lu / %lu", x12[0]->getTargetPosition(), x12[1]->getTargetPosition());
+          gdispFillString(xdiag, ydiag+50, logBuf, font10, GFX_AMBER, GFX_BLACK);
+#endif
           gdispFlush();
           drawStep = 0;
           timerDraw = HAL_GetTick ();
-          break;
-
-        default:
           break;
       }
     }
@@ -731,6 +755,12 @@ int main_cpp(void)
 	break; // break the main loop
     }
 
+    static uint32_t dataBuffer[BTBuffer::dataLen / 4];
+    static int loopCnt = 0;
+    dataBuffer[0] = loopCnt++;
+    dataBuffer[1] = loopPeriod;
+    dataBuffer[2] = worstLoopPeriod;
+    BTBuffer::pushBuffer((uint8_t*)dataBuffer);
 
     /*
      * does nothing, just checks loop timing for diagnostics
