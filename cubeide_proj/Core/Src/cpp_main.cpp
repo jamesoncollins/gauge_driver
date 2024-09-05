@@ -73,8 +73,8 @@ volatile static unsigned i2c_lock = 0;
  * so i tweaked it.  well, i will tweak it once i get some measurements again.
  */
 #define SPEED_TICKS_PER_ODO_TICK (3)
-#define ODO_STEPS_PER_TICK (12)
-volatile int odo_tick_flag = 0;
+#define ODO_STEPS_PER_TICK (12/2)
+volatile static uint32_t odo_ticks = 0;
 volatile static int resetCnt1 = 0, resetCnt2 = 0;
 
 /*
@@ -240,18 +240,35 @@ int main_cpp(void)
       DIR_SPEED_Pin
       );
 
-  uint32_t slowTable[][2] = { 20, (uint32_t) (2100. * 64000000. * 1e-6) };
+//  uint32_t slowTable[][2] =
+//  {
+//    { 1,  (uint32_t) (10. * 64000000. * 1.e-6) },
+//    { 20, (uint32_t) (10. * 64000000. * 1.e-6) },
+//  };
+  static const uint32_t ticks_per_us =  ( 64000000 * 1e-6);
+  static const uint32_t accelTable[5][2] =
+  {
+  { 1,   (uint32_t) 1.1 * 40000 * ticks_per_us },
+  { 5,   (uint32_t) 1.1 * 20000 * ticks_per_us },
+  { 10,  (uint32_t) 1.1 * 15000 * ticks_per_us },
+  { 20,  (uint32_t) 1.1 * 10000 * ticks_per_us },
+  { 100, (uint32_t) 1.1 * 2000 * ticks_per_us },
+  //{ 150, (uint32_t) 1.1 * 750  * ticks_per_us },
+  //{ 200, (uint32_t) 1.1 * 500  * ticks_per_us },
+  //{ 250, (uint32_t) 1.1 * 400  * ticks_per_us },
+  //{ 300, (uint32_t) 1.1 * 300  * ticks_per_us }
+  };
   SwitecX12 odoX12(
       0xFFFFFFFE,  // hopefully infinite
       STEP_ODO_GPIO_Port,
       STEP_ODO_Pin,
       DIR_ODO_GPIO_Port,
       DIR_ODO_Pin,
-      slowTable, 1,
+      accelTable, 5,
       true      // reverse direction for odometer ticks
       );
-  odoX12.currentStep = 0xFFFFFFFE;
-  odoX12.targetStep = 0xFFFFFFFE;
+  odoX12.currentStep = 0;
+  odoX12.targetStep = 0;
 
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );
   HAL_Delay(10);
@@ -651,7 +668,7 @@ int main_cpp(void)
 
         default:
           // debug / diag messages
-//#define DIAG_SQUARE
+#define DIAG_SQUARE
 #ifdef DIAG_SQUARE
           static uint32_t displayTime = 0;
           static const int xdiag = 30, ydiag = 192;
@@ -685,10 +702,9 @@ int main_cpp(void)
     /*
      * odometer ticks
      */
-    if(odo_tick_flag && odoX12.atTarget())
+    //if(odoX12.atTarget())
     {
-      odoX12.setPosition(odoX12.targetStep+ODO_STEPS_PER_TICK);
-      odo_tick_flag--;
+      odoX12.setPosition(odo_ticks);
     }
 
 #ifdef SWEEP_GAUGES
@@ -1006,10 +1022,10 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
   if(ch == SPEEDOIND)
   {
     speed_tick_count++;
-    if(speed_tick_count >= SPEED_TICKS_PER_ODO_TICK)
+    if(speed_tick_count == SPEED_TICKS_PER_ODO_TICK)
     {
       speed_tick_count = 0;
-      odo_tick_flag++;
+      odo_ticks += ODO_STEPS_PER_TICK;
     }
   }
 }

@@ -18,7 +18,7 @@ public:
   uint32_t steps;            // total steps available
   long time0;           // time when we entered this state
   unsigned int microDelay;       // microsecs until next state
-  uint32_t (*accelTable)[2]; // accel table can be modified.
+  const uint32_t (*accelTable)[2]; // accel table can be modified.
   int maxVel;           // fastest vel allowed
   int vel;              // steps travelled under acceleration
   int dir;                      // direction -1,0,1
@@ -26,7 +26,7 @@ public:
   SwitecX12 (uint32_t steps,
 	     GPIO_TypeDef*, int,
 	     GPIO_TypeDef*, int,
-	     uint32_t accelTable[][2] = NULL,
+	     const uint32_t accelTable[][2] = NULL,
 	     int tableLen = 0,
 	     bool reverse_step = false);
   bool atTarget();

@@ -20,8 +20,8 @@
 //{ 50, 700 },
 //{ 100, 400 },
 //};
-static uint32_t ticks_per_us =  ( 64000000 * 1e-6);
-static uint32_t defaultAccelTable[][2] =
+static const uint32_t ticks_per_us =  ( 64000000 * 1e-6);
+static const uint32_t defaultAccelTable[][2] =
 {
 { 1,   (uint32_t) 1.1 * 40000 * ticks_per_us },
 { 5,   (uint32_t) 1.1 * 20000 * ticks_per_us },
@@ -69,7 +69,7 @@ bool SwitecX12::atTarget()
 SwitecX12::SwitecX12 (uint32_t steps,
 		      GPIO_TypeDef* portStep, int pinStep,
 		      GPIO_TypeDef* portDir, int pinDir,
-		      uint32_t _accelTable[][2], int tableLen,
+		      const uint32_t _accelTable[][2], int tableLen,
 		      bool reverseDir)
 {
   this->steps = steps;
