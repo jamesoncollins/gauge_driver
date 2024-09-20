@@ -739,6 +739,7 @@ int main_cpp(void)
     lastTime = HAL_GetTick ();
 #endif
 
+#if 0
     /*
      * shift alert
      */
@@ -753,7 +754,7 @@ int main_cpp(void)
     {
       rpm_alert = false;
     }
-
+#endif
 
     /*
      * check ignition signal status.  we want it low for at least 10ms
