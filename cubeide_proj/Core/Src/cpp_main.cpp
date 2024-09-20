@@ -668,7 +668,7 @@ int main_cpp(void)
 
         default:
           // debug / diag messages
-#define DIAG_SQUARE
+//#define DIAG_SQUARE
 #ifdef DIAG_SQUARE
           static uint32_t displayTime = 0;
           static const int xdiag = 30, ydiag = 192;
@@ -699,13 +699,10 @@ int main_cpp(void)
       }
     }
 
-    /*
-     * odometer ticks
-     */
-    //if(odoX12.atTarget())
-    {
-      odoX12.setPosition(odo_ticks);
-    }
+
+    tachX12.setPosition( get_x12_ticks_rpm(rpm) );
+    speedX12.setPosition( get_x12_ticks_speed(speed) );
+    odoX12.setPosition(odo_ticks);
 
 #ifdef SWEEP_GAUGES
     /*
@@ -776,7 +773,7 @@ int main_cpp(void)
     dataBuffer[0] = loopCnt++;
     dataBuffer[1] = loopPeriod;
     dataBuffer[2] = worstLoopPeriod;
-    BTBuffer::pushBuffer((uint8_t*)dataBuffer);
+    BTBuffer::pushBuffer(0,0,HAL_GetTick(),(uint8_t*)dataBuffer, BTBuffer::dataLen);
 
     /*
      * does nothing, just checks loop timing for diagnostics
@@ -1091,8 +1088,6 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
           tmp = speed;
         speed = tmp;
 #endif
-        x12[0]->setPosition( get_x12_ticks_rpm(rpm) );
-        x12[1]->setPosition( get_x12_ticks_speed(speed) );
 #endif
       }
       update_needles();

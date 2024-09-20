@@ -75,24 +75,29 @@ bool BTBuffer::popBuffer()
     return false;
   Custom_STM_App_Update_Char(
       CUSTOM_STM_READNEXT,
-      (uint8_t*)BTBuffer->buffer[BTBuffer->head]
+      (uint8_t*)&BTBuffer->buffer[BTBuffer->head]
       );
   BTBuffer->head = (BTBuffer->head + 1) % BTBuffer->numBuffers;
   return true;
 }
 
-bool BTBuffer::pushBuffer(const uint8_t *data)
+bool BTBuffer::pushBuffer( uint16_t id1, uint16_t id2, uint32_t timestamp, const uint8_t *data, int datalen )
 {
   BTBuffer *BTBuffer = BTBuffer::GetInstance();
   if(BTBuffer == nullptr)
     return false;
   if(BTBuffer->isFull())
     return false;
+  if(datalen>BTBuffer::dataLen)
+    return false;
   BTBuffer->disableIRQs();
+  BTBuffer->buffer[BTBuffer->tail].id1 = id1;
+  BTBuffer->buffer[BTBuffer->tail].id2 = id2;
+  BTBuffer->buffer[BTBuffer->tail].timestamp = timestamp;
   memcpy(
-      BTBuffer->buffer[BTBuffer->tail],
+      BTBuffer->buffer[BTBuffer->tail].data,
       data,
-      BTBuffer::dataLen);
+      dataLen);
   BTBuffer->enableIRQs();
   return true;
 }
