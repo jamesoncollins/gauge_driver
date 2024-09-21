@@ -531,10 +531,13 @@ int main_cpp(void)
      *
      * In practice you can get about 13 if you draw nothing at all
      * and currently, about 9.5fps if you draw what's here.
+     *
+     * SAMPLE_TIME_MS_DRAW will limit the frame frame to 1/SAMPLE_TIME_MS_DRAW
+     * but in practice we're actually limited by bus_busy()
      */
     if (
-        //(HAL_GetTick () - timerDraw) >= SAMPLE_TIME_MS_DRAW
-         !bus_busy()
+         (HAL_GetTick () - timerDraw) >= SAMPLE_TIME_MS_DRAW
+         && !bus_busy()
         )
     {
 
