@@ -60,9 +60,7 @@ volatile static bool acc_int_rdy = false;       // we got exti saying data ready
 volatile static bool do_convert = false;        // we received the raw data
 
 volatile static bool rpm_alert = false;
-volatile static bool rpm_alert_has_lock = false;
-volatile static bool acc_has_lock = false;
-volatile static unsigned i2c_lock = 0;
+
 
 /*
  * frequency measurement settings for rpm and speed
@@ -443,13 +441,15 @@ int main_cpp(void)
   uint32_t timerPrint = timerLoop;
   uint32_t timerDraw = timerLoop;
   int drawStep = 0; // breakup drawing into multtiple steps so avoid doing too much in one loop
-  uint32_t loopPeriod = 0, worstLoopPeriod = 0;
+  uint32_t loopPeriod = 0, worstLoopPeriod = 0, loopCnt = 0;
   while (1)
   {
 
     MX_APPE_Process();
 
-    /* Toggle LED */
+    /*
+     * Used to just be for toggling the LED, now its used for any low rate updates
+     */
     if ((HAL_GetTick () - timerLED) >= SAMPLE_TIME_MS_LED)
     {
       // needs to be called occasionally to avoid looping
@@ -458,9 +458,11 @@ int main_cpp(void)
       HAL_GPIO_TogglePin ( LED_GPIO_Port, LED_Pin );
       timerLED = HAL_GetTick ();
 
-      static uint8_t data = 0;
-      Custom_STM_App_Update_Char(CUSTOM_STM_READNEXT, &data);
-      data++;
+      static uint32_t dataBuffer[BTBuffer::dataLen / 4];
+      dataBuffer[0] = loopCnt++;
+      dataBuffer[1] = loopPeriod;
+      dataBuffer[2] = worstLoopPeriod;
+      BTBuffer::pushBuffer(0,0,HAL_GetTick(),(uint8_t*)dataBuffer, BTBuffer::dataLen);
     }
 
     /**
@@ -475,9 +477,22 @@ int main_cpp(void)
     }
 
     /**
-     * bmi088 triggered us that data is available, start reading it
+     * bmi088 triggered us that data is available, or an I2C interrupt
+     * has told us that new data has been collected, but needs to be converted
      */
-    if( do_convert )
+    if( acc_int_rdy  )
+    {
+        regAddr = BMI_ACC_DATA;
+        uint8_t status = 1;
+        status = HAL_I2C_Mem_Read_IT(
+          &hi2c1,
+          ACC_ADDR,
+          BMI_ACC_DATA, 1,
+          imu.accRxBuf, 6);
+        if(status==0)
+          acc_int_rdy = false;
+    }
+    else if( do_convert )
     {
       BMI088_ConvertAccData(&imu); // converts raw buffered data to accel floats
       do_convert = false;
@@ -485,32 +500,8 @@ int main_cpp(void)
     }
 
     /*
-     * fixme: mutex isnt required, just use a flag.  the reason
-     * is that we only lock from this loop and we only unlock from the
-     * callbacks.
+     * USB Print Logging
      */
-    if( acc_int_rdy  )
-    {
-      if (!acc_has_lock)
-        acc_has_lock = lock_mutex (&i2c_lock);
-      if (acc_has_lock)
-      {
-        regAddr = BMI_ACC_DATA;
-        uint8_t status = 1;
-        while(status)
-        {
-          status = HAL_I2C_Mem_Read_IT(
-            &hi2c1,
-            ACC_ADDR,
-            BMI_ACC_DATA, 1,
-            imu.accRxBuf, 6);
-        }
-        acc_int_rdy = false;
-      }
-    }
-
-    /* Print */
-
     if ((HAL_GetTick () - timerPrint) >= SAMPLE_TIME_MS_PRINT)
     {
 #ifdef PRINT_TO_USB
@@ -560,7 +551,10 @@ int main_cpp(void)
            * we dont enter this section of code uncless the display bus isn't busy
            * then we know this function call below will always return immediatly
            */
-          gdispClear(GFX_BLACK);
+          if(rpm_alert)
+            gdispClear(GFX_YELLOW);
+          else
+            gdispClear(GFX_BLACK);
           break;
 
         case 1:
@@ -742,22 +736,18 @@ int main_cpp(void)
     lastTime = HAL_GetTick ();
 #endif
 
-#if 0
     /*
      * shift alert
      */
-    if( rpm > 6500  && (!rpm_alert || !rpm_alert_has_lock))
+    if( rpm > 6500 )
     {
       rpm_alert = true;
-      if(!rpm_alert_has_lock)
-        rpm_alert_has_lock = lock_mutex(&i2c_lock);
     }
-
-    if( rpm < 6400 && rpm_alert )
+    else if( rpm < 6400  )
     {
       rpm_alert = false;
     }
-#endif
+
 
     /*
      * check ignition signal status.  we want it low for at least 10ms
@@ -772,16 +762,10 @@ int main_cpp(void)
 	break; // break the main loop
     }
 
-    static uint32_t dataBuffer[BTBuffer::dataLen / 4];
-    static int loopCnt = 0;
-    dataBuffer[0] = loopCnt++;
-    dataBuffer[1] = loopPeriod;
-    dataBuffer[2] = worstLoopPeriod;
-    BTBuffer::pushBuffer(0,0,HAL_GetTick(),(uint8_t*)dataBuffer, BTBuffer::dataLen);
-
     /*
-     * does nothing, just checks loop timing for diagnostics
+     * misc loop diagnostics
      */
+    loopCnt++;
     loopPeriod = (HAL_GetTick () - timerLoop);
     worstLoopPeriod = (loopPeriod>worstLoopPeriod) ? loopPeriod : worstLoopPeriod;
     timerLoop = HAL_GetTick ();
@@ -916,25 +900,27 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
     bulbReadWaiting = false;
     return;
   }
-
-  do_convert = true;
-
-  bool was_locked = acc_has_lock;
-  acc_has_lock = false;
-  if(was_locked)
-    unlock_mutex(&i2c_lock);
+  else if(hi2c->Instance==hi2c1.Instance)
+  {
+    /*
+     * Acc/gyro, DAC, and onboard IO expander that we
+     * dont currently use.
+     */
+    do_convert = true;
+  }
 }
 
-/*
- * fires when DAC write finishes.  currently the only thing using
- * master transmits
- */
+
 void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-  bool was_locked = rpm_alert_has_lock;
-  rpm_alert_has_lock = false;
-  if(was_locked)
-    unlock_mutex(&i2c_lock);
+  if(hi2c->Instance==hi2c3.Instance)
+  {
+
+  }
+  else if(hi2c->Instance==hi2c1.Instance)
+  {
+
+  }
 }
 
 /*
@@ -1097,8 +1083,8 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
       update_needles();
     }
 
-
     ecu.update();
+
   }
 
   end = HAL_GetTick();
