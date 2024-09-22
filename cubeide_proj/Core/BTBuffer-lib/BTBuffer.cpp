@@ -98,6 +98,7 @@ bool BTBuffer::pushBuffer( uint16_t id1, uint16_t id2, uint32_t timestamp, const
       BTBuffer->buffer[BTBuffer->tail].data,
       data,
       dataLen);
+  BTBuffer->tail = (BTBuffer->tail + 1) % BTBuffer->numBuffers;
   BTBuffer->enableIRQs();
   return true;
 }
