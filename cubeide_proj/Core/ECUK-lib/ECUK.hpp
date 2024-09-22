@@ -1,7 +1,7 @@
 #ifndef ECUK_LIB_ECUK_HPP_
 #define ECUK_LIB_ECUK_HPP_
 
-
+#include "../BTbuffer-lib/BTBuffer.hpp"
 
 
 class ECUK
@@ -133,6 +133,8 @@ private:
   uint32_t msgRate;
 
   int txLen, rxLen;
+
+  uint8_t bleBuffer[BTBuffer::dataLen];
 
 };
 

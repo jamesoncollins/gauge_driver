@@ -67,6 +67,15 @@ void ECUK::update()
       *txDone = false;
       *rxDone = false;
       init_bit_ind = 0;
+
+      *(uint32_t*)bleBuffer = ECU_REQUEST_DELAY_US;
+      BTBuffer::pushBuffer(
+          1,
+          -1,
+          HAL_GetTick(),
+          bleBuffer,
+          BTBuffer::dataLen);
+
       break;
 
     // perform 5-baud init
