@@ -462,6 +462,9 @@ int main_cpp(void)
       dataBuffer[0] = loopCnt++;
       dataBuffer[1] = loopPeriod;
       dataBuffer[2] = worstLoopPeriod;
+      dataBuffer[3] = 0;
+      dataBuffer[4] = speed;
+      dataBuffer[5] = rpm;
       BTBuffer::pushBuffer(0,0,HAL_GetTick(),(uint8_t*)dataBuffer, BTBuffer::dataLen);
     }
 
@@ -558,8 +561,8 @@ int main_cpp(void)
           break;
 
         case 1:
-          static const int gimbal_radius = 35;
-          drawGimball ( &gimball, 168, 48, gimbal_radius,
+          static const int gimbal_radius = 45;
+          drawGimball ( &gimball, 168+10, 48-0, gimbal_radius,
                         -imu.acc_mps2[1] * 1.f / (9.8f / 1.f) * gimbal_radius,
                         -imu.acc_mps2[0] * 1.f / (9.8f / 1.f) * gimbal_radius
                        );
