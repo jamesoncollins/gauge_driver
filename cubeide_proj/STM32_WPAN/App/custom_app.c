@@ -38,6 +38,7 @@ typedef struct
   /* UserButtonService */
   /* ClientReadService */
   uint8_t               Readnext_Notification_Status;
+  /* RebootReqService */
   /* USER CODE BEGIN CUSTOM_APP_Context_t */
 
   /* USER CODE END CUSTOM_APP_Context_t */
@@ -82,6 +83,7 @@ uint16_t Connection_Handle;
 /* ClientReadService */
 static void Custom_Readnext_Update_Char(void);
 static void Custom_Readnext_Send_Notification(void);
+/* RebootReqService */
 
 /* USER CODE BEGIN PFP */
 
@@ -123,6 +125,14 @@ void Custom_STM_App_Notification(Custom_STM_App_Notification_evt_t *pNotificatio
       /* USER CODE BEGIN CUSTOM_STM_READNEXT_NOTIFY_DISABLED_EVT */
 
       /* USER CODE END CUSTOM_STM_READNEXT_NOTIFY_DISABLED_EVT */
+      break;
+
+    /* RebootReqService */
+    case CUSTOM_STM_BM_REQ_CHAR_WRITE_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_BM_REQ_CHAR_WRITE_EVT */
+      *(uint32_t*)SRAM1_BASE = *(uint32_t*)pNotification->DataTransfered.pPayload;
+      NVIC_SystemReset();
+      /* USER CODE END CUSTOM_STM_BM_REQ_CHAR_WRITE_EVT */
       break;
 
     case CUSTOM_STM_NOTIFICATION_COMPLETE_EVT:
@@ -238,6 +248,8 @@ void Custom_Readnext_Send_Notification(void) /* Property Notification */
 
   return;
 }
+
+/* RebootReqService */
 
 /* USER CODE BEGIN FD_LOCAL_FUNCTIONS*/
 

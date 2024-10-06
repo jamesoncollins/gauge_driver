@@ -38,6 +38,8 @@ typedef enum
   CUSTOM_STM_BUTTONPRESS,
   /* ClientReadService */
   CUSTOM_STM_READNEXT,
+  /* RebootReqService */
+  CUSTOM_STM_BM_REQ_CHAR,
 } Custom_STM_Char_Opcode_t;
 
 typedef enum
@@ -48,6 +50,8 @@ typedef enum
   CUSTOM_STM_READNEXT_READ_EVT,
   CUSTOM_STM_READNEXT_NOTIFY_ENABLED_EVT,
   CUSTOM_STM_READNEXT_NOTIFY_DISABLED_EVT,
+  /* BM_REQ_CHAR */
+  CUSTOM_STM_BM_REQ_CHAR_WRITE_EVT,
   CUSTOM_STM_NOTIFICATION_COMPLETE_EVT,
 
   CUSTOM_STM_BOOT_REQUEST_EVT
@@ -75,6 +79,7 @@ typedef struct
 /* Exported constants --------------------------------------------------------*/
 extern uint16_t SizeButtonpress;
 extern uint16_t SizeReadnext;
+extern uint16_t SizeBm_Req_Char;
 
 /* USER CODE BEGIN EC */
 

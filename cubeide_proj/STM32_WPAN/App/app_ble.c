@@ -225,10 +225,10 @@ uint8_t index_con_int, mutex;
 /**
  * Advertising Data
  */
-uint8_t a_AdvData[15] =
+uint8_t a_AdvData[18] =
 {
-  14, AD_TYPE_COMPLETE_LOCAL_NAME, '3', '0', '0', '0', 'G', 'T', '_', 'G', 'A', 'U', 'G', 'E', 'S',  /* Complete name */
-
+  9, AD_TYPE_COMPLETE_LOCAL_NAME, '3', '0', '0', '0', 'G', 'T', '_', '_',  /* Complete name */
+  7, AD_TYPE_MANUFACTURER_SPECIFIC_DATA, 0x01, 0x83, 0x00 /* SDK VERSION */, 0x00 /* DEVID */, 0x00 /* FIRMWAREID */, 0x00 /* feature 0 */,
 };
 
 /* USER CODE BEGIN PV */
