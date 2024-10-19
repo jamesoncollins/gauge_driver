@@ -14,46 +14,31 @@
 // 1st value is the speed step, 2nd value is delay in microseconds
 // 1st value in each row must be > 1st value in subsequent row
 // 1st value in last row should be == maxVel, must be <= maxVel
-//static unsigned short defaultAccelTable[][2] =
-//{
-//{ 20, 1200 },
-//{ 50, 700 },
-//{ 100, 400 },
-//};
-static const uint32_t ticks_per_us =  ( 64000000 * 1e-6);
 static const uint32_t defaultAccelTable[][2] =
 {
-{ 1,   (uint32_t) 1.1 * 40000 * ticks_per_us },
-{ 5,   (uint32_t) 1.1 * 20000 * ticks_per_us },
-{ 10,  (uint32_t) 1.1 * 15000 * ticks_per_us },
-{ 20,  (uint32_t) 1.1 * 10000 * ticks_per_us },
-{ 100, (uint32_t) 1.1 * 2000 * ticks_per_us },
-{ 150, (uint32_t) 1.1 * 750  * ticks_per_us },
-{ 200, (uint32_t) 1.1 * 500  * ticks_per_us },
-{ 250, (uint32_t) 1.1 * 400  * ticks_per_us },
-{ 300, (uint32_t) 1.1 * 300  * ticks_per_us }
+{  200, 1000 }, // 200d/s, 2400 ticks per second. 416us/tick
+{  250,  900 },
+{  300,  750 },
+{  350,  700 },
+{ 1000,  700 },
+//{ 450,  500 },
+//{ 500,  400 },
 };
 
-//static unsigned short defaultAccelTable[][2] =
-//{
-//{ 20, 800 },
-//{ 50, 400 },
-//{ 100, 200 },
-//{ 150, 150 },
-//{ 300, 90 } };
 
-const int stepPulseTicks = 1 * ticks_per_us;
-const int resetStepTicks = 2000 * ticks_per_us;
+const int stepPulseTicks = 1;
+const int resetStepTicks = defaultAccelTable[0][1]*10;
 #define DEFAULT_ACCEL_TABLE_SIZE (sizeof(defaultAccelTable)/sizeof(*defaultAccelTable))
 
 #define LOW GPIO_PIN_RESET
 #define HIGH GPIO_PIN_SET
 
 // clock ticks since startm overflows at 32-bits
-inline uint32_t ticks ()
+inline uint32_t elapsed_us ()
 {
   //return get_ticks_us();
-  return get_ticks_32();
+  //return get_ticks_32();
+  return get_us_32();
 }
 
 inline void delay(uint32_t us)
@@ -63,7 +48,7 @@ inline void delay(uint32_t us)
 
 bool SwitecX12::atTarget()
 {
-  return (targetStep==currentStep) && stopped;
+  return (targetStep==currentStep) && (targetStepNext==targetStep) && stopped;
 }
 
 SwitecX12::SwitecX12 (uint32_t steps,
@@ -87,6 +72,8 @@ SwitecX12::SwitecX12 (uint32_t steps,
   stopped = true;
   currentStep = 0;
   targetStep = 0;
+  targetStepNext = 0;
+  worstMiss = 0;
 
   accelTable = defaultAccelTable;
   maxVel = defaultAccelTable[DEFAULT_ACCEL_TABLE_SIZE - 1][0]; // last value in table.
@@ -128,12 +115,16 @@ void SwitecX12::stepTo (uint32_t position)
     step (dir);
     delay (resetStepTicks);
   }
+
+  targetStep = position;
+  targetStepNext = position;
 }
 
 void SwitecX12::reset()
 {
   currentStep = 0;
   targetStep = 0;
+  targetStepNext = 0;
   vel = 0;
   dir = 0;
   stopped = true;
@@ -144,6 +135,7 @@ void SwitecX12::zero ()
   currentStep = steps - 1;
   stepTo (0);
   targetStep = 0;
+  targetStepNext = 0;
   vel = 0;
   dir = 0;
 }
@@ -155,7 +147,7 @@ void SwitecX12::advance ()
   {
     stopped = true;
     dir = 0;
-    time0 = ticks ();
+    time0 = elapsed_us ();
     return;
   }
 
@@ -189,6 +181,7 @@ void SwitecX12::advance ()
     else
     {
       // at full speed - stay there
+      vel = vel;
     }
   }
   else
@@ -205,33 +198,31 @@ void SwitecX12::advance ()
     i++;
   }
   microDelay = accelTable[i][1];
-  time0 = ticks ();
+  time0 = elapsed_us ();
 }
 
 void SwitecX12::setPosition (uint32_t pos)
 {
+  targetStepNext = pos;
+}
 
-  /*
-   * wait to aqauire the lock.
-   * we'll only fail if an interrupt is still in update()
-   */
-  bool wasLocked = false;
-  while(!wasLocked)
-    lock.compare_exchange_weak(wasLocked, true);
+void SwitecX12::setPositionNow ()
+{
+  uint32_t pos = targetStepNext;
 
   // pos is unsigned so don't need to check for <0
   if (pos >= steps)
     pos = steps - 1;
   targetStep = pos;
+  targetStepNext = pos;
   if (stopped)
   {
     // reset the timer to avoid possible time overflow giving spurious deltas
     stopped = false;
-    time0 = ticks ();
+    time0 = elapsed_us ();
     microDelay = 0;
   }
 
-  lock.store(false);
 }
 
 uint32_t SwitecX12::getTargetPosition()
@@ -243,22 +234,23 @@ void SwitecX12::update ()
 {
 
   /*
-   * try to aquire the lock, return immediatly if we
-   * fail
+   * check if the user had given us a new target pos or not.
+   * if so, update that now before we check on moving the needles.
    */
-  bool wasLocked = false;
-  lock.compare_exchange_weak(wasLocked, true);
-  if(wasLocked)
-    return;
+  if(targetStepNext != targetStep)
+    setPositionNow();
+
 
   if (!stopped)
   {
-    unsigned long delta = ticks () - time0;
+    uint32_t delta = elapsed_us () - time0;
     if (delta >= microDelay)
     {
+      uint32_t over = delta - microDelay;
+      if(over > worstMiss)
+        worstMiss = over;
       advance ();
     }
   }
 
-  lock.store(false);
 }

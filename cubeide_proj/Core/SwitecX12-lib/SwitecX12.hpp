@@ -15,9 +15,11 @@ public:
   bool reverseDir;
   uint32_t currentStep;      // step we are currently at
   uint32_t targetStep;       // target we are moving to
+  uint32_t targetStepNext;   // queued target step, the update function will actually set it
   uint32_t steps;            // total steps available
-  long time0;           // time when we entered this state
-  unsigned int microDelay;       // microsecs until next state
+  uint32_t time0;           // time when we entered this state
+  uint32_t microDelay;       // microsecs until next state
+  uint32_t worstMiss;
   const uint32_t (*accelTable)[2]; // accel table can be modified.
   int maxVel;           // fastest vel allowed
   int vel;              // steps travelled under acceleration
@@ -62,8 +64,8 @@ public:
   void update ();
 
 private:
+  void setPositionNow ();
   void advance ();
-  std::atomic<bool> lock;
 };
 
 #endif
