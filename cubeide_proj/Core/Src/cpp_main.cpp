@@ -275,17 +275,18 @@ int main_cpp(void)
   /*
    * calibrate the needles by bumping them against the stops
    */
+  int stepDown = 100 ;
   if(!cleanPwr)
+    stepDown = X27_STEPS;
+  for(int i=0; i<stepDown; i++)
   {
-    for(int i=0; i<X27_STEPS>>1; i++)
-    {
-      tachX12.step(-1);
-      speedX12.step(-1);
-      DWT_Delay(500);
-    }
+    tachX12.step(-1);
+    speedX12.step(-1);
+    DWT_Delay(2000);
   }
   tachX12.reset();
   speedX12.reset();
+  //odoX12.reset();
   HAL_Delay(200);
 
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );
@@ -333,8 +334,8 @@ int main_cpp(void)
     switch(startup_state)
     {
       case 0:
-        tachX12.setPosition (X27_STEPS);
-        speedX12.setPosition (X27_STEPS);
+        tachX12.setPosition (get_x12_ticks_rpm(9000));
+        speedX12.setPosition (get_x12_ticks_speed(180) );
         startup_state++;
         break;
       case 1:
@@ -342,8 +343,8 @@ int main_cpp(void)
           startup_state ++;
         break;
       case 2:
-        tachX12.setPosition (0);
-        speedX12.setPosition (0);
+        tachX12.setPosition (get_x12_ticks_rpm(0));
+        speedX12.setPosition (get_x12_ticks_speed(0) );
         startup_state++;
         break;
       case 3:
@@ -699,11 +700,6 @@ int main_cpp(void)
       }
     }
 
-
-    tachX12.setPosition( get_x12_ticks_rpm(rpm) );
-    speedX12.setPosition( get_x12_ticks_speed(speed) );
-    odoX12.setPosition(odo_ticks);
-
 #ifdef SWEEP_GAUGES
     /*
      * temporarily sweep needle back and forth
@@ -712,14 +708,14 @@ int main_cpp(void)
     if ( set && tachX12.atTarget() && speedX12.atTarget() )
     {
       set = !set;
-      tachX12.setPosition (get_x12_ticks_rpm(7000));
+      tachX12.setPosition (get_x12_ticks_rpm(9000));
       speedX12.setPosition (get_x12_ticks_speed(180) );
     }
     else if ( !set && tachX12.atTarget() && speedX12.atTarget() )
     {
       set = !set;
-      tachX12.setPosition (0);
-      speedX12.setPosition (0);
+      tachX12.setPosition (get_x12_ticks_rpm(0));
+      speedX12.setPosition (get_x12_ticks_speed(0) );
     }
 #elif defined(SIM_GAUGES)
     /*
@@ -737,7 +733,14 @@ int main_cpp(void)
       rpm = 1000;
     }
     lastTime = HAL_GetTick ();
+    tachX12.setPosition( get_x12_ticks_rpm(rpm) );
+    speedX12.setPosition( get_x12_ticks_speed(speed) );
+#else
+    tachX12.setPosition( get_x12_ticks_rpm(rpm) );
+    speedX12.setPosition( get_x12_ticks_speed(speed) );
 #endif
+    odoX12.setPosition(odo_ticks);
+
 
     /*
      * shift alert
@@ -817,8 +820,8 @@ int main_cpp(void)
 int get_x12_ticks_speed( float speed )
 {
   const float MIN_MPH = 10;
-  const float ZERO_ANGLE = 1;    // degrees beyond the stopper to get to 0
-  const float MIN_MPH_ANGLE = 3.5; // degrees from zero to MIN_MPH
+  const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
+  const float MIN_MPH_ANGLE = 0; // degrees from zero to MIN_MPH
   const float DEGREES_PER_MPH = 1.35;
 
   if( speed <= 1 )
@@ -833,9 +836,9 @@ int get_x12_ticks_speed( float speed )
 int get_x12_ticks_rpm( float rpm )
 {
   const float MIN_RPM = 500;
-  const float ZERO_ANGLE = 1;    // degrees beyond the stopper to get to 0
-  const float MIN_RPM_ANGLE = 4.5; // degrees from zero to MIN_RPM
-  const float DEGREES_PER_RPM = 21.9 / 1000.;
+  const float ZERO_ANGLE = 5;    // degrees beyond the stopper to get to 0
+  const float MIN_RPM_ANGLE = 0; // degrees from zero to MIN_RPM
+  const float DEGREES_PER_RPM = 22.1 / 1000.;
 
   if( rpm <= 1 )
     return ZERO_ANGLE * 12.;
@@ -1058,35 +1061,57 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
     /*
      * we should be here every
      * 1 / (10000 * (1/64000000 seconds)) = 6.4kHz
+     * actually, this is now 64khz.  i wanted to use another timer for that
+     * but neither TIM1 or TIM17 will actually fire.
      */
+    /*
+     * this is a temporary fix to slow down how often we checkthe ECU
+     * initially this was 6.4kHz, but we upped this timer speed.  i dont really
+     * want to check the ecu that often, seems not needed.
+     */
+    static int ecuCnt = 10;
+    if(ecuCnt--==0)
+    {
+      if(needles_ready)
+      {
+        if(measure_freq)
+        {
+  #ifndef SWEEP_GAUGES
+  #ifndef SIM_GAUGES
+          /*
+           * convert ticks, to Hz, to RPM and Speed
+           *
+           * TODO: get rid of float division
+           */
+          float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)F_CLK / (float)ticks[TACHIND];
+          if( tmp > 9000 )
+            tmp = rpm;
+          rpm = tmp;
+
+          tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)F_CLK / (float)ticks[SPEEDOIND];
+          if( tmp > 180 )
+            tmp = speed;
+          speed = tmp;
+  #endif
+  #endif
+        }
+      }
+      ecu.update();
+      ecuCnt = 10;
+    }
 
     if(needles_ready)
     {
-      if(measure_freq)
-      {
-#ifndef SWEEP_GAUGES
-#ifndef SIM_GAUGES
-        /*
-         * convert ticks, to Hz, to RPM and Speed
-         *
-         * TODO: get rid of float division
-         */
-        float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)F_CLK / (float)ticks[TACHIND];
-        if( tmp > 9000 )
-          tmp = rpm;
-        rpm = tmp;
-
-        tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)F_CLK / (float)ticks[SPEEDOIND];
-        if( tmp > 180 )
-          tmp = speed;
-        speed = tmp;
-#endif
-#endif
-      }
       update_needles();
     }
-
-    ecu.update();
+  }
+  else if(htim->Instance == TIM17)
+  {
+    static bool everHere = false;
+    everHere = true;
+  }
+  else if(htim->Instance == TIM1)
+  {
 
   }
 
