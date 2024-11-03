@@ -53,6 +53,7 @@ DMA_HandleTypeDef hdma_spi2_tx;
 
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim16;
+TIM_HandleTypeDef htim17;
 
 UART_HandleTypeDef huart1;
 
@@ -73,6 +74,7 @@ static void MX_I2C3_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_RTC_Init(void);
 static void MX_IPCC_Init(void);
+static void MX_TIM17_Init(void);
 static void MX_RF_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -232,6 +234,7 @@ int main(void)
   MX_I2C3_Init();
   MX_USART1_UART_Init();
   MX_RTC_Init();
+  MX_TIM17_Init();
   MX_RF_Init();
   /* USER CODE BEGIN 2 */
 
@@ -655,7 +658,7 @@ static void MX_TIM16_Init(void)
   htim16.Instance = TIM16;
   htim16.Init.Prescaler = 0;
   htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim16.Init.Period = 999;
+  htim16.Init.Period = 31999;
   htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim16.Init.RepetitionCounter = 0;
   htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -666,6 +669,38 @@ static void MX_TIM16_Init(void)
   /* USER CODE BEGIN TIM16_Init 2 */
 
   /* USER CODE END TIM16_Init 2 */
+
+}
+
+/**
+  * @brief TIM17 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM17_Init(void)
+{
+
+  /* USER CODE BEGIN TIM17_Init 0 */
+
+  /* USER CODE END TIM17_Init 0 */
+
+  /* USER CODE BEGIN TIM17_Init 1 */
+
+  /* USER CODE END TIM17_Init 1 */
+  htim17.Instance = TIM17;
+  htim17.Init.Prescaler = 0;
+  htim17.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim17.Init.Period = 999;
+  htim17.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim17.Init.RepetitionCounter = 0;
+  htim17.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim17) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM17_Init 2 */
+
+  /* USER CODE END TIM17_Init 2 */
 
 }
 
