@@ -399,7 +399,7 @@ uint8_t MCP4725_writeComand (MCP4725 *_MCP4725, uint16_t value,
 			     MCP4725_POWER_DOWN_TYPE powerType)
 {
   uint8_t buffer[3];
-  HAL_StatusTypeDef I2C_Stat;
+  HAL_StatusTypeDef I2C_Stat = 0;
   //Wire.beginTransmission(_i2cAddress);
 
   switch (mode)
