@@ -32,6 +32,7 @@ extern I2C_HandleTypeDef hi2c1, hi2c3;
 extern SPI_HandleTypeDef hspi1;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim16;
+extern TIM_HandleTypeDef htim17;
 extern UART_HandleTypeDef huart1;
 extern RTC_HandleTypeDef hrtc;
 
@@ -162,13 +163,6 @@ int main_cpp(void)
     //exit(-1);
   }
 
-  /*
-   * Time-sensitive operation timer.
-   *
-   * COuld do the DAC.  Currently does ECU.
-   */
-  HAL_TIM_Base_Start_IT(&htim16);
-
 
   /*
    * onboard io expander
@@ -204,9 +198,15 @@ int main_cpp(void)
   }
 
   /*
-   * tach and speedo freq measurement setup
+   * start timers
    */
   HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_Base_Start_IT(&htim16);
+  HAL_TIM_Base_Start_IT(&htim17);
+
+  /*
+   * tach and speedo freq measurement setup
+   */
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3); // speed
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4); // tach
 
@@ -1059,56 +1059,43 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
   else if(htim->Instance == TIM16)
   {
     /*
-     * we should be here every
-     * 1 / (10000 * (1/64000000 seconds)) = 6.4kHz
-     * actually, this is now 64khz.  i wanted to use another timer for that
-     * but neither TIM1 or TIM17 will actually fire.
+     * 2khz
      */
-    /*
-     * this is a temporary fix to slow down how often we checkthe ECU
-     * initially this was 6.4kHz, but we upped this timer speed.  i dont really
-     * want to check the ecu that often, seems not needed.
-     */
-    static int ecuCnt = 10;
-    if(ecuCnt--==0)
+    if(needles_ready)
     {
-      if(needles_ready)
+      if(measure_freq)
       {
-        if(measure_freq)
-        {
-  #ifndef SWEEP_GAUGES
-  #ifndef SIM_GAUGES
-          /*
-           * convert ticks, to Hz, to RPM and Speed
-           *
-           * TODO: get rid of float division
-           */
-          float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)F_CLK / (float)ticks[TACHIND];
-          if( tmp > 9000 )
-            tmp = rpm;
-          rpm = tmp;
+#ifndef SWEEP_GAUGES
+#ifndef SIM_GAUGES
+        /*
+         * convert ticks, to Hz, to RPM and Speed
+         *
+         * TODO: get rid of float division
+         */
+        float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)F_CLK / (float)ticks[TACHIND];
+        if( tmp > 9000 )
+          tmp = rpm;
+        rpm = tmp;
 
-          tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)F_CLK / (float)ticks[SPEEDOIND];
-          if( tmp > 180 )
-            tmp = speed;
-          speed = tmp;
-  #endif
-  #endif
-        }
+        tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)F_CLK / (float)ticks[SPEEDOIND];
+        if( tmp > 180 )
+          tmp = speed;
+        speed = tmp;
+#endif
+#endif
       }
-      ecu.update();
-      ecuCnt = 10;
     }
-
+    ecu.update();
+  }
+  else if(htim->Instance == TIM17)
+  {
+    /*
+     * 64khz
+     */
     if(needles_ready)
     {
       update_needles();
     }
-  }
-  else if(htim->Instance == TIM17)
-  {
-    static bool everHere = false;
-    everHere = true;
   }
   else if(htim->Instance == TIM1)
   {
