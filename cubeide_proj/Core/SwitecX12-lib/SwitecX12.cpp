@@ -11,23 +11,32 @@
 #include "utils.h"
 
 // This table defines the acceleration curve.
-// 1st value is the speed step, 2nd value is delay in microseconds
+// 1st value is the number of step, 2nd value is delay in microseconds
 // 1st value in each row must be > 1st value in subsequent row
 // 1st value in last row should be == maxVel, must be <= maxVel
+// the first value is the number of times we've stepped in a row, and the second is how long we wait between steps
+/*
+ * adjustment procedure:
+ *  1) reduce table to one line.  find the range of acceptable values for the timing.
+ *  too fast is bad.  but too slow is also bad.  you can hear when the motor stalls,
+ *  it makes s buzzing noise.  find the middle of the range where its smooth sounding.
+ *  2) add a second row.  make the timing be about 10% fast that the previs row.
+ *  adjust the number of steps of the PREVIOUS row until the motor doesnt stall. be
+ *  sure to change the steps of the last row to always be higher that the previous row.
+ */
+const uint32_t adjustment = 50;
 static const uint32_t defaultAccelTable[][2] =
 {
-{  200, 1000 }, // 200d/s, 2400 ticks per second. 416us/tick
-{  250,  900 },
-{  300,  750 },
-{  350,  700 },
-{ 1000,  700 },
-//{ 450,  500 },
-//{ 500,  400 },
+    {   20, 800 + adjustment},
+    {   50, 400 + adjustment},
+    {  100, 200 + adjustment},
+    {  150, 150 + adjustment},
+//    {  300, 125}
 };
 
 
-const int stepPulseTicks = 1;
-const int resetStepTicks = defaultAccelTable[0][1]*10;
+const int stepPulseTicks = 10; // actually in microseconds
+const int resetStepTicks = defaultAccelTable[0][1];
 #define DEFAULT_ACCEL_TABLE_SIZE (sizeof(defaultAccelTable)/sizeof(*defaultAccelTable))
 
 #define LOW GPIO_PIN_RESET
@@ -85,7 +94,7 @@ SwitecX12::SwitecX12 (uint32_t steps,
   }
 }
 
-void SwitecX12::step (int dir)
+void SwitecX12::stepNow (int dir)
 {
   // the chip is actually active-high = CW as the pin is labeled CW-/CCW
   // but its flipped here becuase the schematic is flipped
@@ -94,6 +103,28 @@ void SwitecX12::step (int dir)
   delay (stepPulseTicks);
   HAL_GPIO_WritePin (portStep, pinStep, LOW);
   currentStep += dir;
+}
+
+void SwitecX12::step (int dir)
+{
+  // the chip is actually active-high = CW as the pin is labeled CW-/CCW
+  // but its flipped here becuase the schematic is flipped
+  HAL_GPIO_WritePin (portDir, pinDir, (dir > 0) && !reverseDir ? LOW : HIGH);
+  HAL_GPIO_WritePin (portStep, pinStep, HIGH);
+  steppedAt =  elapsed_us ();
+  inStep = true;
+  //delay (stepPulseTicks);
+  //HAL_GPIO_WritePin (portStep, pinStep, LOW);
+  currentStep += dir;
+}
+
+void SwitecX12::stepEnd ()
+{
+  if(inStep &&  ( elapsed_us () - steppedAt) >stepPulseTicks )
+  {
+    HAL_GPIO_WritePin (portStep, pinStep, LOW);
+    inStep = false;
+  }
 }
 
 void SwitecX12::stepTo (uint32_t position)
@@ -232,6 +263,9 @@ uint32_t SwitecX12::getTargetPosition()
 
 void SwitecX12::update ()
 {
+
+  // check if its time to end a step
+  stepEnd ();
 
   /*
    * check if the user had given us a new target pos or not.

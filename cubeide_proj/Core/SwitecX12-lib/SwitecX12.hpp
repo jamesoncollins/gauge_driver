@@ -19,7 +19,7 @@ public:
   uint32_t steps;            // total steps available
   uint32_t time0;           // time when we entered this state
   uint32_t microDelay;       // microsecs until next state
-  uint32_t worstMiss;
+  volatile uint32_t worstMiss;
   const uint32_t (*accelTable)[2]; // accel table can be modified.
   int maxVel;           // fastest vel allowed
   int vel;              // steps travelled under acceleration
@@ -36,8 +36,15 @@ public:
   /*
    * step right now
    */
-  void step (int dir);
+  void stepNow (int dir);
 
+private:
+  void step (int dir); // perform a step, but dont UNstep
+  void stepEnd ();      // call this often to check if a step should end
+  bool inStep = false;
+  uint32_t steppedAt;
+
+public:
   /*
    * step to 0, right now
    */
