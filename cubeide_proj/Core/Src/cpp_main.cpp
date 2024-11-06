@@ -280,8 +280,8 @@ int main_cpp(void)
     stepDown = X27_STEPS;
   for(int i=0; i<stepDown; i++)
   {
-    tachX12.step(-1);
-    speedX12.step(-1);
+    tachX12.stepNow(-1);
+    speedX12.stepNow(-1);
     DWT_Delay(2000);
   }
   tachX12.reset();
@@ -872,11 +872,12 @@ void handleButton(uint8_t button_char)
 /*
  * call by a timer to update needle positions regularly
  */
-void update_needles ()
+uint32_t update_needles ()
 {
-  x12[0]->update ();
-  x12[1]->update ();
+  uint32_t v1 = x12[0]->update ();
+  uint32_t v2 = x12[1]->update ();
   x12[2]->update ();
+  return (v1<v2) ? v1 : v2;
 }
 
 /*
@@ -1090,11 +1091,15 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
   else if(htim->Instance == TIM17)
   {
     /*
-     * 64khz
+     * ticks at 1us
      */
     if(needles_ready)
     {
-      update_needles();
+      uint32_t delay = update_needles();
+      if(delay>TIM17->ARR)
+        TIM17->CNT = 0;
+      else
+        TIM17->CNT = TIM17->ARR - (delay-2);
     }
   }
   else if(htim->Instance == TIM1)
