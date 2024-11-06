@@ -19,7 +19,7 @@ public:
   uint32_t steps;            // total steps available
   uint32_t time0;           // time when we entered this state
   uint32_t microDelay;       // microsecs until next state
-  volatile uint32_t worstMiss;
+  volatile int32_t worstMiss;
   const uint32_t (*accelTable)[2]; // accel table can be modified.
   int maxVel;           // fastest vel allowed
   int vel;              // steps travelled under acceleration
@@ -37,12 +37,6 @@ public:
    * step right now
    */
   void stepNow (int dir);
-
-private:
-  void step (int dir); // perform a step, but dont UNstep
-  void stepEnd ();      // call this often to check if a step should end
-  bool inStep = false;
-  uint32_t steppedAt;
 
 public:
   /*
@@ -67,12 +61,19 @@ public:
 
   /*
    * step the motor now if currentStep != targetStep
+   *
+   * returns an amount of time, in microseonds, that you should try to
+   * call this function again after.
    */
-  void update ();
+  uint32_t update ();
 
 private:
   void setPositionNow ();
   void advance ();
+  void step (int dir); // perform a step, but dont UNstep
+  void stepEnd ();      // call this often to check if a step should end
+  bool inStep = false;
+  uint32_t steppedAt;
 };
 
 #endif

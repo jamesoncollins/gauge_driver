@@ -35,7 +35,7 @@ static const uint32_t defaultAccelTable[][2] =
 };
 
 
-const int stepPulseTicks = 10; // actually in microseconds
+const int stepPulseTicks = 20; // actually in microseconds
 const int resetStepTicks = defaultAccelTable[0][1];
 #define DEFAULT_ACCEL_TABLE_SIZE (sizeof(defaultAccelTable)/sizeof(*defaultAccelTable))
 
@@ -261,7 +261,7 @@ uint32_t SwitecX12::getTargetPosition()
   return targetStep;
 }
 
-void SwitecX12::update ()
+uint32_t SwitecX12::update ()
 {
 
   // check if its time to end a step
@@ -274,17 +274,42 @@ void SwitecX12::update ()
   if(targetStepNext != targetStep)
     setPositionNow();
 
-
+  const uint32_t earliest_us = 5;
   if (!stopped)
   {
     uint32_t delta = elapsed_us () - time0;
-    if (delta >= microDelay)
+    if (microDelay==0 || delta >= microDelay - earliest_us)
     {
-      uint32_t over = delta - microDelay;
-      if(over > worstMiss)
+      int32_t over = (int32_t)delta - (int32_t)microDelay;
+      over = (over>0) ? over : -over;
+      if( over > worstMiss && microDelay!=0)
         worstMiss = over;
       advance ();
     }
   }
+
+  uint32_t retval = 0;
+  if(inStep)
+  {
+   // if(microDelay!=0)
+   //   retval = microDelay>>1;
+   // else
+      retval = stepPulseTicks;
+  }
+  else if(stopped || microDelay==0)
+  {
+    retval = accelTable[0][1];
+  }
+  else
+  {
+    uint32_t timeNow = elapsed_us ();
+    uint32_t howLong = microDelay - (timeNow - time0);
+    retval = howLong;
+  }
+
+  //if(retval<5)
+  //  retval = 10;
+
+  return retval;
 
 }
