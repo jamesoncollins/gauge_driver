@@ -21,7 +21,7 @@ extern DMA_HandleTypeDef hdma_memtomem_dma2_channel1, hdma_memtomem_dma1_channel
 
 #define SPIDEV     hspi2
 
-#define CS_PIN     GPIO_PIN_6
+#define CS_PIN     GPIO_PIN_12
 #define CS_PORT    GPIOB
 
 #define RST_PIN    GPIO_PIN_12

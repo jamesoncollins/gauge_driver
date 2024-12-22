@@ -70,6 +70,10 @@ void Error_Handler(void);
 #define INT_GYR_Pin GPIO_PIN_3
 #define INT_GYR_GPIO_Port GPIOC
 #define INT_GYR_EXTI_IRQn EXTI3_IRQn
+#define GPIO3_Pin GPIO_PIN_8
+#define GPIO3_GPIO_Port GPIOA
+#define GPIO2_Pin GPIO_PIN_4
+#define GPIO2_GPIO_Port GPIOC
 #define IGN_Pin GPIO_PIN_5
 #define IGN_GPIO_Port GPIOC
 #define RESET_MOTOR_Pin GPIO_PIN_2
@@ -82,10 +86,16 @@ void Error_Handler(void);
 #define DIR_TACH_GPIO_Port GPIOB
 #define DIR_SPEED_Pin GPIO_PIN_1
 #define DIR_SPEED_GPIO_Port GPIOB
+#define GPIO0_Pin GPIO_PIN_4
+#define GPIO0_GPIO_Port GPIOE
+#define SPI_LCD_nCS_Pin GPIO_PIN_12
+#define SPI_LCD_nCS_GPIO_Port GPIOB
 #define LED_Pin GPIO_PIN_15
 #define LED_GPIO_Port GPIOA
 #define PWREN_Pin GPIO_PIN_10
 #define PWREN_GPIO_Port GPIOC
+#define GPIO1_Pin GPIO_PIN_12
+#define GPIO1_GPIO_Port GPIOC
 #define STEP_ODO_Pin GPIO_PIN_0
 #define STEP_ODO_GPIO_Port GPIOD
 #define DIR_ODO_Pin GPIO_PIN_1
@@ -94,6 +104,8 @@ void Error_Handler(void);
 #define STEP_TACH_GPIO_Port GPIOB
 #define STEP_SPEED_Pin GPIO_PIN_5
 #define STEP_SPEED_GPIO_Port GPIOB
+#define SPI_FLASH_nCS_Pin GPIO_PIN_6
+#define SPI_FLASH_nCS_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

@@ -820,11 +820,11 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13|GPIO_PIN_6|PWREN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8|LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO3_Pin|LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, RESET_MOTOR_Pin|DIR_TACH_Pin|DIR_SPEED_Pin|GPIO_PIN_12
-                          |STEP_TACH_Pin|STEP_SPEED_Pin|GPIO_PIN_6, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, RESET_MOTOR_Pin|DIR_TACH_Pin|DIR_SPEED_Pin|SPI_LCD_nCS_Pin
+                          |STEP_TACH_Pin|STEP_SPEED_Pin|SPI_FLASH_nCS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, STEP_ODO_Pin|DIR_ODO_Pin, GPIO_PIN_RESET);
@@ -862,15 +862,15 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PA8 LED_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_8|LED_Pin;
+  /*Configure GPIO pins : GPIO3_Pin LED_Pin */
+  GPIO_InitStruct.Pin = GPIO3_Pin|LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PC4 PC11 PC12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_11|GPIO_PIN_12;
+  /*Configure GPIO pins : GPIO2_Pin PC11 GPIO1_Pin */
+  GPIO_InitStruct.Pin = GPIO2_Pin|GPIO_PIN_11|GPIO1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -881,20 +881,20 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(IGN_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : RESET_MOTOR_Pin DIR_TACH_Pin DIR_SPEED_Pin PB12
-                           STEP_TACH_Pin STEP_SPEED_Pin PB6 */
-  GPIO_InitStruct.Pin = RESET_MOTOR_Pin|DIR_TACH_Pin|DIR_SPEED_Pin|GPIO_PIN_12
-                          |STEP_TACH_Pin|STEP_SPEED_Pin|GPIO_PIN_6;
+  /*Configure GPIO pins : RESET_MOTOR_Pin DIR_TACH_Pin DIR_SPEED_Pin SPI_LCD_nCS_Pin
+                           STEP_TACH_Pin STEP_SPEED_Pin SPI_FLASH_nCS_Pin */
+  GPIO_InitStruct.Pin = RESET_MOTOR_Pin|DIR_TACH_Pin|DIR_SPEED_Pin|SPI_LCD_nCS_Pin
+                          |STEP_TACH_Pin|STEP_SPEED_Pin|SPI_FLASH_nCS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PE4 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  /*Configure GPIO pin : GPIO0_Pin */
+  GPIO_InitStruct.Pin = GPIO0_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIO0_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : STEP_ODO_Pin DIR_ODO_Pin */
   GPIO_InitStruct.Pin = STEP_ODO_Pin|DIR_ODO_Pin;
