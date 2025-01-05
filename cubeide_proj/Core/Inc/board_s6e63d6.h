@@ -27,18 +27,12 @@ extern DMA_HandleTypeDef hdma_memtomem_dma2_channel1, hdma_memtomem_dma1_channel
 #define RST_PIN    GPIO_PIN_12
 #define RST_PORT   GPIOC
 
-#define DC_PIN     GPIO_PIN_4
-#define DC_PORT    GPIOC
-
+// caution, the schematic calls this 'DC'
 #define PWR_EN_PIN     GPIO_PIN_4
-#define PWR_EN_PORT    GPIOA
+#define PWR_EN_PORT    GPIOC
 
 #define CLR_RST CLEAR_BIT(RST_PORT->ODR, RST_PIN)
 #define SET_RST SET_BIT(RST_PORT->ODR, RST_PIN)
-
-#define CLR_DC CLEAR_BIT(DC_PORT->ODR, DC_PIN)
-#define SET_DC SET_BIT(DC_PORT->ODR, DC_PIN)
-#define GET_DC READ_BIT(DC_PORT->IDR, DC_PIN)
 
 #define CLR_CS CLEAR_BIT(CS_PORT->ODR, CS_PIN)
 #define SET_CS SET_BIT(CS_PORT->ODR, CS_PIN)
@@ -176,17 +170,17 @@ static GFXINLINE void init_board (GDisplay *g)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init (RST_PORT, &GPIO_InitStruct);
 
-  GPIO_InitStruct.Pin = DC_PIN;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init (DC_PORT, &GPIO_InitStruct);
+//  GPIO_InitStruct.Pin = DC_PIN;
+//  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+//  GPIO_InitStruct.Pull = GPIO_NOPULL;
+//  HAL_GPIO_Init (DC_PORT, &GPIO_InitStruct);
 
   GPIO_InitStruct.Pin = PWR_EN_PIN;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init (PWR_EN_PORT, &GPIO_InitStruct);
 
-  SET_DC; // defaults to 'data'
+  //SET_DC; // defaults to 'data'. NOTE: this isn't connected to the screen by default anymore
   CLR_PWR_EN;
   CLR_RST;
   SET_CS;
