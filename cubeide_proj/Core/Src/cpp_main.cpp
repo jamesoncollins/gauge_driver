@@ -50,11 +50,11 @@ static MUTII ecu(&huart1, &ecuTxDone, &ecuRxDone);
 volatile static float rpm, speed;
 
 volatile static bool bulbReadWaiting = false;
-static const uint16_t lampMask         = 1<<1;
-static const uint16_t beamMask         = 1<<0;
-static const uint16_t psMask           = 1<<3;
-static const uint16_t battMask         = 1<<2;
-static const uint16_t brakeMask        = 1<<4;
+static const uint16_t lampMask         = 1<<7;
+static const uint16_t beamMask         = 1<<5;
+static const uint16_t psMask           = 1<<1;
+static const uint16_t battMask         = 1<<0;
+static const uint16_t brakeMask        = 1<<3;
 
 // flags used by accelerometer in IT mode
 volatile static bool acc_int_rdy = false;       // we got exti saying data ready
@@ -182,7 +182,7 @@ int main_cpp(void)
         0x0000
 //        | lampMask    // not sure
         | brakeMask     // switch pulls bulb down, need to mimic bulb voltage
-        | battMask    // voltage source is normally applied
+//        | battMask    // voltage source is normally applied
 //        | psMask      // switch pulls this up, so we pull down
       ))
   {
@@ -641,7 +641,7 @@ int main_cpp(void)
           }
           //bulbVals = ioexp_screen.get();
 
-          if( !(bulbVals&battMask) ) // car pulls down
+          if( !(bulbVals&battMask) ) // voltage threshold
             gdispImageDraw(&battImg,  145,  210, battImg.width,  battImg.height,  0, 0);
           if( !(bulbVals&brakeMask) ) // car pulls down
             gdispFillString(120, 233, "BRAKE", font20, GFX_RED, GFX_BLACK);
