@@ -181,7 +181,7 @@ int main_cpp(void)
     HAL_SPI_Transmit (&hspi1, (uint8_t*)&buffer, 2 , HAL_MAX_DELAY);
 
     // set the default tone to 1kHz (for a 10ksps output)
-    set_tone( 1000, 100 );
+    set_tone( 1000, 2000 );
     //HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t*)tone_buffer, current_tone_len);
     //HAL_TIM_Base_Stop_DMA(&htim1);
   }
@@ -300,7 +300,12 @@ int main_cpp(void)
    */
   int stepDown = 100 ;
   if(!cleanPwr)
+  {
+    gdispClear(GFX_BLACK);
+    gdispFillString((screenWidth>>1)-60, (screenHeight>>1), "RESET", fontLCD, GFX_AMBER, GFX_BLACK);
+    gdispFlush();
     stepDown = X27_STEPS;
+  }
   for(int i=0; i<stepDown; i++)
   {
     tachX12.stepNow(-1);
@@ -333,6 +338,7 @@ int main_cpp(void)
   gdispImageOpenMemory(&startupAnim, mitslogoanim_128);
   gDelay delay = 0;
   int displayCnt = 42; // number of logo frames
+  gdispClear(GFX_BLACK);
   gdispImageDraw(&startupAnim,
                  (screenWidth>>1)-(startupAnim.width>>1),
                  75,
@@ -750,13 +756,11 @@ int main_cpp(void)
     static int lastTime = 0;
     int diff = HAL_GetTick () - lastTime;
     rpm += (float) diff / 1000. * 3000; // 3000rpm per second
+    speed = rpm / (9000./180.);
     if (rpm > 9000)
-      rpm = 3000;
-    speed += (float) diff / 1000. * 20; // 20 mph per second
-    if (speed > 180)
     {
-      speed = 0;
       rpm = 1000;
+      speed = rpm / (9000./180.);
     }
     lastTime = HAL_GetTick ();
     tachX12.setPosition( get_x12_ticks_rpm(rpm) );
@@ -786,7 +790,7 @@ int main_cpp(void)
       {
         HAL_TIM_Base_Stop_DMA(&htim1);
         //set_tone( 500, 1000 );
-        htim1.Instance->ARR = 6399>>1; // 500 hz
+        htim1.Instance->ARR = 6399<<1; // 500 hz
         HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t*)tone_buffer, current_tone_len);
         rpm_mode = 1;
       }
