@@ -9,7 +9,7 @@
  */
 int get_x12_ticks_speed( float  );
 int get_x12_ticks_rpm( float  );
-
+HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const uint32_t *pData, uint16_t Length);
 
 
 /*
@@ -24,7 +24,7 @@ int get_x12_ticks_rpm( float  );
                                                    // with -O2 you can draw in about 10.
                                                    // so 70ms seems to be ablout the best you can do here
 //#define PRINT_TO_USB
-#define SWEEP_GAUGES  // sweep needles forever
+//#define SWEEP_GAUGES  // sweep needles forever
 //#define SIM_GAUGES       // generate simulated rpm and mph
 
 /*

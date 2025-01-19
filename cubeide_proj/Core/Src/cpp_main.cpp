@@ -30,6 +30,7 @@ extern void setAutoClear();
 
 extern I2C_HandleTypeDef hi2c1, hi2c3;
 extern SPI_HandleTypeDef hspi1;
+extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim16;
 extern TIM_HandleTypeDef htim17;
@@ -39,7 +40,6 @@ extern RTC_HandleTypeDef hrtc;
 static uint16_t screenWidth;
 static uint16_t screenHeight;
 
-static MCP4725 dac;
 static BMI088 imu;
 static uint8_t regAddr;
 
@@ -88,6 +88,26 @@ volatile static bool measure_freq = false;
  * holds the button value sent by bluetooth
  */
 volatile static  button_e btnCmd = BTN_INV;
+
+/*
+ * dac tones
+ */
+const int MAX_TONE_LEN = 256;
+int current_tone_len = MAX_TONE_LEN;
+uint16_t tone_buffer[MAX_TONE_LEN];
+const float fs = 10000; // timer1 is a 64mhz clock counting 0 - 6399
+const float mid = (1<<11);
+float current_freq = 0;
+void set_tone( float f, float amp )
+{
+  if(f==current_freq)
+    return;
+  current_freq = f;
+  float n_period = (int)(fs / f);
+  current_tone_len = n_period-1;
+  for(int i=0; i<n_period-1; i++)
+    tone_buffer[i] = (amp * std::sin( 2. * M_PI * (float)i / (n_period-1) )) + 0x1000 + mid;
+}
 
 
 int main_cpp(void)
@@ -153,14 +173,17 @@ int main_cpp(void)
   /*
    * dac setup
    */
-  MCP4725_init (&dac, &hi2c1, MCP4725A0_ADDR_A00, 3.30);
-  if (!MCP4725_isConnected (&dac))
   {
-    //exit(-1);
-  }
-  if( MCP4725_setVoltage(&dac, 0, MCP4725_REGISTER_MODE, MCP4725_POWER_DOWN_100KOHM) )
-  {
-    //exit(-1);
+    htim1.Instance->ARR = 6400-1;       // 10ksps
+    //HAL_TIM_Base_Start_IT(&htim1);
+
+    int16_t buffer = 0x1000 + 2048;
+    HAL_SPI_Transmit (&hspi1, (uint8_t*)&buffer, 2 , HAL_MAX_DELAY);
+
+    // set the default tone to 1kHz (for a 10ksps output)
+    set_tone( 1000, 100 );
+    //HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t*)tone_buffer, current_tone_len);
+    //HAL_TIM_Base_Stop_DMA(&htim1);
   }
 
 
@@ -446,6 +469,9 @@ int main_cpp(void)
   while (1)
   {
 
+    /*
+     * Process bluetooth transactions
+     */
     MX_APPE_Process();
 
     /*
@@ -556,7 +582,7 @@ int main_cpp(void)
            * then we know this function call below will always return immediatly
            */
           if(rpm_alert)
-            gdispClear(GFX_YELLOW);
+            gdispClear(GFX_RED);
           else
             gdispClear(GFX_BLACK);
           break;
@@ -745,11 +771,67 @@ int main_cpp(void)
     /*
      * shift alert
      */
-    if( rpm > 6500 )
+    static int rpm_mode = -1;
+    if(rpm <  5000)
+    {
+      if(rpm_mode!=0)
+      {
+        rpm_mode = 0;
+        HAL_TIM_Base_Stop_DMA(&htim1);
+      }
+    }
+    else if (rpm>5000 && rpm<6000)
+    {
+      if(rpm_mode!=1)
+      {
+        HAL_TIM_Base_Stop_DMA(&htim1);
+        //set_tone( 500, 1000 );
+        htim1.Instance->ARR = 6399>>1; // 500 hz
+        HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t*)tone_buffer, current_tone_len);
+        rpm_mode = 1;
+      }
+
+    }
+    else
+    {
+      static int toggle_mode = 0;
+      static int toggleTime_last = 0;
+      if(rpm_mode!=2)
+      {
+        toggle_mode = 0;
+        toggleTime_last = HAL_GetTick ();
+        HAL_TIM_Base_Stop_DMA(&htim1);
+        //set_tone( 1000, 1000 );
+        htim1.Instance->ARR =6399; // 1khz
+        //HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t*)tone_buffer, current_tone_len);
+        rpm_mode = 2;
+      }
+
+
+
+      if(HAL_GetTick () - toggleTime_last < 50 && toggle_mode == 0)
+      {
+        toggle_mode = 1;
+        HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t*)tone_buffer, current_tone_len);
+      }
+      else if(HAL_GetTick () - toggleTime_last > 50 && HAL_GetTick () - toggleTime_last < 100 && toggle_mode == 1)
+      {
+        HAL_TIM_Base_Stop_DMA(&htim1);
+        toggle_mode = 2;
+      }
+      else if( HAL_GetTick () - toggleTime_last > 100 && toggle_mode == 2 )
+      {
+        toggle_mode = 0;
+        toggleTime_last = HAL_GetTick ();
+      }
+
+    }
+
+    if( rpm > 6000 )
     {
       rpm_alert = true;
     }
-    else if( rpm < 6400  )
+    else if( rpm < 5999  )
     {
       rpm_alert = false;
     }
@@ -846,6 +928,118 @@ int get_x12_ticks_rpm( float rpm )
     return (MIN_RPM_ANGLE + ZERO_ANGLE) * 12.;
   else
     return ((rpm-MIN_RPM) * DEGREES_PER_RPM + ZERO_ANGLE + MIN_RPM_ANGLE ) * 12.;
+}
+
+/**
+ *
+ * THis is a copy of HAL_TIM_Base_Start_DMA that we have modified
+ *
+  * @brief  Starts the TIM Base generation in DMA mode.
+  * @param  htim TIM Base handle
+  * @param  pData The source Buffer address.
+  * @param  Length The length of data to be transferred from memory to peripheral.
+  * @retval HAL status
+  */
+extern "C" {
+  /**
+    * @brief  TIM DMA Period Elapse complete callback.
+    * @param  hdma pointer to DMA handle.
+    * @retval None
+    */
+  static void TIM_DMAPeriodElapsedCplt(DMA_HandleTypeDef *hdma)
+  {
+    TIM_HandleTypeDef *htim = (TIM_HandleTypeDef *)((DMA_HandleTypeDef *)hdma)->Parent;
+
+    if (htim->hdma[TIM_DMA_ID_UPDATE]->Init.Mode == DMA_NORMAL)
+    {
+      htim->State = HAL_TIM_STATE_READY;
+    }
+
+  #if (USE_HAL_TIM_REGISTER_CALLBACKS == 1)
+    htim->PeriodElapsedCallback(htim);
+  #else
+    HAL_TIM_PeriodElapsedCallback(htim);
+  #endif /* USE_HAL_TIM_REGISTER_CALLBACKS */
+  }
+
+  /**
+    * @brief  TIM DMA Period Elapse half complete callback.
+    * @param  hdma pointer to DMA handle.
+    * @retval None
+    */
+  static void TIM_DMAPeriodElapsedHalfCplt(DMA_HandleTypeDef *hdma)
+  {
+    TIM_HandleTypeDef *htim = (TIM_HandleTypeDef *)((DMA_HandleTypeDef *)hdma)->Parent;
+
+  #if (USE_HAL_TIM_REGISTER_CALLBACKS == 1)
+    htim->PeriodElapsedHalfCpltCallback(htim);
+  #else
+    HAL_TIM_PeriodElapsedHalfCpltCallback(htim);
+  #endif /* USE_HAL_TIM_REGISTER_CALLBACKS */
+  }
+}
+HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const uint32_t *pData, uint16_t Length)
+{
+  uint32_t tmpsmcr;
+
+  /* Check the parameters */
+  assert_param(IS_TIM_DMA_INSTANCE(htim->Instance));
+
+  /* Set the TIM state */
+  if (htim->State == HAL_TIM_STATE_BUSY)
+  {
+    return HAL_BUSY;
+  }
+  else if (htim->State == HAL_TIM_STATE_READY)
+  {
+    if ((pData == NULL) || (Length == 0U))
+    {
+      return HAL_ERROR;
+    }
+    else
+    {
+      htim->State = HAL_TIM_STATE_BUSY;
+    }
+  }
+  else
+  {
+    return HAL_ERROR;
+  }
+
+  /* Set the DMA Period elapsed callbacks */
+  htim->hdma[TIM_DMA_ID_UPDATE]->XferCpltCallback = TIM_DMAPeriodElapsedCplt;
+  htim->hdma[TIM_DMA_ID_UPDATE]->XferHalfCpltCallback = TIM_DMAPeriodElapsedHalfCplt;
+
+  /* Set the DMA error callback */
+  htim->hdma[TIM_DMA_ID_UPDATE]->XferErrorCallback = TIM_DMAError ;
+
+  /* Enable the DMA channel */
+  if (HAL_DMA_Start_IT(htim->hdma[TIM_DMA_ID_UPDATE], (uint32_t)pData, (uint32_t)&hspi1.Instance->DR,
+                       Length) != HAL_OK)
+  {
+    /* Return error status */
+    return HAL_ERROR;
+  }
+
+  /* Enable the TIM Update DMA request */
+  __HAL_TIM_ENABLE_DMA(htim, TIM_DMA_UPDATE);
+
+  /* Enable the Peripheral, except in trigger mode where enable is automatically done with trigger */
+  if (IS_TIM_SLAVE_INSTANCE(htim->Instance))
+  {
+    tmpsmcr = htim->Instance->SMCR & TIM_SMCR_SMS;
+    if (!IS_TIM_SLAVEMODE_TRIGGER_ENABLED(tmpsmcr))
+    {
+      __HAL_TIM_ENABLE(htim);
+    }
+  }
+  else
+  {
+    __HAL_TIM_ENABLE(htim);
+  }
+
+  /* Return function status */
+  return HAL_OK;
 }
 
 /*
@@ -1140,6 +1334,5 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
   ecuTxDone = true;
 }
-
 
 } // extern C
