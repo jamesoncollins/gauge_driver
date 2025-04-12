@@ -259,11 +259,6 @@ int main_cpp(void)
       DIR_SPEED_Pin
       );
 
-//  uint32_t slowTable[][2] =
-//  {
-//    { 1,  (uint32_t) (10. * 64000000. * 1.e-6) },
-//    { 20, (uint32_t) (10. * 64000000. * 1.e-6) },
-//  };
   static const uint32_t ticks_per_us =  ( 64000000 * 1e-6);
   static const uint32_t accelTable[5][2] =
   {
@@ -272,10 +267,6 @@ int main_cpp(void)
   { 10,  (uint32_t) 1.1 * 15000 * ticks_per_us },
   { 20,  (uint32_t) 1.1 * 10000 * ticks_per_us },
   { 100, (uint32_t) 1.1 * 2000 * ticks_per_us },
-  //{ 150, (uint32_t) 1.1 * 750  * ticks_per_us },
-  //{ 200, (uint32_t) 1.1 * 500  * ticks_per_us },
-  //{ 250, (uint32_t) 1.1 * 400  * ticks_per_us },
-  //{ 300, (uint32_t) 1.1 * 300  * ticks_per_us }
   };
   SwitecX12 odoX12(
       0xFFFFFFFE,  // hopefully infinite
@@ -386,7 +377,7 @@ int main_cpp(void)
 
     if(HAL_GetTick() - timerAnim > delay && displayCnt>=0)
     {
-      // load te next image
+      // load the next image
       gdispImageDraw(&startupAnim,
                      (screenWidth>>1)-(startupAnim.width>>1),
                      75,
@@ -805,8 +796,6 @@ int main_cpp(void)
         rpm_mode = 2;
       }
 
-
-
       if(HAL_GetTick () - toggleTime_last < 50 && toggle_mode == 0)
       {
         toggle_mode = 1;
@@ -822,7 +811,6 @@ int main_cpp(void)
         toggle_mode = 0;
         toggleTime_last = HAL_GetTick ();
       }
-
     }
 
     if( rpm > 6000 )
