@@ -27,6 +27,9 @@ HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const u
 //#define SWEEP_GAUGES  // sweep needles forever
 //#define SIM_GAUGES       // generate simulated rpm and mph
 
+const int RPM_ALERT_INIT = 5000; // soft alert threshold
+const int RPM_ALERT_FINAL = 6000; // hard threshold (i.e. red screen, constant buzz)
+
 /*
  * dots per inch for this screen
  */

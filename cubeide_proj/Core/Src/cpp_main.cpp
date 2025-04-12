@@ -60,8 +60,6 @@ static const uint16_t brakeMask        = 1<<3;
 volatile static bool acc_int_rdy = false;       // we got exti saying data ready
 volatile static bool do_convert = false;        // we received the raw data
 
-volatile static bool rpm_alert = false;
-
 
 /*
  * frequency measurement settings for rpm and speed
@@ -576,7 +574,9 @@ int main_cpp(void)
            * we dont enter this section of code uncless the display bus isn't busy
            * then we know this function call below will always return immediatly
            */
-          if(rpm_alert)
+          if(rpm > RPM_ALERT_INIT)
+            gdispClear(GFX_YELLOW);
+          else if (rpm > RPM_ALERT_FINAL)
             gdispClear(GFX_RED);
           else
             gdispClear(GFX_BLACK);
@@ -765,7 +765,7 @@ int main_cpp(void)
      * shift alert
      */
     static int rpm_mode = -1;
-    if(rpm <  5000)
+    if(rpm <  RPM_ALERT_INIT)
     {
       if(rpm_mode!=0)
       {
@@ -773,7 +773,7 @@ int main_cpp(void)
         HAL_TIM_Base_Stop_DMA(&htim1);
       }
     }
-    else if (rpm>5000 && rpm<6000)
+    else if (rpm>RPM_ALERT_INIT && rpm<RPM_ALERT_FINAL)
     {
       if(rpm_mode!=1)
       {
@@ -813,14 +813,6 @@ int main_cpp(void)
       }
     }
 
-    if( rpm > 6000 )
-    {
-      rpm_alert = true;
-    }
-    else if( rpm < 5999  )
-    {
-      rpm_alert = false;
-    }
 
 
     /*
