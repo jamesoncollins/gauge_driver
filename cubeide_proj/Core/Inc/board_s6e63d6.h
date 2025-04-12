@@ -66,9 +66,9 @@ void setClearColor(uint32_t color)
   clear_int = color;
 }
 
-void setAutoClear()
+void setAutoClear(bool cl)
 {
-  autoClear = true;
+  autoClear = cl;
 }
 
 bool bus_busy ()
@@ -387,7 +387,7 @@ void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
           &dma_memtomem,
           (uint32_t)&clear_int,
           ((uint32_t)data_ptr - xfer_len),
-          xfer_len
+          xfer_len>>2 // these transfers are 32-bit
           );
     }
 
