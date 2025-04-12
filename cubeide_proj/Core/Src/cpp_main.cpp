@@ -12,7 +12,7 @@ extern "C" {
 #include "filters.h"
 //#include "board_s6e63d6.h" // cant include this
 extern bool bus_busy();
-extern void setAutoClear();
+extern void setAutoClear(bool);
 }
 #include "../SwitecX12-lib/SwitecX12.hpp"
 #include "utils.h"
@@ -95,14 +95,15 @@ volatile static  button_e btnCmd = BTN_INV;
 const int MAX_TONE_LEN = 256;
 int current_tone_len = MAX_TONE_LEN;
 uint16_t tone_buffer[MAX_TONE_LEN];
-const float fs = 10000; // timer1 is a 64mhz clock counting 0 - 6399
-const float mid = (1<<11);
+float fs;
+const float mid = 1800;
 float current_freq = 0;
 void set_tone( float f, float amp )
 {
   if(f==current_freq)
     return;
   current_freq = f;
+  fs = (64000000 / htim1.Instance->ARR+1); // timer1 is a 64mhz clock counting 0 - 6399
   float n_period = (int)(fs / f);
   current_tone_len = n_period-1;
   for(int i=0; i<n_period-1; i++)
@@ -174,16 +175,13 @@ int main_cpp(void)
    * dac setup
    */
   {
-    htim1.Instance->ARR = 6400-1;       // 10ksps
-    //HAL_TIM_Base_Start_IT(&htim1);
-
+    htim1.Instance->ARR = 1600-1;
     int16_t buffer = 0x1000 + 2048;
     HAL_SPI_Transmit (&hspi1, (uint8_t*)&buffer, 2 , HAL_MAX_DELAY);
-
-    // set the default tone to 1kHz (for a 10ksps output)
-    set_tone( 1000, 2000 );
-    //HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t*)tone_buffer, current_tone_len);
-    //HAL_TIM_Base_Stop_DMA(&htim1);
+    set_tone(
+        3000,
+        1000
+       );
   }
 
 
@@ -302,7 +300,7 @@ int main_cpp(void)
   if(!cleanPwr)
   {
     gdispClear(GFX_BLACK);
-    gdispFillString((screenWidth>>1)-60, (screenHeight>>1), "RESET", fontLCD, GFX_AMBER, GFX_BLACK);
+    gdispFillString((screenWidth>>1)-70, (screenHeight>>1), "RESET", fontLCD, GFX_AMBER, GFX_BLACK);
     gdispFlush();
     stepDown = X27_STEPS;
   }
@@ -410,7 +408,7 @@ int main_cpp(void)
    * is flushed.
    */
   gdispClear(GFX_BLACK); // not sure if this clear fixes the temporary display of the logo over the gauges
-  setAutoClear();
+  setAutoClear(true);
   gdispClear(GFX_BLACK); // or if its this one
   gdispFlush(); // not sure why we flush twice here, maybe becuase its required by autoflush somehow
   gdispFlush();
@@ -789,12 +787,10 @@ int main_cpp(void)
       if(rpm_mode!=1)
       {
         HAL_TIM_Base_Stop_DMA(&htim1);
-        //set_tone( 500, 1000 );
-        htim1.Instance->ARR = 6399<<1; // 500 hz
+        htim1.Instance->ARR = 2200;
         HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t*)tone_buffer, current_tone_len);
         rpm_mode = 1;
       }
-
     }
     else
     {
@@ -805,9 +801,7 @@ int main_cpp(void)
         toggle_mode = 0;
         toggleTime_last = HAL_GetTick ();
         HAL_TIM_Base_Stop_DMA(&htim1);
-        //set_tone( 1000, 1000 );
-        htim1.Instance->ARR =6399; // 1khz
-        //HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t*)tone_buffer, current_tone_len);
+        htim1.Instance->ARR = 800;
         rpm_mode = 2;
       }
 
