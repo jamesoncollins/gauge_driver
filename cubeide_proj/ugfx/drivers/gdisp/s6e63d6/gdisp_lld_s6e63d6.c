@@ -77,7 +77,7 @@ static bool initOnce = false;
 // Some common routines and macros
 #define RAM(g)                                                  ((uint16_t*)g->priv)
 #define xyaddr(x, y)            (((x) + (y)*GDISP_SCREEN_WIDTH))
-#define map_color(color) ((color>>8) | (color<<8))
+#define map_color(color) ((color << 8) | (color >> 8)) // byte swap
 //#define map_color(color) (color)
 
 
