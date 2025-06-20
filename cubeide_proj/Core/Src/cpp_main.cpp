@@ -43,11 +43,20 @@ static uint16_t screenHeight;
 static BMI088 imu;
 static uint8_t regAddr;
 
+static uint32_t startupInitError = 0;
+
 volatile static bool ecuTxDone = false;
 volatile static bool ecuRxDone = false;
 static MUTII ecu(&huart1, &ecuTxDone, &ecuRxDone);
 
 volatile static float rpm, speed;
+
+/*
+ * one per i2c channel
+ * used to flag if someone is waiting for an RX interrupt.
+ * These should only be set 'true' by this thread (no interrupts).
+ */
+volatile bool i2cPendingIrq[4] = {0,0,0,0};
 
 volatile static bool bulbReadWaiting = false;
 static const uint16_t lampMask         = 1<<7;
@@ -58,7 +67,7 @@ static const uint16_t brakeMask        = 1<<3;
 
 // flags used by accelerometer in IT mode
 volatile static bool acc_int_rdy = false;       // we got exti saying data ready
-volatile static bool do_convert = false;        // we received the raw data
+volatile static bool pendingInertial = false;
 
 
 /*
@@ -101,7 +110,7 @@ void set_tone( float f, float amp )
   if(f==current_freq)
     return;
   current_freq = f;
-  fs = (64000000 / htim1.Instance->ARR+1); // timer1 is a 64mhz clock counting 0 - 6399
+  fs = 64000000.0f / (htim1.Instance->ARR+1); // timer1 is a 64mhz clock counting 0 - 6399
   float n_period = (int)(fs / f);
   current_tone_len = n_period-1;
   for(int i=0; i<n_period-1; i++)
@@ -184,12 +193,15 @@ int main_cpp(void)
 
 
   /*
-   * onboard io expander
+   * speedo pcb io expander
    */
-  PI4IOE5V6416 ioexp_onboard(&hi2c1);
-  if(ioexp_onboard.init(0x0000))
+  PI4IOE5V6416 ioexp_speedo(&hi2c1);
+  if(ioexp_speedo.init(
+        0x0000,  // no pull-ups
+        0x00FF  // port 0 are inputs, port 1 are outputs
+      ))
   {
-    //exit(-1);
+    startupInitError |= 1<<0;
   }
 
   /*
@@ -199,13 +211,11 @@ int main_cpp(void)
   PI4IOE5V6416 ioexp_screen(&hi2c3);
   if(ioexp_screen.init(
         0x0000
-//        | lampMask    // not sure
         | brakeMask     // switch pulls bulb down, need to mimic bulb voltage
-//        | battMask    // voltage source is normally applied
-//        | psMask      // switch pulls this up, so we pull down
-      ))
+      )
+    )
   {
-    //exit(-1);
+    startupInitError |= 1<<1;
   }
 
   /*
@@ -461,6 +471,7 @@ int main_cpp(void)
   uint32_t loopPeriod = 0, worstLoopPeriod = 0, loopCnt = 0;
   while (1)
   {
+    logBufInd = 0;
 
     /*
      * Process bluetooth transactions
@@ -503,7 +514,7 @@ int main_cpp(void)
      * bmi088 triggered us that data is available, or an I2C interrupt
      * has told us that new data has been collected, but needs to be converted
      */
-    if( acc_int_rdy  )
+    if( acc_int_rdy && !i2cPendingIrq[1] )
     {
         regAddr = BMI_ACC_DATA;
         uint8_t status = 1;
@@ -513,12 +524,16 @@ int main_cpp(void)
           BMI_ACC_DATA, 1,
           imu.accRxBuf, 6);
         if(status==0)
+        {
           acc_int_rdy = false;
+          i2cPendingIrq[1] = true;
+          pendingInertial = true;
+        }
     }
-    else if( do_convert )
+    else if( pendingInertial && !i2cPendingIrq[1]  )
     {
       BMI088_ConvertAccData(&imu); // converts raw buffered data to accel floats
-      do_convert = false;
+      pendingInertial = false;
       rotateVectorKnownPitch(imu.acc_mps2, cosPitch, sinPitch);
     }
 
@@ -530,7 +545,7 @@ int main_cpp(void)
 #ifdef PRINT_TO_USB
       timerPrint = HAL_GetTick ();
       logBufInd += snprintf (logBuf+logBufInd, bufLen-logBufInd, " tach: %d , speedo %d  \n",  (int)rpm,  (int)speed);
-      CDC_Transmit_FS ((uint8_t*) logBuf, ind);
+      CDC_Transmit_FS ((uint8_t*) logBuf, logBufInd);
 #endif
     }
 
@@ -654,13 +669,32 @@ int main_cpp(void)
           break;
 
         case 6:
-          // check warning
-          if(!bulbReadWaiting)
+          if(startupInitError)
+          {
+            gdispFillString(
+                (screenWidth>>1)-50, (screenHeight>>1),
+                "ERR",
+                fontLCD, GFX_RED, GFX_BLACK
+                );
+          }
+
+          /*
+           * If a bulb read is not pending, and no i2c irq is pending
+           * then submit a request
+           */
+          if( !bulbReadWaiting && !i2cPendingIrq[3] )
           {
             if(ioexp_screen.get_IT(&bulbVals)==0) //we dont know when this will finish, dont care
+            {
+              i2cPendingIrq[3] = true;
               bulbReadWaiting = true;
+            }
           }
-          //bulbVals = ioexp_screen.get();
+          else if( bulbReadWaiting && !i2cPendingIrq[3] )
+          {
+            // we have new values
+            bulbReadWaiting = false;
+          }
 
           if( !(bulbVals&battMask) ) // voltage threshold
             gdispImageDraw(&battImg,  145,  210, battImg.width,  battImg.height,  0, 0);
@@ -764,7 +798,9 @@ int main_cpp(void)
     /*
      * shift alert
      */
-    static int rpm_mode = -1;
+    static int rpm_mode = -1; // 0 - no alert, 1 - early warning, 2 - critical
+    static int toggle_mode = 0;
+    static int toggleTime_last = 0;
     if(rpm <  RPM_ALERT_INIT)
     {
       if(rpm_mode!=0)
@@ -773,7 +809,7 @@ int main_cpp(void)
         HAL_TIM_Base_Stop_DMA(&htim1);
       }
     }
-    else if (rpm>RPM_ALERT_INIT && rpm<RPM_ALERT_FINAL)
+    else if (rpm>RPM_ALERT_INIT && rpm<RPM_ALERT_FINAL && rpm_mode<=1 )
     {
       if(rpm_mode!=1)
       {
@@ -785,8 +821,6 @@ int main_cpp(void)
     }
     else
     {
-      static int toggle_mode = 0;
-      static int toggleTime_last = 0;
       if(rpm_mode!=2)
       {
         toggle_mode = 0;
@@ -810,6 +844,31 @@ int main_cpp(void)
       {
         toggle_mode = 0;
         toggleTime_last = HAL_GetTick ();
+      }
+    }
+
+
+    /*
+     * control the screen boards rpm alert pins based on the toggle mode
+     * for the rpm section above.
+     *
+     * this pins will toggle at the same rate the the oboard speaker toggles.
+     * i.e. it goes solid for the first alert, then rapidly beeps for the critical alert.
+     */
+    if( rpm_mode==1 || (toggle_mode==1 && rpm_mode==2) )
+    {
+      for(int i=11; i<=14; i++)
+      {
+        if(!ioexp_speedo.getOutputState(i) && !i2cPendingIrq[1] )
+        ioexp_speedo.set_IT(i,1);
+      }
+    }
+    else
+    {
+      for(int i=11; i<=14; i++)
+      {
+        if(ioexp_speedo.getOutputState(i) && !i2cPendingIrq[1] )
+          ioexp_speedo.set_IT(i,0);
       }
     }
 
@@ -1075,17 +1134,11 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
   if(hi2c->Instance==hi2c3.Instance)
   {
-    // this is the screen io expander
-    bulbReadWaiting = false;
-    return;
+    i2cPendingIrq[3] = false;
   }
   else if(hi2c->Instance==hi2c1.Instance)
   {
-    /*
-     * Acc/gyro, DAC, and onboard IO expander that we
-     * dont currently use.
-     */
-    do_convert = true;
+    i2cPendingIrq[1] = false;
   }
 }
 
