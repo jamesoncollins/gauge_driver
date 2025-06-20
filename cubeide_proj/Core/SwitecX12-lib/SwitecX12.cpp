@@ -98,7 +98,7 @@ void SwitecX12::stepNow (int dir)
 {
   // the chip is actually active-high = CW as the pin is labeled CW-/CCW
   // but its flipped here becuase the schematic is flipped
-  HAL_GPIO_WritePin (portDir, pinDir, (dir > 0) && !reverseDir ? LOW : HIGH);
+  HAL_GPIO_WritePin (portDir, pinDir, (dir > 0) && !reverseDir ? HIGH : LOW);
   HAL_GPIO_WritePin (portStep, pinStep, HIGH);
   delay (stepPulseTicks);
   HAL_GPIO_WritePin (portStep, pinStep, LOW);
@@ -109,7 +109,7 @@ void SwitecX12::step (int dir)
 {
   // the chip is actually active-high = CW as the pin is labeled CW-/CCW
   // but its flipped here becuase the schematic is flipped
-  HAL_GPIO_WritePin (portDir, pinDir, (dir > 0) && !reverseDir ? LOW : HIGH);
+  HAL_GPIO_WritePin (portDir, pinDir, (dir > 0) && !reverseDir ? HIGH : LOW);
   HAL_GPIO_WritePin (portStep, pinStep, HIGH);
   steppedAt =  elapsed_us ();
   inStep = true;
