@@ -26,6 +26,17 @@ int PI4IOE5V6416::init( uint16_t pullup_mask, uint16_t input_mask)
             2,          // data read len
             1000);
 
+  // set the output register to all zeros.  it defaults to 1.
+  // this will only affect pins set to be outputs
+  buffer = 0x0000;
+  status |= HAL_I2C_Mem_Write(
+            i2cdev,
+            ADDR,
+            0x02, 1,
+            (uint8_t*)&buffer,
+            2,
+            1000);
+
   // configure pin direction
   buffer = input_mask;
   status |= HAL_I2C_Mem_Write(
@@ -103,8 +114,6 @@ int PI4IOE5V6416::set(int pin, int value)
 
 int PI4IOE5V6416::get_IT(uint16_t *user_buffer)
 {
-  status = 0;
-//  *user_buffer = 0x0000;
   status = 0;
   status |= HAL_I2C_Mem_Read_IT(
             i2cdev,

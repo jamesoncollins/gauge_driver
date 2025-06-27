@@ -55,6 +55,10 @@ volatile static float rpm, speed;
  * one per i2c channel
  * used to flag if someone is waiting for an RX interrupt.
  * These should only be set 'true' by this thread (no interrupts).
+ *
+ * i2c1 == speedo board stuff (i.e. acceleromter, and an io expander)
+ * i2c2 == nothing
+ * i2c3 == display board (i.e. io expander, and the oled psu)
  */
 volatile bool i2cPendingIrq[4] = {0,0,0,0};
 
@@ -697,7 +701,7 @@ int main_cpp(void)
           }
 
           if( !(bulbVals&battMask) ) // voltage threshold
-            gdispImageDraw(&battImg,  145,  210, battImg.width,  battImg.height,  0, 0);
+            gdispImageDraw(&battImg,  145,  205, battImg.width,  battImg.height,  0, 0);
           if( !(bulbVals&brakeMask) ) // car pulls down
             gdispFillString(120, 233, "BRAKE", font20, GFX_RED, GFX_BLACK);
            //gdispImageDraw(&brakeImg, 100,  230, brakeImg.width, brakeImg.height, 0, 0);
@@ -849,7 +853,7 @@ int main_cpp(void)
 
 
     /*
-     * control the screen boards rpm alert pins based on the toggle mode
+     * control the speedo boards rpm alert pins based on the toggle mode
      * for the rpm section above.
      *
      * this pins will toggle at the same rate the the oboard speaker toggles.
@@ -860,7 +864,7 @@ int main_cpp(void)
       for(int i=11; i<=14; i++)
       {
         if(!ioexp_speedo.getOutputState(i) && !i2cPendingIrq[1] )
-        ioexp_speedo.set_IT(i,1);
+          ioexp_speedo.set_IT(i,1);
       }
     }
     else
@@ -1197,7 +1201,8 @@ volatile static float ticks[2] = {0,0};
 volatile static uint32_t rejects[2];
 volatile static uint32_t TIM2_OVC[2] = {0,0};
 volatile static uint32_t speed_tick_count = 0;
-static iir_ma_state_t filter_state[2] = {{0.3,0}, {0.3,0}};
+static iir_ma_state_t filter_state[2] = {{0.25,0}, {0.25,0}};
+static const float outlier_reject_ratio = 10.;
 
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 {
@@ -1216,9 +1221,9 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
     TIM2_OVC[ch] = 0;
 
     /*
-     * reject outliers that are more than X as long as the last tick
+     * reject outliers that are more than X as long, or short, as the last tick
      */
-    if( tmp>10*ticks_raw[ch] )
+    if( tmp > outlier_reject_ratio*ticks_raw[ch] || tmp < (1.-outlier_reject_ratio)*ticks_raw[ch] )
     {
       ticks[ch] = ticks[ch];
       rejects[ch]++;
