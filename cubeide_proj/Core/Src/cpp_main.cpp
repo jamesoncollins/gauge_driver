@@ -63,11 +63,11 @@ volatile static float rpm, speed;
 volatile bool i2cPendingIrq[4] = {0,0,0,0};
 
 volatile static bool bulbReadWaiting = false;
-static const uint16_t lampMask         = 1<<7;
-static const uint16_t beamMask         = 1<<5;
-static const uint16_t psMask           = 1<<1;
-static const uint16_t battMask         = 1<<0;
-static const uint16_t brakeMask        = 1<<3;
+static const uint16_t lampMask         = 1<<2;
+static const uint16_t beamMask         = 1<<3;
+static const uint16_t psMask           = 1<<0;
+static const uint16_t battMask         = 1<<7;
+static const uint16_t brakeMask        = 1<<1;
 
 // flags used by accelerometer in IT mode
 volatile static bool acc_int_rdy = false;       // we got exti saying data ready
@@ -216,6 +216,7 @@ int main_cpp(void)
   if(ioexp_screen.init(
         0x0000
         | brakeMask     // switch pulls bulb down, need to mimic bulb voltage
+        | battMask      // battery monitor goes through comparator with open-drain output
       )
     )
   {
