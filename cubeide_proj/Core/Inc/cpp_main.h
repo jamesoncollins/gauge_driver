@@ -23,9 +23,20 @@ HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const u
 #define SAMPLE_TIME_MS_DRAW     (1000/TARGET_FPS) // it takes 60ms to refresh the screen
                                                    // with -O2 you can draw in about 10.
                                                    // so 70ms seems to be ablout the best you can do here
-//#define PRINT_TO_USB
 //#define SWEEP_GAUGES  // sweep needles forever
 //#define SIM_GAUGES       // generate simulated rpm and mph
+
+
+/*
+ * USB-based diagnostics
+ *
+ * Print to USB: what it sounds like, prints text to the  USB port
+ * USB_DISPLAY: sends the display buffer over USB, use the script in ./python to view it.
+ *
+ * Note, you can use both of these at the same time.
+ */
+//#define PRINT_TO_USB
+//#define USB_DISPLAY
 
 const int RPM_ALERT_INIT = 5500; // soft alert threshold
 const int RPM_ALERT_FINAL = 6700; // hard threshold (i.e. red screen, constant buzz)

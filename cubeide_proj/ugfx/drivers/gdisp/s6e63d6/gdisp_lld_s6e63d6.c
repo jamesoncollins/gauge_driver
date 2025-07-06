@@ -7,6 +7,9 @@
 
 #include "gfx.h"
 
+#include "main.h"
+#include "cpp_main.h"
+
 #if GFX_USE_GDISP
 
 #define GDISP_DRIVER_VMT			GDISPVMT_s6e63d6

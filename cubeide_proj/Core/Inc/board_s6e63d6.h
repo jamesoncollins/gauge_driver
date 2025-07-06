@@ -341,6 +341,33 @@ static GFXINLINE void write_data (GDisplay *g, uint8_t *data, unsigned int lengt
   (void) g;
   busy = true;
 
+
+#ifdef USB_DISPLAY
+  length = length + 2;
+  data = data -2;
+  if(length != 240*255*2 || !check_pending_xfer())
+  {
+
+  }
+  else
+  {
+	  const int CHUNK_SIZE = 64;
+	  const uint8_t *ptr = (const uint8_t*)data;
+
+	  for (uint32_t offset = 0; offset < length; offset += CHUNK_SIZE) {
+		  uint32_t len = (length - offset > CHUNK_SIZE) ? CHUNK_SIZE : (length - offset);
+
+		  while (CDC_Transmit_FS(ptr + offset, len) != 0) {
+			  // Wait until USB endpoint is free
+		  }
+	  }
+  }
+
+  length = length - 2;
+  data = data + 2;
+#endif
+
+
   /*
    * dont spinlock in a function that gets called from an interrupt
    */
@@ -357,7 +384,6 @@ static GFXINLINE void write_data (GDisplay *g, uint8_t *data, unsigned int lengt
   data_ptr = data + xfer_len;
   txPending = true;
   HAL_SPI_Transmit_DMA (&SPIDEV, data, xfer_len);
-
 }
 
 void HAL_SPI_TxCpltCallback (SPI_HandleTypeDef *hspi)
