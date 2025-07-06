@@ -206,6 +206,9 @@ int main(void)
 
   /* USER CODE BEGIN Init */
 
+  // allow BLE and USB to coexist
+  //https://community.st.com/t5/stm32-mcus-wireless/enabeling-usb-and-ble-on-stm32wb55/td-p/607928
+  LL_HSEM_1StepLock(HSEM, CFG_HW_CLK48_CONFIG_SEMID);
   /*
    * uncomment this code to reset the backup domain,
    * which ive had get locked up becuase of CSS.
@@ -232,7 +235,6 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_I2C1_Init();
-  MX_USB_Device_Init();
   MX_TIM2_Init();
   MX_TIM16_Init();
   MX_SPI2_Init();
@@ -242,6 +244,7 @@ int main(void)
   MX_TIM17_Init();
   MX_SPI1_Init();
   MX_TIM1_Init();
+  MX_USB_Device_Init();
   MX_RF_Init();
   /* USER CODE BEGIN 2 */
 
