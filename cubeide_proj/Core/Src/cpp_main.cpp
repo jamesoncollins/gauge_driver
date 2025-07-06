@@ -1,4 +1,6 @@
 
+#include <array>
+
 #include "main.h"
 #include "cpp_main.h"
 #include "usb_device.h"
@@ -9,11 +11,11 @@ extern "C" {
 #include "custom_stm.h"
 #include "../MCP4725-lib/MCP4725.h"
 #include "../BMI088-lib/BMI088.h"
-#include "filters.h"
 //#include "board_s6e63d6.h" // cant include this
 extern bool bus_busy();
 extern void setAutoClear(bool);
 }
+#include "filters.h"
 #include "../SwitecX12-lib/SwitecX12.hpp"
 #include "utils.h"
 #include "gfx.h"
@@ -63,6 +65,7 @@ volatile static float rpm, speed;
 volatile bool i2cPendingIrq[4] = {0,0,0,0};
 
 volatile static bool bulbReadWaiting = false;
+static const bool force_all_lamps = true;
 static const uint16_t lampMask         = 1<<2;
 static const uint16_t beamMask         = 1<<3;
 static const uint16_t psMask           = 1<<0;
@@ -304,7 +307,7 @@ int main_cpp(void)
   if(!cleanPwr)
   {
     gdispClear(GFX_BLACK);
-    gdispFillString((screenWidth>>1)-70, (screenHeight>>1), "RESET", fontLCD, GFX_AMBER, GFX_BLACK);
+    gdispFillString((screenWidth>>1)-77, (screenHeight>>1), "RESET", fontLCD, GFX_AMBER, GFX_BLACK);
     gdispFlush();
     stepDown = X27_STEPS;
   }
@@ -701,19 +704,19 @@ int main_cpp(void)
             bulbReadWaiting = false;
           }
 
-          if( !(bulbVals&battMask) ) // voltage threshold
-            gdispImageDraw(&battImg,  145,  205, battImg.width,  battImg.height,  0, 0);
-          if( !(bulbVals&brakeMask) ) // car pulls down
+          if( !(bulbVals&battMask) || force_all_lamps ) // voltage threshold
+            gdispImageDraw(&battImg,  140,  200, battImg.width,  battImg.height,  0, 0);
+          if( !(bulbVals&brakeMask) || force_all_lamps ) // car pulls down
             gdispFillString(120, 233, "BRAKE", font20, GFX_RED, GFX_BLACK);
            //gdispImageDraw(&brakeImg, 100,  230, brakeImg.width, brakeImg.height, 0, 0);
-          if(  (bulbVals&psMask) ) // car pulls HIGH
-            gdispFillString(145, 215, "4WS", font20, GFX_YELLOW, GFX_BLACK);
-          if (bulbVals&lampMask )
+          if(  (bulbVals&psMask) || force_all_lamps ) // car pulls HIGH
+            gdispFillString(175, 205, "4WS", font20, GFX_YELLOW, GFX_BLACK);
+          if (bulbVals&lampMask || force_all_lamps )
           {
             // headlights are on
             GFX_AMBER = GFX_AMBER_SAE;
             setColors(GFX_AMBER,GFX_RED,GFX_BLACK);
-            if( !(bulbVals&beamMask) )
+            if( !(bulbVals&beamMask) || force_all_lamps )
             {
               // high beam on
               gdispImageDraw(&beamImg, 190,  223, beamImg.width,  beamImg.height,  0, 0);
@@ -1197,13 +1200,14 @@ const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
 volatile static uint8_t state[2] = {IDLE, IDLE};
 volatile static uint32_t T1[2] = {0,0};
 volatile static uint32_t T2[2] = {0,0};
-volatile static float ticks_raw[2] = {1e9,1e9};
 volatile static float ticks[2] = {0,0};
 volatile static uint32_t rejects[2];
 volatile static uint32_t TIM2_OVC[2] = {0,0};
 volatile static uint32_t speed_tick_count = 0;
-static iir_ma_state_t filter_state[2] = {{0.25,0}, {0.25,0}};
-static const float outlier_reject_ratio = 10.;
+static std::array<SMA<8>, 2> sma = {
+    SMA<8>(0.5f, 0.125f),
+    SMA<8>(0.5f, 0.125f),
+};
 
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 {
@@ -1220,20 +1224,7 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
     float tmp = (T2[ch] + (TIM2_OVC[ch] * TIM2_MAX_CNT)) - T1[ch];
     state[ch] = IDLE;
     TIM2_OVC[ch] = 0;
-
-    /*
-     * reject outliers that are more than X as long, or short, as the last tick
-     */
-    if( tmp > outlier_reject_ratio*ticks_raw[ch] || tmp < (1.-outlier_reject_ratio)*ticks_raw[ch] )
-    {
-      ticks[ch] = ticks[ch];
-      rejects[ch]++;
-    }
-    else
-    {
-      ticks[ch] = iir_ma( &filter_state[ch], tmp );
-      ticks_raw[ch] = ticks[ch];
-    }
+    ticks[ch] = sma[ch].add(tmp);
   }
 
   /*
