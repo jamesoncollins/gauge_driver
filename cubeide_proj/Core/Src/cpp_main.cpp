@@ -65,7 +65,7 @@ volatile static float rpm, speed;
 volatile bool i2cPendingIrq[4] = {0,0,0,0};
 
 volatile static bool bulbReadWaiting = false;
-static const bool force_all_lamps = true;
+static const bool force_all_lamps = false;
 static const uint16_t lampMask         = 1<<2;
 static const uint16_t beamMask         = 1<<3;
 static const uint16_t psMask           = 1<<0;
