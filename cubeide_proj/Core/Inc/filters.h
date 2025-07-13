@@ -48,7 +48,7 @@ public:
         float limit = outlierThresholdRatio * fabsf(avg);
 
         if (deviationAbs > limit) {
-            if (clampOutliers) {
+            if (clampOutliers && avg>0) {
                 // Clamp outlier
                 if (value > avg + limit) value = avg + limit;
                 else if (value < avg - limit) value = avg - limit;
