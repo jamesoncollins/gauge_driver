@@ -26,11 +26,14 @@ class SMA {
     static_assert(WindowSize > 0, "WindowSize must be > 0");
 
 public:
-    SMA(float outlierThresholdRatio = 0.0f, float outlierScaleFactor = 1.0f)
+    SMA(float outlierThresholdRatio = 0.0f,
+        float outlierScaleFactor = 1.0f,
+        bool clampOutliers = false)
         : index(0), sum(0.0f),
           scale(1.0f / WindowSize),
           outlierThresholdRatio(outlierThresholdRatio),
           outlierScaleFactor(outlierScaleFactor),
+          clampOutliers(clampOutliers),
           previousAverage(0.0f)
     {
         for (size_t i = 0; i < WindowSize; ++i) {
@@ -41,12 +44,18 @@ public:
     float add(float value) {
         float avg = previousAverage;
 
-        float deviationAbs = std::fabs(value - avg);
-        float limit = outlierThresholdRatio * std::fabs(avg);
+        float deviationAbs = fabsf(value - avg);
+        float limit = outlierThresholdRatio * fabsf(avg);
 
-        float appliedScale = scale;
         if (deviationAbs > limit) {
-            appliedScale *= outlierScaleFactor;
+            if (clampOutliers) {
+                // Clamp outlier
+                if (value > avg + limit) value = avg + limit;
+                else if (value < avg - limit) value = avg - limit;
+            } else {
+                // Scale outlier influence directly
+                value = avg + (value - avg) * outlierScaleFactor;
+            }
         }
 
         // Remove oldest value
@@ -64,6 +73,7 @@ public:
         return result;
     }
 
+
 private:
     float buffer[WindowSize];
     size_t index;
@@ -72,8 +82,9 @@ private:
 
     const float outlierThresholdRatio;   // e.g. 0.5 = 50% deviation
     const float outlierScaleFactor;      // e.g. 0.25 = 25% influence if outlier
-
+    const bool clampOutliers;            // NEW: clamp instead of scale
     float previousAverage;
 };
+
 
 #endif /* INC_FILTER_H_ */

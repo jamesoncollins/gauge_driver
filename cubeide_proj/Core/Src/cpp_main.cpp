@@ -947,36 +947,68 @@ int main_cpp(void)
 
 
 
-int get_x12_ticks_speed( float speed )
+int get_x12_ticks_speed(float speed)
 {
-  const float MIN_MPH = 10;
-  const float ZERO_ANGLE = 3;    // degrees beyond the stopper to get to 0
-  const float MIN_MPH_ANGLE = 0; // degrees from zero to MIN_MPH
-  const float DEGREES_PER_MPH = 1.35;
+    constexpr float MIN_MPH = 10.0f;
+    constexpr float ZERO_ANGLE = 3.0f;    // degrees beyond the stopper to get to 0
+    constexpr float MIN_MPH_ANGLE = 0.0f; // degrees from zero to MIN_MPH
+    constexpr float DEGREES_PER_MPH = 1.35f;
+    constexpr float MICROSTEPS_PER_DEGREE = 12.0f;
 
-  if( speed <= 1 )
-    return ZERO_ANGLE * 12.;
-  else if( speed<=MIN_MPH )
-    return (MIN_MPH_ANGLE + ZERO_ANGLE) * 12.;
-  else
-    return ((speed-MIN_MPH) * DEGREES_PER_MPH + ZERO_ANGLE + MIN_MPH_ANGLE ) * 12.;
+    float angle;
+
+    if (speed <= 1.0f)
+    {
+        // Below 1 MPH, clamp to zero position
+        angle = ZERO_ANGLE;
+    }
+    else if (speed <= MIN_MPH)
+    {
+        // Between 1 and MIN_MPH, hold at the minimum angle
+        angle = ZERO_ANGLE + MIN_MPH_ANGLE;
+    }
+    else
+    {
+        // Map speed to angle linearly beyond MIN_MPH
+        angle = ZERO_ANGLE + MIN_MPH_ANGLE + (speed - MIN_MPH) * DEGREES_PER_MPH;
+    }
+
+    // Convert angle to microsteps and round
+    return static_cast<int>(angle * MICROSTEPS_PER_DEGREE + 0.5f);
 }
 
 
-int get_x12_ticks_rpm( float rpm )
-{
-  const float MIN_RPM = 500;
-  const float ZERO_ANGLE = 5;    // degrees beyond the stopper to get to 0
-  const float MIN_RPM_ANGLE = 0; // degrees from zero to MIN_RPM
-  const float DEGREES_PER_RPM = 22.1 / 1000.;
 
-  if( rpm <= 1 )
-    return ZERO_ANGLE * 12.;
-  else if( rpm<=MIN_RPM )
-    return (MIN_RPM_ANGLE + ZERO_ANGLE) * 12.;
-  else
-    return ((rpm-MIN_RPM) * DEGREES_PER_RPM + ZERO_ANGLE + MIN_RPM_ANGLE ) * 12.;
+int get_x12_ticks_rpm(float rpm)
+{
+    constexpr float MIN_RPM = 500.0f;
+    constexpr float ZERO_ANGLE = 5.0f;    // degrees beyond the stopper to get to 0
+    constexpr float MIN_RPM_ANGLE = 0.0f; // degrees from zero to MIN_RPM
+    constexpr float DEGREES_PER_RPM = 22.1f / 1000.0f;
+    constexpr float MICROSTEPS_PER_DEGREE = 12.0f;
+
+    float angle;
+
+    if (rpm <= 1.0f)
+    {
+        // Below 1 RPM, clamp to zero position
+        angle = ZERO_ANGLE;
+    }
+    else if (rpm <= MIN_RPM)
+    {
+        // Between 1 and MIN_RPM, hold at the minimum angle
+        angle = ZERO_ANGLE + MIN_RPM_ANGLE;
+    }
+    else
+    {
+        // Map rpm to angle linearly beyond MIN_RPM
+        angle = ZERO_ANGLE + MIN_RPM_ANGLE + (rpm - MIN_RPM) * DEGREES_PER_RPM;
+    }
+
+    // Convert angle to microsteps and round
+    return static_cast<int>(angle * MICROSTEPS_PER_DEGREE + 0.5f);
 }
+
 
 /**
  *
@@ -1208,8 +1240,8 @@ volatile static uint32_t rejects[2];
 volatile static uint32_t TIM2_OVC[2] = {0,0};
 volatile static uint32_t speed_tick_count = 0;
 static std::array<SMA<16>, 2> sma = {
-    SMA<16>(0.25f, 0.125f),
-    SMA<16>(0.25f, 0.125f),
+	SMA<16>(0.10f, 0.125f, true), // speed
+    SMA<16>(0.40f, 0.125f, true), //rpm
 };
 
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
