@@ -810,13 +810,58 @@ int main_cpp(void)
     tachX12.setPosition( get_x12_ticks_rpm(rpm) );
     speedX12.setPosition( get_x12_ticks_speed(speed) );
 #else
-    // Smooth raw RPM and speed values first
-    float smoothed_rpm = iir_ma(&ema_state_rpm, rpm);
-    float smoothed_speed = iir_ma(&ema_state_speed, speed);
+    static float last_rpm = 0.0f;
+    static uint32_t last_rpm_time = 0;
+    static float rpm_rate = 0.0f; // RPM change per ms
 
-    // Then convert to microsteps
+    static float last_speed = 0.0f;
+    static uint32_t last_speed_time = 0;
+    static float speed_rate = 0.0f; // MPH change per ms
+
+    uint32_t now = HAL_GetTick();
+    uint32_t dt_rpm = now - last_rpm_time;
+    uint32_t dt_speed = now - last_speed_time;
+
+    // --- Check for new RPM tick ---
+    if (rpm != last_rpm) {
+        if (dt_rpm > 0) {
+            rpm_rate = (rpm - last_rpm) / (float)dt_rpm; // RPM change per ms
+        } else {
+            rpm_rate = 0.0f;
+        }
+        last_rpm = rpm;
+        last_rpm_time = now;
+    }
+
+    // --- Extrapolate RPM ---
+    float extrapolated_rpm = last_rpm + rpm_rate * dt_rpm;
+
+    // Smooth extrapolated RPM
+    // TODO: Is this still necessary, or is the extrapolation enough?
+    float smoothed_rpm = iir_ma(&ema_state_rpm, extrapolated_rpm);
+
+    // --- Check for new Speed tick ---
+    if (speed != last_speed) {
+        if (dt_speed > 0) {
+            speed_rate = (speed - last_speed) / (float)dt_speed; // MPH change per ms
+        } else {
+            speed_rate = 0.0f;
+        }
+        last_speed = speed;
+        last_speed_time = now;
+    }
+
+    // --- Extrapolate Speed ---
+    float extrapolated_speed = last_speed + speed_rate * dt_speed;
+
+    // Smooth extrapolated Speed
+    // TODO: Is this still necessary, or is the extrapolation enough?
+    float smoothed_speed = iir_ma(&ema_state_speed, extrapolated_speed);
+
+    // Update needle targets
     tachX12.setPosition(get_x12_ticks_rpm(smoothed_rpm));
     speedX12.setPosition(get_x12_ticks_speed(smoothed_speed));
+
 #endif
     odoX12.setPosition(odo_ticks);
 
