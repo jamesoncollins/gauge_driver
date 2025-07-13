@@ -1204,9 +1204,9 @@ volatile static float ticks[2] = {0,0};
 volatile static uint32_t rejects[2];
 volatile static uint32_t TIM2_OVC[2] = {0,0};
 volatile static uint32_t speed_tick_count = 0;
-static std::array<SMA<8>, 2> sma = {
-    SMA<8>(0.5f, 0.125f),
-    SMA<8>(0.5f, 0.125f),
+static std::array<SMA<16>, 2> sma = {
+    SMA<16>(0.25f, 0.125f),
+    SMA<16>(0.25f, 0.125f),
 };
 
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
