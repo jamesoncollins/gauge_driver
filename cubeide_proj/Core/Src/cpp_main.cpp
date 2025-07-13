@@ -290,8 +290,7 @@ int main_cpp(void)
       STEP_ODO_Pin,
       DIR_ODO_GPIO_Port,
       DIR_ODO_Pin,
-      accelTable, 5,
-      true      // reverse direction for odometer ticks
+      accelTable, 5
       );
   odoX12.currentStep = 0;
   odoX12.targetStep = 0;
@@ -704,8 +703,12 @@ int main_cpp(void)
             bulbReadWaiting = false;
           }
 
-          if( !(bulbVals&battMask) || force_all_lamps ) // voltage threshold
+          if( !(bulbVals&battMask) || force_all_lamps )
+          {// voltage threshold
             gdispImageDraw(&battImg,  140,  200, battImg.width,  battImg.height,  0, 0);
+            //snprintf (logBuf, bufLen, "%s", ecu.getValString(MUTII::ECU_PARAM_VBAT));
+            //gdispFillString(140, 185, logBuf, font20, GFX_AMBER, GFX_BLACK);
+          }
           if( !(bulbVals&brakeMask) || force_all_lamps ) // car pulls down
             gdispFillString(120, 233, "BRAKE", font20, GFX_RED, GFX_BLACK);
            //gdispImageDraw(&brakeImg, 100,  230, brakeImg.width, brakeImg.height, 0, 0);
