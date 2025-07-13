@@ -295,6 +295,16 @@ int main_cpp(void)
   odoX12.currentStep = 0;
   odoX12.targetStep = 0;
 
+  /*
+   * SMA filters for RPM and Speed.
+   * Note that the frequency measurement itself has a long SMA
+   * applied as well.  This one will be shorted and is basically just
+   * performing interpolation at low speed/rpm where tick updates are
+   * infrequent.
+   */
+  iir_ma_state_t ema_state_rpm = { .alpha = 0.3, .yz1 = 0 };
+  iir_ma_state_t ema_state_speed = { .alpha = 0.3, .yz1 = 0 };
+
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );
   HAL_Delay(10);
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_SET );
@@ -800,8 +810,13 @@ int main_cpp(void)
     tachX12.setPosition( get_x12_ticks_rpm(rpm) );
     speedX12.setPosition( get_x12_ticks_speed(speed) );
 #else
-    tachX12.setPosition( get_x12_ticks_rpm(rpm) );
-    speedX12.setPosition( get_x12_ticks_speed(speed) );
+    // Smooth raw RPM and speed values first
+    float smoothed_rpm = iir_ma(&ema_state_rpm, rpm);
+    float smoothed_speed = iir_ma(&ema_state_speed, speed);
+
+    // Then convert to microsteps
+    tachX12.setPosition(get_x12_ticks_rpm(smoothed_rpm));
+    speedX12.setPosition(get_x12_ticks_speed(smoothed_speed));
 #endif
     odoX12.setPosition(odo_ticks);
 
@@ -1239,9 +1254,9 @@ volatile static float ticks[2] = {0,0};
 volatile static uint32_t rejects[2];
 volatile static uint32_t TIM2_OVC[2] = {0,0};
 volatile static uint32_t speed_tick_count = 0;
-static std::array<SMA<16>, 2> sma = {
-	SMA<16>(0.10f, 0.125f, true), // speed
-    SMA<16>(0.40f, 0.125f, true), //rpm
+static std::array<SMA<8>, 2> sma = {
+	SMA<8>(0.10f, 0.125f, true), // speed
+    SMA<8>(0.40f, 0.125f, true), //rpm
 };
 
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
@@ -1299,14 +1314,14 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
   {
     TIM2_OVC[0]++;
     TIM2_OVC[1]++;
-    if(TIM2_OVC[0]*OVERFLOW_MS > 2000)
+    if(TIM2_OVC[0]*OVERFLOW_MS > 1200)
     {
       TIM2_OVC[0] = 0;
       ticks[0] = 0;
       state[0] = IDLE;
       resetCnt1++;
     }
-    if(TIM2_OVC[1]*OVERFLOW_MS > 2000)
+    if(TIM2_OVC[1]*OVERFLOW_MS > 1200)
     {
       TIM2_OVC[1] = 0;
       ticks[1] = 0;
