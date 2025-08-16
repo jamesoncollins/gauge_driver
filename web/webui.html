@@ -5,103 +5,166 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Gauge BLE Web UI</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;margin:0;padding:24px;line-height:1.4}
-    h1{margin:0 0 16px;font-size:20px}
-    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-    button{padding:8px 12px;border-radius:10px;border:1px solid #ccc;background:#fff;cursor:pointer}
-    button.primary{background:#0a7cff;color:#fff;border-color:#0a7cff}
-    button:disabled{opacity:.5;cursor:not-allowed}
-    .card{border:1px solid #ddd;border-radius:12px;padding:12px;margin:12px 0}
-    .grid{display:grid;grid-template-columns:repeat(2,minmax(200px,1fr));gap:8px}
-    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
-    label{font-size:12px;color:#333}
-    input[type="text"], textarea{width:100%;padding:8px;border:1px solid #ccc;border-radius:8px}
-    .status{white-space:pre-wrap}
+    :root{
+      --bg:#0b0e14;        /* base */
+      --bg-2:#111620;      /* raised */
+      --bg-3:#0f1420;      /* sunken */
+      --fg:#e6edf3;        /* text */
+      --muted:#a0a8b0;     /* secondary text */
+      --acc:#4ea1ff;       /* accent */
+      --acc-2:#7ee787;     /* ok */
+      --warn:#ffb86b;      /* warn */
+      --err:#ff6b6b;       /* error */
+      --line:#1f2633;      /* borders */
+      --pill:#182235;      /* chips */
+      --radius:14px;
+      --pad:14px;
+      --shadow:0 1px 0 rgba(255,255,255,.02) inset, 0 8px 24px rgba(0,0,0,.35);
+      --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+      --sans: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;
+    }
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.35}
+    header{position:sticky;top:0;background:linear-gradient(180deg,rgba(11,14,20,.95),rgba(11,14,20,.80));backdrop-filter:saturate(160%) blur(6px);z-index:10;border-bottom:1px solid var(--line)}
+    .bar{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 16px}
+    .title{font-weight:700;letter-spacing:.2px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .pill{display:inline-flex;align-items:center;gap:6px;background:var(--pill);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:12px;color:var(--muted)}
+    main{padding:18px;max-width:1100px;margin:0 auto}
+    .card{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
+    label{display:block;font-size:12px;color:var(--muted);margin:4px 0}
+    input[type="text"], textarea{width:100%;padding:10px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);border-radius:10px}
+    button{padding:9px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);cursor:pointer;transition:.15s ease;box-shadow:0 0 0 rgba(0,0,0,0)}
+    button:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.35)}
+    button.primary{background:var(--acc);border-color:transparent;color:#041224}
+    button.ghost{background:transparent}
+    button:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
     table{border-collapse:collapse;width:100%}
-    td,th{border:1px solid #eee;padding:6px;text-align:left}
-    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#eef;font-size:12px}
+    td,th{border-bottom:1px solid var(--line);padding:8px;text-align:left;font-size:13px}
+    th{color:var(--muted);font-weight:600;background:rgba(255,255,255,.02)}
+    .mono{font-family:var(--mono)}
+
+    /* Accordion (roll-up sections) */
+    details.section{margin:14px 0;border-radius:var(--radius);overflow:hidden}
+    details.section>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);user-select:none}
+    details.section>summary:hover{background:#121a29}
+    details.section[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
+    .summary-title{font-weight:600}
+    .chev{transition:transform .18s ease;color:var(--muted)}
+    details[open] .chev{transform:rotate(90deg)}
+    .panel{padding:14px;border:1px solid var(--line);border-top:none;background:var(--bg-3)}
+
+    /* Status console */
+    #status{max-height:200px;overflow:auto;padding:12px;margin:0;background:#0a0f19;border-top:1px solid var(--line)}
+
+    footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
+    .spacer{flex:1}
   </style>
 </head>
 <body>
-  <h1>Gauge BLE Web UI</h1>
-  <div class="row">
-    <button id="btnConnect" class="primary">Connect</button>
-    <button id="btnDisconnect" disabled>Disconnect</button>
-    <span id="connState" class="pill">Disconnected</span>
-  </div>
-
-  <div class="card">
-    <div class="grid">
-      <div>
-        <label>Device filter (name prefix)</label>
-        <input id="namePrefix" type="text" placeholder="Gauge" />
+  <header>
+    <div class="bar">
+      <div class="row">
+        <div class="title">Gauge BLE Web UI</div>
+        <span id="connState" class="pill">● Disconnected</span>
       </div>
-      <div>
-        <label>Custom Service UUID</label>
-        <input id="svcUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-      </div>
-      <div>
-        <label>Commands Char UUID (write)</label>
-        <input id="cmdUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-      </div>
-      <div>
-        <label>BTBuffer Char UUID (notify)</label>
-        <input id="bufUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-      </div>
-      <div>
-        <label>OTA Control Char UUID (write)</label>
-        <input id="otaUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+      <div class="row">
+        <button id="btnConnect" class="primary">Connect</button>
+        <button id="btnDisconnect" class="ghost" disabled>Disconnect</button>
       </div>
     </div>
-  </div>
+  </header>
 
-  <div class="card">
-    <strong>Commands</strong>
-    <div class="row" style="margin-top:8px">
-      <button data-cmd="LEFT">◀ Left</button>
-      <button data-cmd="RIGHT">▶ Right</button>
-      <button data-cmd="UP">▲ Up</button>
-      <button data-cmd="DOWN">▼ Down</button>
-      <button data-cmd="ENTER">⏎ Enter</button>
-      <button data-cmd="BACK">↩ Back</button>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
-      <button id="btnSendRaw">Send Raw</button>
-    </div>
-  </div>
+  <main>
+    <details class="section" open>
+      <summary><span class="chev">▶</span><span class="summary-title">Connection & UUIDs</span><span class="spacer"></span><span class="pill">Setup</span></summary>
+      <div class="panel">
+        <div class="grid">
+          <div>
+            <label>Device filter (name prefix)</label>
+            <input id="namePrefix" type="text" placeholder="Gauge" />
+          </div>
+          <div>
+            <label>Custom Service UUID</label>
+            <input id="svcUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          </div>
+          <div>
+            <label>Commands Char UUID (write)</label>
+            <input id="cmdUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          </div>
+          <div>
+            <label>BTBuffer Char UUID (notify)</label>
+            <input id="bufUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          </div>
+          <div>
+            <label>OTA Control Char UUID (write)</label>
+            <input id="otaUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button id="btnSaveCfg">Save</button>
+          <button id="btnLoadCfg" class="ghost">Load</button>
+          <button id="btnClearCfg" class="ghost">Clear</button>
+        </div>
+      </div>
+    </details>
 
-  <div class="card">
-    <strong>ECU Stream (BTBuffer)</strong>
-    <div class="row" style="margin:8px 0">
-      <button id="btnStartLog">Start Log</button>
-      <button id="btnStopLog" disabled>Stop Log</button>
-      <button id="btnDownload" disabled>Download CSV</button>
-    </div>
-    <table>
-      <thead><tr><th>Time</th><th>Payload (hex)</th><th>Parsed</th></tr></thead>
-      <tbody id="tblBody"></tbody>
-    </table>
-  </div>
+    <details class="section" open>
+      <summary><span class="chev">▶</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
+      <div class="panel">
+        <div class="row" style="margin-bottom:10px">
+          <button data-cmd="LEFT">◀ Left</button>
+          <button data-cmd="RIGHT">▶ Right</button>
+          <button data-cmd="UP">▲ Up</button>
+          <button data-cmd="DOWN">▼ Down</button>
+          <button data-cmd="ENTER">⏎ Enter</button>
+          <button data-cmd="BACK">↩ Back</button>
+        </div>
+        <div class="row">
+          <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
+          <button id="btnSendRaw">Send Raw</button>
+        </div>
+      </div>
+    </details>
 
-  <div class="card">
-    <strong>OTA</strong>
-    <div class="row" style="margin-top:8px">
-      <button id="btnOta">Reboot to OTA</button>
-    </div>
-  </div>
+    <details class="section" open>
+      <summary><span class="chev">▶</span><span class="summary-title">ECU Stream (BTBuffer)</span><span class="spacer"></span><span class="pill">Notify</span></summary>
+      <div class="panel">
+        <div class="row" style="margin-bottom:10px">
+          <button id="btnStartLog">Start Log</button>
+          <button id="btnStopLog" disabled>Stop Log</button>
+          <button id="btnDownload" disabled>Download CSV</button>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th style="width:180px">Time</th><th>Payload (hex)</th><th>Parsed</th></tr></thead>
+            <tbody id="tblBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </details>
 
-  <div class="card">
-    <strong>Status</strong>
-    <pre id="status" class="status mono"></pre>
-  </div>
+    <details class="section">
+      <summary><span class="chev">▶</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot</span></summary>
+      <div class="panel">
+        <button id="btnOta" style="border-color:var(--warn)">Reboot to OTA</button>
+      </div>
+    </details>
+
+    <details class="section" open>
+      <summary><span class="chev">▶</span><span class="summary-title">Status</span><span class="spacer"></span><span class="pill">Debug</span></summary>
+      <div class="panel">
+        <pre id="status" class="mono"></pre>
+      </div>
+    </details>
+
+    <footer>Tip: this UI works best on HTTPS or <span class="mono">localhost</span>.</footer>
+  </main>
 
 <script>
 (function(){
-  /*** —— PROJECT-SPECIFIC PLACEHOLDERS ——
-   * Fill these with your actual 128-bit UUIDs from custom_app/custom_stm.
-   * If your project uses 16-bit UUIDs within a base UUID, keep the full 128-bit strings here.
-   */
+  // —— Defaults (fill with your UUIDs later) ——
   const Defaults = {
     namePrefix: 'Gauge',
     SERVICE_UUID: '',
@@ -110,55 +173,46 @@
     OTA_CHAR_UUID: ''    // write to trigger reboot to OTA FW
   };
 
-  // Mapping for the command buttons → bytes to send.
-  // Update these values to match your firmware's expected command opcodes.
   const CommandMap = {
-    LEFT:  [0x10],
-    RIGHT: [0x11],
-    UP:    [0x12],
-    DOWN:  [0x13],
-    ENTER: [0x14],
-    BACK:  [0x15]
+    LEFT:  [0x10], RIGHT: [0x11], UP: [0x12], DOWN: [0x13], ENTER:[0x14], BACK:[0x15]
   };
 
-  // Value to write to OTA characteristic to request reboot into alt image.
-  // Update per your firmware (e.g., [0xA5])
   const OTA_MAGIC = [0xA5];
 
-  // If your BTBuffer frames are length-prefixed, set this to true and adjust field sizes below.
+  // Frame settings
   const USE_LENGTH_PREFIX = true;
-  const LENGTH_BYTES = 2; // uint16 little-endian length of payload (excluding the length field)
+  const LENGTH_BYTES = 2; // uint16 LE
+  const DELIM = 0x0A; // for delimited mode if enabled
 
-  // If your frames are newline-delimited ASCII, set USE_LENGTH_PREFIX=false and DELIM as needed.
-  const DELIM = 0x0A; // '\n'
-
-  // Optional codec: convert a payload (Uint8Array) → parsed object for UI.
-  // Replace with real decoding (e.g., TLV → {rpm, speed, coolant})
-  function exampleDecode(payload){
-    // Placeholder: return length and first few bytes
-    return { len: payload.length, first: [...payload.slice(0, 4)] };
-  }
-
-  // ——— Helpers ———
-  const $ = sel => document.querySelector(sel);
-  function log(msg){
-    const el = $('#status');
-    el.textContent += (msg + '\n');
-    el.scrollTop = el.scrollHeight;
-  }
-  function setState(text){ $('#connState').textContent = text; }
+  // —— Helpers ——
+  const $ = s => document.querySelector(s);
+  function log(msg){ const el=$('#status'); el.textContent += msg+'
+'; el.scrollTop=el.scrollHeight; }
+  function setState(txt, ok){ $('#connState').textContent = (ok?'● ':'● ')+txt; }
   function hex(u8){ return [...u8].map(b=>b.toString(16).padStart(2,'0')).join(' '); }
-  function toBytes(hexStr){
-    const bytes=[];
-    hexStr.replace(/[^0-9a-fA-F]/g,'').replace(/(..)/g,(m,b)=>{bytes.push(parseInt(b,16));});
-    return new Uint8Array(bytes);
-  }
+  function toBytes(hexStr){ const bytes=[]; hexStr.replace(/[^0-9a-fA-F]/g,'').replace(/(..)/g,(m,b)=>bytes.push(parseInt(b,16))); return new Uint8Array(bytes); }
   function le16(b0,b1){ return b0 | (b1<<8); }
+
+  // Persist inputs
+  const KEYS = ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'];
+  function saveCfg(){ const cfg={}; for(const k of KEYS){ cfg[k]=$('#'+k).value; } localStorage.setItem('gauge-ble-ui', JSON.stringify(cfg)); log('Config saved'); }
+  function loadCfg(){ const s=localStorage.getItem('gauge-ble-ui'); if(!s) return; const cfg=JSON.parse(s); for(const k of KEYS){ if(cfg[k]!==undefined) $('#'+k).value=cfg[k]; } log('Config loaded'); }
+  function clearCfg(){ localStorage.removeItem('gauge-ble-ui'); log('Config cleared'); }
+
+  // Restore defaults first-run
+  function applyDefaults(){
+    if(!localStorage.getItem('gauge-ble-ui')){
+      $('#namePrefix').value = Defaults.namePrefix;
+      $('#svcUuid').value = Defaults.SERVICE_UUID;
+      $('#cmdUuid').value = Defaults.CMD_CHAR_UUID;
+      $('#bufUuid').value = Defaults.BTBUF_CHAR_UUID;
+      $('#otaUuid').value = Defaults.OTA_CHAR_UUID;
+    } else { loadCfg(); }
+  }
 
   class Reassembler {
     constructor(){ this.buf = new Uint8Array(0); }
     push(chunk){
-      // concat
       const combined = new Uint8Array(this.buf.length + chunk.length);
       combined.set(this.buf,0); combined.set(chunk,this.buf.length);
       this.buf = combined;
@@ -172,93 +226,60 @@
           this.buf = this.buf.slice(LENGTH_BYTES+len);
         }
       } else {
-        let idx;
-        while((idx = this.buf.indexOf(DELIM)) !== -1){
-          const payload = this.buf.slice(0, idx); // delimiter removed
-          frames.push(payload);
-          this.buf = this.buf.slice(idx+1);
-        }
+        let idx; while((idx=this.buf.indexOf(DELIM))!==-1){ frames.push(this.buf.slice(0,idx)); this.buf = this.buf.slice(idx+1); }
       }
       return frames;
     }
     reset(){ this.buf = new Uint8Array(0); }
   }
 
-  // ——— BLE session ———
-  const state = {
-    device: null,
-    server: null,
-    svc: null,
-    chars: {cmd:null, buf:null, ota:null},
-    reasm: new Reassembler(),
-    logging: false,
-    logRows: []
-  };
+  function exampleDecode(payload){
+    // TODO: replace with real schema; placeholder shows first 4 bytes & length
+    return {len: payload.length, first: [...payload.slice(0,4)]};
+  }
+
+  const state = { device:null, server:null, svc:null, chars:{cmd:null,buf:null,ota:null}, reasm:new Reassembler(), logging:false, logRows:[] };
 
   async function connect(){
     $('#status').textContent='';
     setState('Requesting...');
     const namePrefix = $('#namePrefix').value || Defaults.namePrefix;
-
-    const options = {
-      filters: namePrefix ? [{ namePrefix }] : undefined,
-      optionalServices: []
-    };
+    const options = { filters: namePrefix ? [{namePrefix}] : undefined, optionalServices: [] };
     const svcUuid = $('#svcUuid').value || Defaults.SERVICE_UUID;
-    if(svcUuid){ options.optionalServices.push(svcUuid); }
+    if(svcUuid) options.optionalServices.push(svcUuid);
 
-    try {
+    try{
       const device = await navigator.bluetooth.requestDevice(options);
-      state.device = device;
-      device.addEventListener('gattserverdisconnected', onDisconnect);
+      state.device = device; device.addEventListener('gattserverdisconnected', onDisconnect);
       setState('Connecting...');
-
       state.server = await device.gatt.connect();
       log(`Connected to ${device.name || '(unnamed)'}`);
       setState('Discovering...');
 
-      if(!svcUuid){ throw new Error('Missing Service UUID'); }
+      if(!svcUuid) throw new Error('Missing Service UUID');
       state.svc = await state.server.getPrimaryService(svcUuid);
 
-      // Resolve characteristics
       const cmdUuid = $('#cmdUuid').value || Defaults.CMD_CHAR_UUID;
       const bufUuid = $('#bufUuid').value || Defaults.BTBUF_CHAR_UUID;
       const otaUuid = $('#otaUuid').value || Defaults.OTA_CHAR_UUID;
 
       if(cmdUuid) state.chars.cmd = await state.svc.getCharacteristic(cmdUuid);
-      if(bufUuid) state.chars.buf = await state.svc.getCharacteristic(bufUuid);
-      if(otaUuid) state.chars.ota = await state.svc.getCharacteristic(otaUuid);
-
-      if(state.chars.buf){
+      if(bufUuid){
+        state.chars.buf = await state.svc.getCharacteristic(bufUuid);
         await state.chars.buf.startNotifications();
         state.chars.buf.addEventListener('characteristicvaluechanged', onNotify);
       }
+      if(otaUuid) state.chars.ota = await state.svc.getCharacteristic(otaUuid);
 
-      $('#btnDisconnect').disabled = false;
-      $('#btnConnect').disabled = true;
-      setState('Connected');
-    } catch(err){
-      log('Connect error: '+err.message);
-      setState('Disconnected');
-    }
+      $('#btnDisconnect').disabled=false; $('#btnConnect').disabled=true; setState('Connected', true);
+    }catch(err){ log('Connect error: '+err.message); setState('Disconnected'); }
   }
 
-  async function disconnect(){
-    try{
-      if(state.device && state.device.gatt.connected){ state.device.gatt.disconnect(); }
-    }catch(e){}
-  }
-
-  function onDisconnect(){
-    log('Disconnected');
-    $('#btnDisconnect').disabled = true;
-    $('#btnConnect').disabled = false;
-    setState('Disconnected');
-  }
+  async function disconnect(){ try{ if(state.device?.gatt?.connected) state.device.gatt.disconnect(); }catch(e){} }
+  function onDisconnect(){ log('Disconnected'); $('#btnDisconnect').disabled=true; $('#btnConnect').disabled=false; setState('Disconnected'); }
 
   function onNotify(ev){
-    const dv = ev.target.value; // DataView
-    const chunk = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+    const dv = ev.target.value; const chunk = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
     const frames = state.reasm.push(chunk);
     for(const payload of frames){
       const t = new Date().toISOString();
@@ -268,67 +289,44 @@
     }
   }
 
-  function appendRow(t, u8, parsed){
-    const tr = document.createElement('tr');
-    const tdT = document.createElement('td'); tdT.textContent = t; tr.appendChild(tdT);
-    const tdH = document.createElement('td'); tdH.textContent = hex(u8); tr.appendChild(tdH);
-    const tdP = document.createElement('td'); tdP.textContent = JSON.stringify(parsed); tr.appendChild(tdP);
-    $('#tblBody').prepend(tr);
-    // cap rows
-    const maxRows = 200; const tbody = $('#tblBody');
-    while(tbody.rows.length > maxRows){ tbody.deleteRow(-1); }
+  function appendRow(t,u8,parsed){
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td class="mono">${t}</td><td class="mono">${hex(u8)}</td><td class="mono">${escapeHtml(JSON.stringify(parsed))}</td>`;
+    const tbody=$('#tblBody'); tbody.prepend(tr); while(tbody.rows.length>300) tbody.deleteRow(-1);
   }
 
+  function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+
   async function sendCommand(kind){
-    if(!state.chars.cmd){ return log('No command characteristic'); }
-    const bytes = CommandMap[kind];
-    if(!bytes){ return log('Unknown command '+kind); }
-    try{
-      await state.chars.cmd.writeValueWithoutResponse(new Uint8Array(bytes));
-      log('Sent '+kind+': '+bytes.map(b=>b.toString(16).padStart(2,'0')).join(' '));
-    }catch(err){
-      log('Send error: '+err.message);
-    }
+    if(!state.chars.cmd) return log('No command characteristic');
+    const bytes = CommandMap[kind]; if(!bytes) return log('Unknown command '+kind);
+    try{ await state.chars.cmd.writeValueWithoutResponse(new Uint8Array(bytes)); log('Sent '+kind+': '+bytes.map(b=>b.toString(16).padStart(2,'0')).join(' ')); }
+    catch(err){ log('Send error: '+err.message); }
   }
 
   async function sendRaw(){
-    if(!state.chars.cmd){ return log('No command characteristic'); }
-    const text = $('#rawHex').value.trim();
-    if(!text) return;
+    if(!state.chars.cmd) return log('No command characteristic');
+    const text=$('#rawHex').value.trim(); if(!text) return;
     try{
-      const buf = toBytes(text);
-      // Chunk at 20 bytes for safety
-      const CHUNK=20;
-      for(let i=0;i<buf.length;i+=CHUNK){
-        const slice = buf.slice(i, Math.min(i+CHUNK, buf.length));
-        await state.chars.cmd.writeValueWithoutResponse(slice);
-      }
+      const buf=toBytes(text); const CHUNK=20;
+      for(let i=0;i<buf.length;i+=CHUNK){ await state.chars.cmd.writeValueWithoutResponse(buf.slice(i,Math.min(i+CHUNK,buf.length))); }
       log('Sent RAW: '+text);
     }catch(err){ log('Raw send error: '+err.message); }
   }
 
-  async function doOta(){
-    if(!state.chars.ota){ return log('No OTA characteristic'); }
-    if(!confirm('Reboot device into OTA firmware?')) return;
-    try{
-      await state.chars.ota.writeValueWithoutResponse(new Uint8Array(OTA_MAGIC));
-      log('OTA reboot requested');
-    }catch(err){ log('OTA write error: '+err.message); }
-  }
+  async function doOta(){ if(!state.chars.ota) return log('No OTA characteristic'); if(!confirm('Reboot device into OTA firmware?')) return; try{ await state.chars.ota.writeValueWithoutResponse(new Uint8Array(OTA_MAGIC)); log('OTA reboot requested'); }catch(err){ log('OTA write error: '+err.message); } }
 
   function startLog(){ state.logging=true; state.logRows=[]; $('#btnDownload').disabled=true; $('#btnStartLog').disabled=true; $('#btnStopLog').disabled=false; }
   function stopLog(){ state.logging=false; $('#btnStopLog').disabled=true; $('#btnStartLog').disabled=false; if(state.logRows.length) $('#btnDownload').disabled=false; }
-  function download(){
-    const rows = [['time','payload_hex','parsed_json'], ...state.logRows];
-    const csv = rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], {type:'text/csv'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'ecu_log_'+Date.now()+'.csv'; a.click();
-    setTimeout(()=>URL.revokeObjectURL(url), 1000);
-  }
+  function download(){ const rows=[["time","payload_hex","parsed_json"],...state.logRows]; const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('
+'); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='ecu_log_'+Date.now()+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1e3); }
 
-  // ——— Wire up UI ———
+  // One-open-at-a-time accordion
+  document.querySelectorAll('details.section').forEach((d)=>{
+    d.addEventListener('toggle',()=>{ if(d.open){ document.querySelectorAll('details.section').forEach(x=>{ if(x!==d) x.open=false; }); }});
+  });
+
+  // UI wiring
   $('#btnConnect').addEventListener('click', connect);
   $('#btnDisconnect').addEventListener('click', disconnect);
   document.querySelectorAll('[data-cmd]').forEach(btn=> btn.addEventListener('click', ()=>sendCommand(btn.dataset.cmd)));
@@ -337,6 +335,11 @@
   $('#btnStartLog').addEventListener('click', startLog);
   $('#btnStopLog').addEventListener('click', stopLog);
   $('#btnDownload').addEventListener('click', download);
+  $('#btnSaveCfg').addEventListener('click', saveCfg);
+  $('#btnLoadCfg').addEventListener('click', loadCfg);
+  $('#btnClearCfg').addEventListener('click', clearCfg);
+
+  applyDefaults();
 })();
 </script>
 </body>
