@@ -64,7 +64,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
   <header>
     <div class="bar">
       <div class="row">
-        <div class="title">Gauge BLE Web UI</div>
+        <div class="title">Gauge BLE Web UI <span style=\"font-size:12px;color:var(--muted);margin-left:6px\">v0.4</span></div>
         <span id="connState" class="pill">● Disconnected</span>
       </div>
       <div class="row">
@@ -403,19 +403,4 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
     $('#btnStopLog').addEventListener('click', stopLog);
     $('#btnDownload').addEventListener('click', download);
     $('#btnSaveCfg').addEventListener('click', saveCfg);
-    $('#btnLoadCfg').addEventListener('click', loadCfg);
-    $('#btnClearCfg').addEventListener('click', clearCfg);
-    log('Event handlers attached');
-  } catch(e){ log('Failed to attach handlers: '+e); }
-
-  applyDefaults();
-  if(!('bluetooth' in navigator)){
-    log('Web Bluetooth not detected. Try Chrome/Edge on desktop or Chrome on Android.');
-  }
-  // Feature detect at startup
-  if(!('bluetooth' in navigator)){
-    log('Web Bluetooth not detected. Try Chrome/Edge on desktop or Chrome on Android.');
-  }
-})();
-</script></body>
-</html>
+    $('#btnLoadCfg').addEventListener('click', loadC
