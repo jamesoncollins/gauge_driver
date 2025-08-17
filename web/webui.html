@@ -103,7 +103,7 @@
         <div class="grid">
           <div>
             <label>Device filter (name prefix)</label>
-            <input id="namePrefix" type="text" placeholder="Gauge" />
+            <input id="namePrefix" type="text" placeholder="e.g., 3000GT" />
           </div>
           <div>
             <label>Custom Service UUID</label>
@@ -295,7 +295,6 @@
     }
 
     return parsed;
-  };
   }
 
   const state = { device:null, server:null, svc:null, chars:{cmd:null,buf:null,ota:null}, reasm:new Reassembler(), logging:false, logRows:[] };
