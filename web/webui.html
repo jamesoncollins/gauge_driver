@@ -199,6 +199,9 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
 
   // —— Helpers ——
   const $ = s => document.querySelector(s);
+  // Boot log so we know the script actually ran
+  try { const boot = document.querySelector('#status'); if(boot){ boot.textContent += 'UI loaded
+'; } } catch(_) {}
   function log(msg){ const el=$('#status'); el.textContent += msg+'
 '; el.scrollTop=el.scrollHeight; }
   function setState(txt, ok){ $('#connState').textContent = (ok?'● ':'● ')+txt; }
@@ -301,11 +304,17 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
     }
     setState('Requesting...');
     const namePrefix = $('#namePrefix').value || Defaults.namePrefix;
-    const options = { filters: namePrefix ? [{namePrefix}] : undefined, optionalServices: [] };
+    let options = { optionalServices: [] };
+    if(namePrefix && namePrefix.trim().length){
+      options.filters = [{ namePrefix: namePrefix.trim() }];
+    } else {
+      options.acceptAllDevices = true;
+    }
     const svcUuid = $('#svcUuid').value || Defaults.SERVICE_UUID;
     if(svcUuid) options.optionalServices.push(svcUuid);
 
     try{
+      if(!isSecureContext){ log('Warning: Not a secure context (HTTPS/localhost). Web Bluetooth may be blocked.'); }
       const device = await navigator.bluetooth.requestDevice(options);
       state.device = device; device.addEventListener('gattserverdisconnected', onDisconnect);
       setState('Connecting...');
@@ -384,23 +393,16 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
   });
 
   // UI wiring
-  $('#btnConnect').addEventListener('click', connect);
-  $('#btnDisconnect').addEventListener('click', disconnect);
-  document.querySelectorAll('[data-cmd]').forEach(btn=> btn.addEventListener('click', ()=>sendCommand(btn.dataset.cmd)));
-  $('#btnSendRaw').addEventListener('click', sendRaw);
-  $('#btnOta').addEventListener('click', doOta);
-  $('#btnStartLog').addEventListener('click', startLog);
-  $('#btnStopLog').addEventListener('click', stopLog);
-  $('#btnDownload').addEventListener('click', download);
-  $('#btnSaveCfg').addEventListener('click', saveCfg);
-  $('#btnLoadCfg').addEventListener('click', loadCfg);
-  $('#btnClearCfg').addEventListener('click', clearCfg);
-
-  applyDefaults();
-  // Feature detect at startup
-  if(!('bluetooth' in navigator)){
-    log('Web Bluetooth not detected. Try Chrome/Edge on desktop or Chrome on Android.');
-  }
-})();
-</script></body>
-</html>
+  try {
+    $('#btnConnect').addEventListener('click', connect);
+    $('#btnDisconnect').addEventListener('click', disconnect);
+    document.querySelectorAll('[data-cmd]').forEach(btn=> btn.addEventListener('click', ()=>sendCommand(btn.dataset.cmd)));
+    $('#btnSendRaw').addEventListener('click', sendRaw);
+    $('#btnOta').addEventListener('click', doOta);
+    $('#btnStartLog').addEventListener('click', startLog);
+    $('#btnStopLog').addEventListener('click', stopLog);
+    $('#btnDownload').addEventListener('click', download);
+    $('#btnSaveCfg').addEventListener('click', saveCfg);
+    $('#btnLoadCfg').addEventListener('click', loadCfg);
+    $('#btnClearCfg').addEventListener('click', clearCfg);
+    log('Event
