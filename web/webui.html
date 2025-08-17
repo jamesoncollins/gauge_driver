@@ -403,4 +403,19 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
     $('#btnStopLog').addEventListener('click', stopLog);
     $('#btnDownload').addEventListener('click', download);
     $('#btnSaveCfg').addEventListener('click', saveCfg);
-    $('#btnLoadCfg').addEventListener('click', loadC
+    $('#btnLoadCfg').addEventListener('click', loadCfg);
+    $('#btnClearCfg').addEventListener('click', clearCfg);
+    log('Event handlers attached');
+  } catch(e){ log('Failed to attach handlers: '+e); }
+
+  applyDefaults();
+  if(!('bluetooth' in navigator)){
+    log('Web Bluetooth not detected. Try Chrome/Edge on desktop or Chrome on Android.');
+  }
+  // Feature detect at startup
+  if(!('bluetooth' in navigator)){
+    log('Web Bluetooth not detected. Try Chrome/Edge on desktop or Chrome on Android.');
+  }
+})();
+</script></body>
+</html>
