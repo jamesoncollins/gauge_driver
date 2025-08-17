@@ -1,5 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -43,23 +42,22 @@
     table{border-collapse:collapse;width:100%}
     td,th{border-bottom:1px solid var(--line);padding:8px;text-align:left;font-size:13px}
     th{color:var(--muted);font-weight:600;background:rgba(255,255,255,.02)}
-    .mono{font-family:var(--mono)}
+    .mono{font-family:var(--mono)}/* Accordion (roll-up sections) */
+details.section{margin:14px 0;border-radius:var(--radius);overflow:hidden}
+details.section>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);user-select:none}
+details.section>summary:hover{background:#121a29}
+details.section[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.summary-title{font-weight:600}
+.chev{transition:transform .18s ease;color:var(--muted)}
+details[open] .chev{transform:rotate(90deg)}
+.panel{padding:14px;border:1px solid var(--line);border-top:none;background:var(--bg-3)}
 
-    /* Accordion (roll-up sections) */
-    details.section{margin:14px 0;border-radius:var(--radius);overflow:hidden}
-    details.section>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);user-select:none}
-    details.section>summary:hover{background:#121a29}
-    details.section[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
-    .summary-title{font-weight:600}
-    .chev{transition:transform .18s ease;color:var(--muted)}
-    details[open] .chev{transform:rotate(90deg)}
-    .panel{padding:14px;border:1px solid var(--line);border-top:none;background:var(--bg-3)}
+/* Status console */
+#status{max-height:200px;overflow:auto;padding:12px;margin:0;background:#0a0f19;border-top:1px solid var(--line)}
 
-    /* Status console */
-    #status{max-height:200px;overflow:auto;padding:12px;margin:0;background:#0a0f19;border-top:1px solid var(--line)}
+footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
+.spacer{flex:1}
 
-    footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
-    .spacer{flex:1}
   </style>
 </head>
 <body>
@@ -74,9 +72,7 @@
         <button id="btnDisconnect" class="ghost" disabled>Disconnect</button>
       </div>
     </div>
-  </header>
-
-  <main>
+  </header>  <main>
     <details class="section" open>
       <summary><span class="chev">▶</span><span class="summary-title">Dashboard</span><span class="spacer"></span><span class="pill">Live</span></summary>
       <div class="panel">
@@ -128,61 +124,58 @@
           <button id="btnClearCfg" class="ghost">Clear</button>
         </div>
       </div>
-    </details>
+    </details><details class="section" open>
+  <summary><span class="chev">▶</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
+  <div class="panel">
+    <div class="row" style="margin-bottom:10px">
+      <button data-cmd="LEFT">◀ Left</button>
+      <button data-cmd="RIGHT">▶ Right</button>
+      <button data-cmd="UP">▲ Up</button>
+      <button data-cmd="DOWN">▼ Down</button>
+      <button data-cmd="ENTER">⏎ Enter</button>
+      <button data-cmd="BACK">↩ Back</button>
+    </div>
+    <div class="row">
+      <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
+      <button id="btnSendRaw">Send Raw</button>
+    </div>
+  </div>
+</details>
 
-    <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
-      <div class="panel">
-        <div class="row" style="margin-bottom:10px">
-          <button data-cmd="LEFT">◀ Left</button>
-          <button data-cmd="RIGHT">▶ Right</button>
-          <button data-cmd="UP">▲ Up</button>
-          <button data-cmd="DOWN">▼ Down</button>
-          <button data-cmd="ENTER">⏎ Enter</button>
-          <button data-cmd="BACK">↩ Back</button>
-        </div>
-        <div class="row">
-          <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
-          <button id="btnSendRaw">Send Raw</button>
-        </div>
-      </div>
-    </details>
+<details class="section" open>
+  <summary><span class="chev">▶</span><span class="summary-title">ECU Stream (BTBuffer)</span><span class="spacer"></span><span class="pill">Notify</span></summary>
+  <div class="panel">
+    <div class="row" style="margin-bottom:10px">
+      <button id="btnStartLog">Start Log</button>
+      <button id="btnStopLog" disabled>Stop Log</button>
+      <button id="btnDownload" disabled>Download CSV</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th style="width:180px">Time</th><th>Payload (hex)</th><th>Parsed</th></tr></thead>
+        <tbody id="tblBody"></tbody>
+      </table>
+    </div>
+  </div>
+</details>
 
-    <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">ECU Stream (BTBuffer)</span><span class="spacer"></span><span class="pill">Notify</span></summary>
-      <div class="panel">
-        <div class="row" style="margin-bottom:10px">
-          <button id="btnStartLog">Start Log</button>
-          <button id="btnStopLog" disabled>Stop Log</button>
-          <button id="btnDownload" disabled>Download CSV</button>
-        </div>
-        <div class="card">
-          <table>
-            <thead><tr><th style="width:180px">Time</th><th>Payload (hex)</th><th>Parsed</th></tr></thead>
-            <tbody id="tblBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </details>
+<details class="section">
+  <summary><span class="chev">▶</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot</span></summary>
+  <div class="panel">
+    <button id="btnOta" style="border-color:var(--warn)">Reboot to OTA</button>
+  </div>
+</details>
 
-    <details class="section">
-      <summary><span class="chev">▶</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot</span></summary>
-      <div class="panel">
-        <button id="btnOta" style="border-color:var(--warn)">Reboot to OTA</button>
-      </div>
-    </details>
+<details class="section" open>
+  <summary><span class="chev">▶</span><span class="summary-title">Status</span><span class="spacer"></span><span class="pill">Debug</span></summary>
+  <div class="panel">
+    <pre id="status" class="mono"></pre>
+  </div>
+</details>
 
-    <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">Status</span><span class="spacer"></span><span class="pill">Debug</span></summary>
-      <div class="panel">
-        <pre id="status" class="mono"></pre>
-      </div>
-    </details>
+<footer>Tip: this UI works best on HTTPS or <span class="mono">localhost</span>.</footer>
 
-    <footer>Tip: this UI works best on HTTPS or <span class="mono">localhost</span>.</footer>
-  </main>
-
-<script>
+  </main><script>
 (function(){
   // —— Defaults (fill with your UUIDs later) ——
   const Defaults = {
@@ -301,6 +294,11 @@
 
   async function connect(){
     $('#status').textContent='';
+    log('Connect clicked');
+    if(!('bluetooth' in navigator)){
+      log('Web Bluetooth not supported here. Use Chrome/Edge (desktop) or Chrome on Android over HTTPS.');
+      return;
+    }
     setState('Requesting...');
     const namePrefix = $('#namePrefix').value || Defaults.namePrefix;
     const options = { filters: namePrefix ? [{namePrefix}] : undefined, optionalServices: [] };
@@ -399,7 +397,10 @@
   $('#btnClearCfg').addEventListener('click', clearCfg);
 
   applyDefaults();
+  // Feature detect at startup
+  if(!('bluetooth' in navigator)){
+    log('Web Bluetooth not detected. Try Chrome/Edge on desktop or Chrome on Android.');
+  }
 })();
-</script>
-</body>
+</script></body>
 </html>
