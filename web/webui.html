@@ -5,20 +5,9 @@
   <title>Gauge BLE Web UI</title>
   <style>
     :root{
-      --bg:#0b0e14;        /* base */
-      --bg-2:#111620;      /* raised */
-      --bg-3:#0f1420;      /* sunken */
-      --fg:#e6edf3;        /* text */
-      --muted:#a0a8b0;     /* secondary text */
-      --acc:#4ea1ff;       /* accent */
-      --acc-2:#7ee787;     /* ok */
-      --warn:#ffb86b;      /* warn */
-      --err:#ff6b6b;       /* error */
-      --line:#1f2633;      /* borders */
-      --pill:#182235;      /* chips */
-      --radius:14px;
-      --pad:14px;
-      --shadow:0 1px 0 rgba(255,255,255,.02) inset, 0 8px 24px rgba(0,0,0,.35);
+      --bg:#0b0e14; --bg-2:#111620; --bg-3:#0f1420; --fg:#e6edf3; --muted:#a0a8b0;
+      --acc:#4ea1ff; --warn:#ffb86b; --err:#ff6b6b; --line:#1f2633; --pill:#182235;
+      --radius:14px; --shadow:0 8px 24px rgba(0,0,0,.35);
       --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
       --sans: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;
     }
@@ -34,7 +23,7 @@
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
     label{display:block;font-size:12px;color:var(--muted);margin:4px 0}
     input[type="text"], textarea{width:100%;padding:10px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);border-radius:10px}
-    button{padding:9px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);cursor:pointer;transition:.15s ease;box-shadow:0 0 0 rgba(0,0,0,0)}
+    button{padding:9px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);cursor:pointer;transition:.15s ease}
     button:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.35)}
     button.primary{background:var(--acc);border-color:transparent;color:#041224}
     button.ghost{background:transparent}
@@ -42,29 +31,25 @@
     table{border-collapse:collapse;width:100%}
     td,th{border-bottom:1px solid var(--line);padding:8px;text-align:left;font-size:13px}
     th{color:var(--muted);font-weight:600;background:rgba(255,255,255,.02)}
-    .mono{font-family:var(--mono)}/* Accordion (roll-up sections) */
-details.section{margin:14px 0;border-radius:var(--radius);overflow:hidden}
-details.section>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);user-select:none}
-details.section>summary:hover{background:#121a29}
-details.section[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
-.summary-title{font-weight:600}
-.chev{transition:transform .18s ease;color:var(--muted)}
-details[open] .chev{transform:rotate(90deg)}
-.panel{padding:14px;border:1px solid var(--line);border-top:none;background:var(--bg-3)}
-
-/* Status console */
-#status{max-height:200px;overflow:auto;padding:12px;margin:0;background:#0a0f19;border-top:1px solid var(--line)}
-
-footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
-.spacer{flex:1}
-
+    .mono{font-family:var(--mono)}
+    details.section{margin:14px 0;border-radius:var(--radius);overflow:hidden}
+    details.section>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);user-select:none}
+    details.section>summary:hover{background:#121a29}
+    details.section[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
+    .summary-title{font-weight:600}
+    .chev{transition:transform .18s ease;color:var(--muted)}
+    details[open] .chev{transform:rotate(90deg)}
+    .panel{padding:14px;border:1px solid var(--line);border-top:none;background:var(--bg-3)}
+    #status{max-height:220px;overflow:auto;padding:12px;margin:0;background:#0a0f19;border-top:1px solid var(--line)}
+    footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
+    .spacer{flex:1}
   </style>
 </head>
 <body>
   <header>
     <div class="bar">
       <div class="row">
-        <div class="title">Gauge BLE Web UI <span style=\"font-size:12px;color:var(--muted);margin-left:6px\">v0.4</span></div>
+        <div class="title">Gauge BLE Web UI <span id="ver" style="font-size:12px;color:var(--muted);margin-left:6px"></span></div>
         <span id="connState" class="pill">● Disconnected</span>
       </div>
       <div class="row">
@@ -92,39 +77,40 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
           </div>
         </div>
       </div>
-    </details>
-    <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">Connection & UUIDs</span><span class="spacer"></span><span class="pill">Setup</span></summary>
-      <div class="panel">
-        <div class="grid">
-          <div>
-            <label>Device filter (name prefix)</label>
-            <input id="namePrefix" type="text" placeholder="e.g., 3000GT" />
-          </div>
-          <div>
-            <label>Custom Service UUID</label>
-            <input id="svcUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </div>
-          <div>
-            <label>Commands Char UUID (write)</label>
-            <input id="cmdUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </div>
-          <div>
-            <label>BTBuffer Char UUID (notify)</label>
-            <input id="bufUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </div>
-          <div>
-            <label>OTA Control Char UUID (write)</label>
-            <input id="otaUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </div>
-        </div>
-        <div class="row" style="margin-top:10px">
-          <button id="btnSaveCfg">Save</button>
-          <button id="btnLoadCfg" class="ghost">Load</button>
-          <button id="btnClearCfg" class="ghost">Clear</button>
-        </div>
-      </div>
     </details><details class="section" open>
+  <summary><span class="chev">▶</span><span class="summary-title">Connection & UUIDs</span><span class="spacer"></span><span class="pill">Setup</span></summary>
+  <div class="panel">
+    <div class="grid">
+      <div>
+        <label>Device filter (name prefix)</label>
+        <input id="namePrefix" type="text" placeholder="e.g., 3000GT" />
+      </div>
+      <div>
+        <label>Custom Service UUID (optional)</label>
+        <input id="svcUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+      </div>
+      <div>
+        <label>Commands Char UUID (write)</label>
+        <input id="cmdUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+      </div>
+      <div>
+        <label>BTBuffer Char UUID (notify)</label>
+        <input id="bufUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+      </div>
+      <div>
+        <label>OTA Control Char UUID (write)</label>
+        <input id="otaUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="btnSaveCfg">Save</button>
+      <button id="btnLoadCfg" class="ghost">Load</button>
+      <button id="btnClearCfg" class="ghost">Clear</button>
+    </div>
+  </div>
+</details>
+
+<details class="section" open>
   <summary><span class="chev">▶</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
   <div class="panel">
     <div class="row" style="margin-bottom:10px">
@@ -177,209 +163,149 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
 
   </main><script>
 (function(){
-  // —— Defaults (fill with your UUIDs later) ——
+  const UI_VERSION = 'v0.6.0';
+
+  // —— Defaults ——
   const Defaults = {
     namePrefix: '3000GT',
     SERVICE_UUID: '',
-    CMD_CHAR_UUID: '',   // write w/o response preferred
-    BTBUF_CHAR_UUID: '', // notify
-    OTA_CHAR_UUID: ''    // write to trigger reboot to OTA FW
+    CMD_CHAR_UUID: '',
+    BTBUF_CHAR_UUID: '',
+    OTA_CHAR_UUID: ''
   };
 
-  const CommandMap = {
-    LEFT:[3], RIGHT:[4], UP:[1], DOWN:[2], ENTER:[0], BACK:[255]
-  };
+  // Button codes (matches your enum)
+  const CommandMap = { LEFT:[3], RIGHT:[4], UP:[1], DOWN:[2], ENTER:[0], BACK:[255] };
 
+  // OTA payload (adjust if firmware expects 4 bytes)
   const OTA_MAGIC = [0xA5];
 
-  // Frame settings
-  const USE_LENGTH_PREFIX = true;
-  const LENGTH_BYTES = 2; // uint16 LE
-  const DELIM = 0x0A; // for delimited mode if enabled
+  // Frame settings (BTBuffer)
+  const USE_LENGTH_PREFIX = true; // set false if ASCII-delimited
+  const LENGTH_BYTES = 2;         // u16 little-endian
+  const DELIM = 0x0A;             // '
+'
 
   // —— Helpers ——
   const $ = s => document.querySelector(s);
-  // Boot log so we know the script actually ran
-  try { const boot = document.querySelector('#status'); if(boot){ boot.textContent += 'UI loaded
-'; } } catch(_) {}
-  function log(msg){ const el=$('#status'); el.textContent += msg+'
-'; el.scrollTop=el.scrollHeight; }
-  function setState(txt, ok){ $('#connState').textContent = (ok?'● ':'● ')+txt; }
+  function log(msg){ const el=$('#status'); if(!el) return; el.textContent += String(msg)+'
+'; el.scrollTop = el.scrollHeight; }
+  function setState(txt){ const pill = $('#connState'); if(pill) pill.textContent = '● '+txt; }
   function hex(u8){ return [...u8].map(b=>b.toString(16).padStart(2,'0')).join(' '); }
   function toBytes(hexStr){ const bytes=[]; hexStr.replace(/[^0-9a-fA-F]/g,'').replace(/(..)/g,(m,b)=>bytes.push(parseInt(b,16))); return new Uint8Array(bytes); }
-  function le16(b0,b1){ return b0 | (b1<<8); }
+  const le16 = (b0,b1)=> (b0 | (b1<<8));
 
   // Persist inputs
   const KEYS = ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'];
-  function saveCfg(){ const cfg={}; for(const k of KEYS){ cfg[k]=$('#'+k).value; } localStorage.setItem('gauge-ble-ui', JSON.stringify(cfg)); log('Config saved'); }
-  function loadCfg(){ const s=localStorage.getItem('gauge-ble-ui'); if(!s) return; const cfg=JSON.parse(s); for(const k of KEYS){ if(cfg[k]!==undefined) $('#'+k).value=cfg[k]; } log('Config loaded'); }
+  function saveCfg(){ const cfg={}; for(const k of KEYS){ const el=$('#'+k); if(el) cfg[k]=el.value; } localStorage.setItem('gauge-ble-ui', JSON.stringify(cfg)); log('Config saved'); }
+  function loadCfg(){ const s=localStorage.getItem('gauge-ble-ui'); if(!s) return; const cfg=JSON.parse(s); for(const k of KEYS){ const el=$('#'+k); if(el && cfg[k]!==undefined) el.value=cfg[k]; } log('Config loaded'); }
   function clearCfg(){ localStorage.removeItem('gauge-ble-ui'); log('Config cleared'); }
+  function applyDefaults(){ if(!localStorage.getItem('gauge-ble-ui')){ $('#namePrefix').value=Defaults.namePrefix; $('#svcUuid').value=Defaults.SERVICE_UUID; $('#cmdUuid').value=Defaults.CMD_CHAR_UUID; $('#bufUuid').value=Defaults.BTBUF_CHAR_UUID; $('#otaUuid').value=Defaults.OTA_CHAR_UUID; } else { loadCfg(); } }
 
-  // Restore defaults first-run
-  function applyDefaults(){
-    if(!localStorage.getItem('gauge-ble-ui')){
-      $('#namePrefix').value = Defaults.namePrefix;
-      $('#svcUuid').value = Defaults.SERVICE_UUID;
-      $('#cmdUuid').value = Defaults.CMD_CHAR_UUID;
-      $('#bufUuid').value = Defaults.BTBUF_CHAR_UUID;
-      $('#otaUuid').value = Defaults.OTA_CHAR_UUID;
-    } else { loadCfg(); }
-  }
-
-  class Reassembler {
-    constructor(){ this.buf = new Uint8Array(0); }
+  // Reassembler for notify stream
+  class Reassembler{
+    constructor(){ this.buf=new Uint8Array(0); }
     push(chunk){
-      const combined = new Uint8Array(this.buf.length + chunk.length);
-      combined.set(this.buf,0); combined.set(chunk,this.buf.length);
-      this.buf = combined;
+      const combined=new Uint8Array(this.buf.length+chunk.length); combined.set(this.buf,0); combined.set(chunk,this.buf.length); this.buf=combined;
       const frames=[];
       if(USE_LENGTH_PREFIX){
-        while(this.buf.length >= LENGTH_BYTES){
-          const len = le16(this.buf[0], this.buf[1]);
-          if(this.buf.length < LENGTH_BYTES + len) break;
-          const payload = this.buf.slice(LENGTH_BYTES, LENGTH_BYTES+len);
-          frames.push(payload);
-          this.buf = this.buf.slice(LENGTH_BYTES+len);
+        while(this.buf.length>=LENGTH_BYTES){
+          const len=le16(this.buf[0],this.buf[1]);
+          if(this.buf.length < LENGTH_BYTES+len) break;
+          frames.push(this.buf.slice(LENGTH_BYTES,LENGTH_BYTES+len));
+          this.buf=this.buf.slice(LENGTH_BYTES+len);
         }
-      } else {
-        let idx; while((idx=this.buf.indexOf(DELIM))!==-1){ frames.push(this.buf.slice(0,idx)); this.buf = this.buf.slice(idx+1); }
+      }else{
+        let idx; while((idx=this.buf.indexOf(DELIM))!==-1){ frames.push(this.buf.slice(0,idx)); this.buf=this.buf.slice(idx+1); }
       }
       return frames;
     }
-    reset(){ this.buf = new Uint8Array(0); }
+    reset(){ this.buf=new Uint8Array(0); }
   }
 
-  function exampleDecode(payload){
-    // Parse BTBuffer frame as sent by firmware via READNEXT:
-    // struct { u16 id1; u16 id2; u32 tick; u8 data[dataLen]; }
-    const dv = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
-    if(payload.byteLength < 8) return {len: payload.length};
-    const id1 = dv.getUint16(0,true);
-    let id2 = dv.getUint16(2,true);
-    // Treat 0xFFFF as -1 to match firmware use
-    if(id2 === 0xFFFF) id2 = -1;
-    const tick = dv.getUint32(4,true);
-    const dataStart = 8;
-    const words = [];
-    for(let off=dataStart; off+4<=payload.byteLength; off+=4){ words.push(dv.getUint32(off,true)); }
-    const parsed = { id1, id2, tick, wordsCount: words.length };
-
-    // Known packet: id1=0,id2=0 contains loopCnt, loopPeriod, worstLoop, _, speed, rpm (u32 each)
-    if(id1===0 && id2===0 && words.length>=6){
-      parsed.loopCnt = words[0];
-      parsed.loopPeriod_ms = words[1];
-      parsed.worstLoop_ms = words[2];
-      parsed.speed = words[4];
-      parsed.rpm = words[5];
-    }
-
-    // ECUK status: id1=1,id2=-1 uses words[0] = ECU_REQUEST_DELAY_US constant
-    if(id1===1 && id2===-1 && words.length>=1){
-      parsed.ecu_req = words[0];
-    }
-
-    // Update live tiles when values present
-    if(typeof parsed.rpm === 'number'){
-      const el = document.getElementById('tileRpm'); if(el) el.textContent = String(parsed.rpm);
-    }
-    if(typeof parsed.speed === 'number'){
-      const el = document.getElementById('tileSpeed'); if(el) el.textContent = String(parsed.speed);
-    }
-    if(typeof parsed.loopPeriod_ms === 'number'){
-      const el = document.getElementById('tileLoop'); if(el) el.textContent = String(parsed.loopPeriod_ms);
-      const ew = document.getElementById('tileWorst'); if(ew && typeof parsed.worstLoop_ms==='number') ew.textContent = 'Worst: '+parsed.worstLoop_ms;
-    }
-
-    return parsed;
+  // Decode BTBuffer frames → parsed fields
+  function decodeFrame(payload){
+    const dv=new DataView(payload.buffer,payload.byteOffset,payload.byteLength);
+    if(payload.byteLength<8) return {len:payload.length};
+    const id1=dv.getUint16(0,true); let id2=dv.getUint16(2,true); if(id2===0xFFFF) id2=-1; const tick=dv.getUint32(4,true);
+    const words=[]; for(let off=8; off+4<=payload.byteLength; off+=4){ words.push(dv.getUint32(off,true)); }
+    const obj={id1,id2,tick,wordsCount:words.length};
+    if(id1===0 && id2===0 && words.length>=6){ obj.loopCnt=words[0]; obj.loopPeriod_ms=words[1]; obj.worstLoop_ms=words[2]; obj.speed=words[4]; obj.rpm=words[5]; }
+    if(id1===1 && id2===-1 && words.length>=1){ obj.ecu_req=words[0]; }
+    // Update tiles
+    if(typeof obj.rpm==='number'){ const t=$('#tileRpm'); if(t) t.textContent=String(obj.rpm); }
+    if(typeof obj.speed==='number'){ const t=$('#tileSpeed'); if(t) t.textContent=String(obj.speed); }
+    if(typeof obj.loopPeriod_ms==='number'){ const t=$('#tileLoop'); if(t) t.textContent=String(obj.loopPeriod_ms); const w=$('#tileWorst'); if(w && typeof obj.worstLoop_ms==='number') w.textContent='Worst: '+obj.worstLoop_ms; }
+    return obj;
   }
 
-  const state = { device:null, server:null, svc:null, chars:{cmd:null,buf:null,ota:null}, reasm:new Reassembler(), logging:false, logRows:[] };
+  // BLE session state
+  const state={ device:null, server:null, reasm:new Reassembler(), chars:{cmd:null,buf:null,ota:null}, logging:false, logRows:[] };
+
+  async function findCharacteristic(server, charUuid, svcUuid){
+    if(!charUuid) return null;
+    try{
+      if(svcUuid){ const svc=await server.getPrimaryService(svcUuid); return await svc.getCharacteristic(charUuid); }
+      const services=await server.getPrimaryServices();
+      for(const svc of services){ try{ const ch=await svc.getCharacteristic(charUuid); if(ch) return ch; }catch(_){} }
+    }catch(err){ log('Find char error: '+err.message); }
+    return null;
+  }
 
   async function connect(){
-    $('#status').textContent='';
+    const status=$('#status'); if(status) status.textContent='';
     log('Connect clicked');
-    if(!('bluetooth' in navigator)){
-      log('Web Bluetooth not supported here. Use Chrome/Edge (desktop) or Chrome on Android over HTTPS.');
-      return;
-    }
+    if(!('bluetooth' in navigator)){ log('Web Bluetooth not supported. Use Chrome/Edge desktop or Chrome on Android over HTTPS.'); return; }
+    if(!isSecureContext){ log('Warning: not HTTPS/localhost. Web Bluetooth may be blocked.'); }
     setState('Requesting...');
-    const namePrefix = $('#namePrefix').value || Defaults.namePrefix;
-    let options = { optionalServices: [] };
-    if(namePrefix && namePrefix.trim().length){
-      options.filters = [{ namePrefix: namePrefix.trim() }];
-    } else {
-      options.acceptAllDevices = true;
-    }
-    const svcUuid = $('#svcUuid').value || Defaults.SERVICE_UUID;
+
+    const namePrefix=$('#namePrefix').value || Defaults.namePrefix;
+    const svcUuid=$('#svcUuid').value || Defaults.SERVICE_UUID;
+    const cmdUuid=$('#cmdUuid').value || Defaults.CMD_CHAR_UUID;
+    const bufUuid=$('#bufUuid').value || Defaults.BTBUF_CHAR_UUID;
+    const otaUuid=$('#otaUuid').value || Defaults.OTA_CHAR_UUID;
+
+    let options={optionalServices:[]};
+    if(namePrefix && namePrefix.trim().length){ options.filters=[{namePrefix:namePrefix.trim()}]; } else { options.acceptAllDevices=true; }
     if(svcUuid) options.optionalServices.push(svcUuid);
 
     try{
-      if(!isSecureContext){ log('Warning: Not a secure context (HTTPS/localhost). Web Bluetooth may be blocked.'); }
-      const device = await navigator.bluetooth.requestDevice(options);
-      state.device = device; device.addEventListener('gattserverdisconnected', onDisconnect);
+      const device=await navigator.bluetooth.requestDevice(options);
+      state.device=device; device.addEventListener('gattserverdisconnected', onDisconnect);
       setState('Connecting...');
-      state.server = await device.gatt.connect();
-      log(`Connected to ${device.name || '(unnamed)'}`);
-      setState('Discovering...');
+      state.server=await device.gatt.connect();
+      log('Connected to '+(device.name||'(unnamed)'));
 
-      if(!svcUuid) throw new Error('Missing Service UUID');
-      state.svc = await state.server.getPrimaryService(svcUuid);
+      // Resolve chars (cross-service search if needed)
+      state.chars.cmd = await findCharacteristic(state.server, cmdUuid, svcUuid);
+      state.chars.buf = await findCharacteristic(state.server, bufUuid, svcUuid);
+      state.chars.ota = await findCharacteristic(state.server, otaUuid, svcUuid);
 
-      const cmdUuid = $('#cmdUuid').value || Defaults.CMD_CHAR_UUID;
-      const bufUuid = $('#bufUuid').value || Defaults.BTBUF_CHAR_UUID;
-      const otaUuid = $('#otaUuid').value || Defaults.OTA_CHAR_UUID;
+      if(state.chars.buf){ await state.chars.buf.startNotifications(); state.chars.buf.addEventListener('characteristicvaluechanged', onNotify); }
 
-      if(cmdUuid) state.chars.cmd = await state.svc.getCharacteristic(cmdUuid);
-      if(bufUuid){
-        state.chars.buf = await state.svc.getCharacteristic(bufUuid);
-        await state.chars.buf.startNotifications();
-        state.chars.buf.addEventListener('characteristicvaluechanged', onNotify);
-      }
-      if(otaUuid) state.chars.ota = await state.svc.getCharacteristic(otaUuid);
-
-      $('#btnDisconnect').disabled=false; $('#btnConnect').disabled=true; setState('Connected', true);
+      $('#btnDisconnect').disabled=false; $('#btnConnect').disabled=true; setState('Connected');
     }catch(err){ log('Connect error: '+err.message); setState('Disconnected'); }
   }
 
-  async function disconnect(){ try{ if(state.device?.gatt?.connected) state.device.gatt.disconnect(); }catch(e){} }
+  async function disconnect(){ try{ if(state.device?.gatt?.connected) state.device.gatt.disconnect(); }catch(_){} }
   function onDisconnect(){ log('Disconnected'); $('#btnDisconnect').disabled=true; $('#btnConnect').disabled=false; setState('Disconnected'); }
 
   function onNotify(ev){
-    const dv = ev.target.value; const chunk = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-    const frames = state.reasm.push(chunk);
-    for(const payload of frames){
-      const t = new Date().toISOString();
-      const parsed = exampleDecode(payload);
-      appendRow(t, payload, parsed);
-      if(state.logging){ state.logRows.push([t, hex(payload), JSON.stringify(parsed)]); }
-    }
+    const dv=ev.target.value; const chunk=new Uint8Array(dv.buffer,dv.byteOffset,dv.byteLength);
+    const frames=state.reasm.push(chunk);
+    for(const payload of frames){ const t=new Date().toISOString(); const parsed=decodeFrame(payload); appendRow(t,payload,parsed); if(state.logging){ state.logRows.push([t,hex(payload),JSON.stringify(parsed)]); } }
   }
 
   function appendRow(t,u8,parsed){
     const tr=document.createElement('tr');
-    tr.innerHTML = `<td class="mono">${t}</td><td class="mono">${hex(u8)}</td><td class="mono">${escapeHtml(JSON.stringify(parsed))}</td>`;
+    tr.innerHTML=`<td class="mono">${t}</td><td class="mono">${hex(u8)}</td><td class="mono">${escapeHtml(JSON.stringify(parsed))}</td>`;
     const tbody=$('#tblBody'); tbody.prepend(tr); while(tbody.rows.length>300) tbody.deleteRow(-1);
   }
 
-  function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+  function escapeHtml(s){ return String(s).replace(/[&<>\"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
 
-  async function sendCommand(kind){
-    if(!state.chars.cmd) return log('No command characteristic');
-    const bytes = CommandMap[kind]; if(!bytes) return log('Unknown command '+kind);
-    try{ await state.chars.cmd.writeValueWithoutResponse(new Uint8Array(bytes)); log('Sent '+kind+': '+bytes.map(b=>b.toString(16).padStart(2,'0')).join(' ')); }
-    catch(err){ log('Send error: '+err.message); }
-  }
-
-  async function sendRaw(){
-    if(!state.chars.cmd) return log('No command characteristic');
-    const text=$('#rawHex').value.trim(); if(!text) return;
-    try{
-      const buf=toBytes(text); const CHUNK=20;
-      for(let i=0;i<buf.length;i+=CHUNK){ await state.chars.cmd.writeValueWithoutResponse(buf.slice(i,Math.min(i+CHUNK,buf.length))); }
-      log('Sent RAW: '+text);
-    }catch(err){ log('Raw send error: '+err.message); }
-  }
-
+  async function sendCommand(kind){ if(!state.chars.cmd) return log('No command characteristic'); const bytes=CommandMap[kind]; if(!bytes) return log('Unknown command '+kind); try{ await state.chars.cmd.writeValueWithoutResponse(new Uint8Array(bytes)); log('Sent '+kind+': '+bytes.map(b=>b.toString(16).padStart(2,'0')).join(' ')); }catch(err){ log('Send error: '+err.message); } }
+  async function sendRaw(){ if(!state.chars.cmd) return log('No command characteristic'); const text=$('#rawHex').value.trim(); if(!text) return; try{ const buf=toBytes(text); const CHUNK=20; for(let i=0;i<buf.length;i+=CHUNK){ await state.chars.cmd.writeValueWithoutResponse(buf.slice(i,Math.min(i+CHUNK,buf.length))); } log('Sent RAW: '+text); }catch(err){ log('Raw send error: '+err.message); } }
   async function doOta(){ if(!state.chars.ota) return log('No OTA characteristic'); if(!confirm('Reboot device into OTA firmware?')) return; try{ await state.chars.ota.writeValueWithoutResponse(new Uint8Array(OTA_MAGIC)); log('OTA reboot requested'); }catch(err){ log('OTA write error: '+err.message); } }
 
   function startLog(){ state.logging=true; state.logRows=[]; $('#btnDownload').disabled=true; $('#btnStartLog').disabled=true; $('#btnStopLog').disabled=false; }
@@ -387,35 +313,33 @@ footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
   function download(){ const rows=[["time","payload_hex","parsed_json"],...state.logRows]; const csv=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(',')).join('
 '); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='ecu_log_'+Date.now()+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1e3); }
 
-  // One-open-at-a-time accordion
-  document.querySelectorAll('details.section').forEach((d)=>{
-    d.addEventListener('toggle',()=>{ if(d.open){ document.querySelectorAll('details.section').forEach(x=>{ if(x!==d) x.open=false; }); }});
-  });
+  // Accordion: one section open at a time
+  document.querySelectorAll('details.section').forEach(d=> d.addEventListener('toggle',()=>{ if(d.open){ document.querySelectorAll('details.section').forEach(x=>{ if(x!==d) x.open=false; }); }}));
 
   // UI wiring
-  try {
-    $('#btnConnect').addEventListener('click', connect);
-    $('#btnDisconnect').addEventListener('click', disconnect);
-    document.querySelectorAll('[data-cmd]').forEach(btn=> btn.addEventListener('click', ()=>sendCommand(btn.dataset.cmd)));
-    $('#btnSendRaw').addEventListener('click', sendRaw);
-    $('#btnOta').addEventListener('click', doOta);
-    $('#btnStartLog').addEventListener('click', startLog);
-    $('#btnStopLog').addEventListener('click', stopLog);
-    $('#btnDownload').addEventListener('click', download);
-    $('#btnSaveCfg').addEventListener('click', saveCfg);
-    $('#btnLoadCfg').addEventListener('click', loadCfg);
-    $('#btnClearCfg').addEventListener('click', clearCfg);
-    log('Event handlers attached');
-  } catch(e){ log('Failed to attach handlers: '+e); }
+  function wireHandlers(){
+    const wire=(sel,fn)=>{ const el=$(sel); if(!el){ log('Missing element '+sel); return false;} el.addEventListener('click',fn); el.onclick=fn; return true; };
+    const ok = [
+      wire('#btnConnect',connect), wire('#btnDisconnect',disconnect),
+      (function(){ let all=true; document.querySelectorAll('[data-cmd]').forEach(btn=>{ try{ btn.addEventListener('click',()=>sendCommand(btn.dataset.cmd)); btn.onclick=()=>sendCommand(btn.dataset.cmd);}catch(_){ all=false; } }); return all; })(),
+      wire('#btnSendRaw',sendRaw), wire('#btnOta',doOta), wire('#btnStartLog',startLog), wire('#btnStopLog',stopLog), wire('#btnDownload',download),
+      wire('#btnSaveCfg',saveCfg), wire('#btnLoadCfg',loadCfg), wire('#btnClearCfg',clearCfg)
+    ].every(Boolean);
+    log('Event handlers attached'+(ok?'':' (some missing)'));
+  }
 
-  applyDefaults();
-  if(!('bluetooth' in navigator)){
-    log('Web Bluetooth not detected. Try Chrome/Edge on desktop or Chrome on Android.');
-  }
-  // Feature detect at startup
-  if(!('bluetooth' in navigator)){
-    log('Web Bluetooth not detected. Try Chrome/Edge on desktop or Chrome on Android.');
-  }
+  // Init
+  (function boot(){
+    const ver=$('#ver'); if(ver) ver.textContent=UI_VERSION;
+    applyDefaults();
+    wireHandlers();
+    if(!('bluetooth' in navigator)) log('Web Bluetooth not detected. Try Chrome/Edge desktop or Chrome on Android.');
+    log('UI loaded');
+  })();
+
+  // Show JS errors in Status panel
+  window.addEventListener('error', e=>{ log('Script error: '+(e.message||e.error||'unknown')); });
+  window.addEventListener('unhandledrejection', e=>{ log('Unhandled promise: '+(e.reason?.message || e.reason || 'unknown')); });
 })();
 </script></body>
 </html>
