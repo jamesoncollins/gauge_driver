@@ -1,5 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -66,9 +65,7 @@
         <button id="btnDisconnect" class="ghost" disabled>Disconnect</button>
       </div>
     </div>
-  </header>
-
-  <main>
+  </header>  <main>
     <details class="section" open>
       <summary><span class="chev">▶</span><span class="summary-title">Dashboard</span><span class="spacer"></span><span class="pill">Live</span></summary>
       <div class="panel">
@@ -122,94 +119,91 @@
           </div>
         </div>
       </div>
-    </details>
-
-    <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">Connection & UUIDs</span><span class="spacer"></span><span class="pill">Setup</span></summary>
-      <div class="panel">
-        <div class="grid">
-          <div>
-            <label>Device filter (name prefix)</label>
-            <input id="namePrefix" type="text" placeholder="e.g., 3000GT" />
-          </div>
-          <div>
-            <label>Custom Service UUID (optional)</label>
-            <input id="svcUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </div>
-          <div>
-            <label>Commands Char UUID (write)</label>
-            <input id="cmdUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </div>
-          <div>
-            <label>BTBuffer Char UUID (notify)</label>
-            <input id="bufUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </div>
-          <div>
-            <label>OTA Control Char UUID (write)</label>
-            <input id="otaUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </div>
-        </div>
-        <div class="row" style="margin-top:10px">
-          <button id="btnSaveCfg">Save</button>
-          <button id="btnLoadCfg" class="ghost">Load</button>
-          <button id="btnClearCfg" class="ghost">Clear</button>
-        </div>
+    </details><details class="section" open>
+  <summary><span class="chev">▶</span><span class="summary-title">Connection & UUIDs</span><span class="spacer"></span><span class="pill">Setup</span></summary>
+  <div class="panel">
+    <div class="grid">
+      <div>
+        <label>Device filter (name prefix)</label>
+        <input id="namePrefix" type="text" placeholder="e.g., 3000GT" />
       </div>
-    </details>
-
-    <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
-      <div class="panel">
-        <div class="row" style="margin-bottom:10px">
-          <button data-cmd="LEFT">◀ Left</button>
-          <button data-cmd="RIGHT">▶ Right</button>
-          <button data-cmd="UP">▲ Up</button>
-          <button data-cmd="DOWN">▼ Down</button>
-          <button data-cmd="ENTER">⏎ Enter</button>
-          <button data-cmd="BACK">↩ Back</button>
-        </div>
-        <div class="row">
-          <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
-          <button id="btnSendRaw">Send Raw</button>
-        </div>
+      <div>
+        <label>Custom Service UUID (optional)</label>
+        <input id="svcUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
       </div>
-    </details>
-
-    <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">ECU Stream (BTBuffer)</span><span class="spacer"></span><span class="pill">Notify</span></summary>
-      <div class="panel">
-        <div class="row" style="margin-bottom:10px">
-          <button id="btnStartLog">Start Log</button>
-          <button id="btnStopLog" disabled>Stop Log</button>
-          <button id="btnDownload" disabled>Download CSV</button>
-        </div>
-        <div class="card">
-          <table>
-            <thead><tr><th style="width:180px">Time</th><th>Payload (hex)</th><th>Parsed</th></tr></thead>
-            <tbody id="tblBody"></tbody>
-          </table>
-        </div>
+      <div>
+        <label>Commands Char UUID (write)</label>
+        <input id="cmdUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
       </div>
-    </details>
-
-    <details class="section">
-      <summary><span class="chev">▶</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot</span></summary>
-      <div class="panel">
-        <button id="btnOta" style="border-color:var(--warn)">Reboot to OTA</button>
+      <div>
+        <label>BTBuffer Char UUID (notify)</label>
+        <input id="bufUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
       </div>
-    </details>
-
-    <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">Status</span><span class="spacer"></span><span class="pill">Debug</span></summary>
-      <div class="panel">
-        <pre id="status" class="mono"></pre>
+      <div>
+        <label>OTA Control Char UUID (write)</label>
+        <input id="otaUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
       </div>
-    </details>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="btnSaveCfg">Save</button>
+      <button id="btnLoadCfg" class="ghost">Load</button>
+      <button id="btnClearCfg" class="ghost">Clear</button>
+    </div>
+  </div>
+</details>
 
-    <footer>Tip: this UI works best on HTTPS or <span class="mono">localhost</span>.</footer>
-  </main>
+<details class="section" open>
+  <summary><span class="chev">▶</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
+  <div class="panel">
+    <div class="row" style="margin-bottom:10px">
+      <button data-cmd="LEFT">◀ Left</button>
+      <button data-cmd="RIGHT">▶ Right</button>
+      <button data-cmd="UP">▲ Up</button>
+      <button data-cmd="DOWN">▼ Down</button>
+      <button data-cmd="ENTER">⏎ Enter</button>
+      <button data-cmd="BACK">↩ Back</button>
+    </div>
+    <div class="row">
+      <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
+      <button id="btnSendRaw">Send Raw</button>
+    </div>
+  </div>
+</details>
 
-<script>
+<details class="section" open>
+  <summary><span class="chev">▶</span><span class="summary-title">ECU Stream (BTBuffer)</span><span class="spacer"></span><span class="pill">Notify</span></summary>
+  <div class="panel">
+    <div class="row" style="margin-bottom:10px">
+      <button id="btnStartLog">Start Log</button>
+      <button id="btnStopLog" disabled>Stop Log</button>
+      <button id="btnDownload" disabled>Download CSV</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th style="width:180px">Time</th><th>Payload (hex)</th><th>Parsed</th></tr></thead>
+        <tbody id="tblBody"></tbody>
+      </table>
+    </div>
+  </div>
+</details>
+
+<details class="section">
+  <summary><span class="chev">▶</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot</span></summary>
+  <div class="panel">
+    <button id="btnOta" style="border-color:var(--warn)">Reboot to OTA</button>
+  </div>
+</details>
+
+<details class="section" open>
+  <summary><span class="chev">▶</span><span class="summary-title">Status</span><span class="spacer"></span><span class="pill">Debug</span></summary>
+  <div class="panel">
+    <pre id="status" class="mono"></pre>
+  </div>
+</details>
+
+<footer>Tip: this UI works best on HTTPS or <span class="mono">localhost</span>.</footer>
+
+  </main><script>
 (function(){
   'use strict';
   var UI_VERSION = 'v0.6.3';
@@ -360,50 +354,4 @@
     var tbody=$('#tblBody'); if(!tbody) return; tbody.prepend(tr); while(tbody.rows.length>300) tbody.deleteRow(-1);
   }
 
-  async function sendCommand(kind){ if(!state.chars.cmd) return log('No command characteristic'); var bytes=CommandMap[kind]; if(!bytes) return log('Unknown command '+kind); try{ await state.chars.cmd.writeValueWithoutResponse(new Uint8Array(bytes)); log('Sent '+kind+': '+bytes.map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')); }catch(err){ log('Send error: '+err.message); } }
-  async function sendRaw(){ if(!state.chars.cmd) return log('No command characteristic'); var text=$('#rawHex') && $('#rawHex').value ? $('#rawHex').value.trim() : ''; if(!text) return; try{ var buf=toBytes(text); var CHUNK=20; for(var i=0;i<buf.length;i+=CHUNK){ await state.chars.cmd.writeValueWithoutResponse(buf.slice(i,Math.min(i+CHUNK,buf.length))); } log('Sent RAW: '+text); }catch(err){ log('Raw send error: '+err.message); } }
-  async function doOta(){ if(!state.chars.ota) return log('No OTA characteristic'); if(!window.confirm('Reboot device into OTA firmware?')) return; try{ await state.chars.ota.writeValueWithoutResponse(new Uint8Array(OTA_MAGIC)); log('OTA reboot requested'); }catch(err){ log('OTA write error: '+err.message); } }
-
-  function startLog(){ state.logging=true; state.logRows=[]; var dl=$('#btnDownload'); if(dl) dl.disabled=true; var st=$('#btnStartLog'); if(st) st.disabled=true; var sp=$('#btnStopLog'); if(sp) sp.disabled=false; }
-  function stopLog(){ state.logging=false; var sp=$('#btnStopLog'); if(sp) sp.disabled=true; var st=$('#btnStartLog'); if(st) st.disabled=false; var dl=$('#btnDownload'); if(dl && state.logRows.length) dl.disabled=false; }
-  function download(){ var rows=[["time","payload_hex","parsed_json"]].concat(state.logRows); var csv=rows.map(function(r){ return r.map(function(x){ var s=String(x).replace(/\"/g,'\"\"'); return '"'+s+'"'; }).join(','); }).join('\n'); var blob=new Blob([csv],{type:'text/csv'}); var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download='ecu_log_'+Date.now()+'.csv'; a.click(); setTimeout(function(){ URL.revokeObjectURL(url); },1000); }
-
-  // Accordion: one section open at a time
-  function setupAccordion(){ var all=document.querySelectorAll('details.section'); for(var i=0;i<all.length;i++){ (function(d){ d.addEventListener('toggle', function(){ if(d.open){ for(var j=0;j<all.length;j++){ if(all[j]!==d) all[j].open=false; } } }); })(all[i]); } }
-
-  // UI wiring
-  function wireHandlers(){
-    function wire(sel,fn){ var el=$(sel); if(!el){ log('Missing element '+sel); return false;} el.addEventListener('click',fn); return true; }
-    var ok = true;
-    ok = wire('#btnConnect',connect) && ok;
-    ok = wire('#btnDisconnect',disconnect) && ok;
-    var cmdBtns = document.querySelectorAll('[data-cmd]');
-    for(var i=0;i<cmdBtns.length;i++){ (function(btn){ btn.addEventListener('click', function(){ sendCommand(btn.getAttribute('data-cmd')); }); })(cmdBtns[i]); }
-    ok = wire('#btnSendRaw',sendRaw) && ok;
-    ok = wire('#btnOta',doOta) && ok;
-    ok = wire('#btnStartLog',startLog) && ok;
-    ok = wire('#btnStopLog',stopLog) && ok;
-    ok = wire('#btnDownload',download) && ok;
-    ok = wire('#btnSaveCfg',saveCfg) && ok;
-    ok = wire('#btnLoadCfg',loadCfg) && ok;
-    ok = wire('#btnClearCfg',clearCfg) && ok;
-    log('Event handlers attached' + (ok?'':' (some missing)'));
-  }
-
-  // Init
-  (function boot(){
-    var ver=$('#ver'); if(ver) ver.textContent=UI_VERSION;
-    applyDefaults();
-    wireHandlers();
-    setupAccordion();
-    if(!('bluetooth' in navigator)) log('Web Bluetooth not detected. Try Chrome/Edge desktop or Chrome on Android.');
-    log('UI loaded');
-  })();
-
-  // JS error hooks → Status panel
-  window.addEventListener('error', function(e){ log('Script error: ' + (e && (e.message||e.error) || 'unknown')); });
-  window.addEventListener('unhandledrejection', function(e){ var r=e && e.reason; log('Unhandled promise: ' + (r && (r.message||r) || 'unknown')); });
-})();
-</script>
-</body>
-</html>
+  async function sendCommand(kind){ if(!state.chars.cmd) return log('No command characteristic'); var bytes=CommandMap[kind]; if(!bytes) return log('Unknown command '+kind); try{ await state.chars.cmd.writeValueWithoutResponse(new Uint8Array(bytes)); log('S
