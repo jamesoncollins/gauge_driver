@@ -78,6 +78,26 @@
 
   <main>
     <details class="section" open>
+      <summary><span class="chev">▶</span><span class="summary-title">Dashboard</span><span class="spacer"></span><span class="pill">Live</span></summary>
+      <div class="panel">
+        <div class="grid">
+          <div class="card" style="padding:14px">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px">RPM</div>
+            <div id="tileRpm" style="font-size:36px;font-weight:800">—</div>
+          </div>
+          <div class="card" style="padding:14px">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Speed</div>
+            <div id="tileSpeed" style="font-size:36px;font-weight:800">—</div>
+          </div>
+          <div class="card" style="padding:14px">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Loop (ms)</div>
+            <div id="tileLoop" style="font-size:24px;font-weight:700">—</div>
+            <div id="tileWorst" style="font-size:12px;color:var(--muted)">Worst: —</div>
+          </div>
+        </div>
+      </div>
+    </details>
+    <details class="section" open>
       <summary><span class="chev">▶</span><span class="summary-title">Connection & UUIDs</span><span class="spacer"></span><span class="pill">Setup</span></summary>
       <div class="panel">
         <div class="grid">
@@ -166,7 +186,7 @@
 (function(){
   // —— Defaults (fill with your UUIDs later) ——
   const Defaults = {
-    namePrefix: 'Gauge',
+    namePrefix: '3000GT',
     SERVICE_UUID: '',
     CMD_CHAR_UUID: '',   // write w/o response preferred
     BTBUF_CHAR_UUID: '', // notify
@@ -174,7 +194,7 @@
   };
 
   const CommandMap = {
-    LEFT:  [0x10], RIGHT: [0x11], UP: [0x12], DOWN: [0x13], ENTER:[0x14], BACK:[0x15]
+    LEFT:[3], RIGHT:[4], UP:[1], DOWN:[2], ENTER:[0], BACK:[255]
   };
 
   const OTA_MAGIC = [0xA5];
@@ -234,8 +254,48 @@
   }
 
   function exampleDecode(payload){
-    // TODO: replace with real schema; placeholder shows first 4 bytes & length
-    return {len: payload.length, first: [...payload.slice(0,4)]};
+    // Parse BTBuffer frame as sent by firmware via READNEXT:
+    // struct { u16 id1; u16 id2; u32 tick; u8 data[dataLen]; }
+    const dv = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+    if(payload.byteLength < 8) return {len: payload.length};
+    const id1 = dv.getUint16(0,true);
+    let id2 = dv.getUint16(2,true);
+    // Treat 0xFFFF as -1 to match firmware use
+    if(id2 === 0xFFFF) id2 = -1;
+    const tick = dv.getUint32(4,true);
+    const dataStart = 8;
+    const words = [];
+    for(let off=dataStart; off+4<=payload.byteLength; off+=4){ words.push(dv.getUint32(off,true)); }
+    const parsed = { id1, id2, tick, wordsCount: words.length };
+
+    // Known packet: id1=0,id2=0 contains loopCnt, loopPeriod, worstLoop, _, speed, rpm (u32 each)
+    if(id1===0 && id2===0 && words.length>=6){
+      parsed.loopCnt = words[0];
+      parsed.loopPeriod_ms = words[1];
+      parsed.worstLoop_ms = words[2];
+      parsed.speed = words[4];
+      parsed.rpm = words[5];
+    }
+
+    // ECUK status: id1=1,id2=-1 uses words[0] = ECU_REQUEST_DELAY_US constant
+    if(id1===1 && id2===-1 && words.length>=1){
+      parsed.ecu_req = words[0];
+    }
+
+    // Update live tiles when values present
+    if(typeof parsed.rpm === 'number'){
+      const el = document.getElementById('tileRpm'); if(el) el.textContent = String(parsed.rpm);
+    }
+    if(typeof parsed.speed === 'number'){
+      const el = document.getElementById('tileSpeed'); if(el) el.textContent = String(parsed.speed);
+    }
+    if(typeof parsed.loopPeriod_ms === 'number'){
+      const el = document.getElementById('tileLoop'); if(el) el.textContent = String(parsed.loopPeriod_ms);
+      const ew = document.getElementById('tileWorst'); if(ew && typeof parsed.worstLoop_ms==='number') ew.textContent = 'Worst: '+parsed.worstLoop_ms;
+    }
+
+    return parsed;
+  };
   }
 
   const state = { device:null, server:null, svc:null, chars:{cmd:null,buf:null,ota:null}, reasm:new Reassembler(), logging:false, logRows:[] };
