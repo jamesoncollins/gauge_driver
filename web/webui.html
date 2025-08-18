@@ -335,9 +335,9 @@
 
     var namePrefix=($('#namePrefix') && $('#namePrefix').value) ? $('#namePrefix').value : Defaults.namePrefix;
     var svcUuid=($('#svcUuid') && $('#svcUuid').value) ? $('#svcUuid').value : Defaults.SERVICE_UUID;
-    var cmdUuid=($('#cmdUuid') && $('#cmdUuid').value) ? $('#cmdUuid').value : Defaults.CMD_CHAR_UUID;
-    var bufUuid=($('#bufUuid') && $('#bufUuid').value) ? $('#bufUuid').value : Defaults.BTBUF_CHAR_UUID;
-    var otaUuid=($('#otaUuid') && $('#otaUuid').value) ? $('#otaUuid').value : Defaults.OTA_CHAR_UUID;
+    var cmdCharUuid=($('#cmdUuid') && $('#cmdUuid').value) ? $('#cmdUuid').value : Defaults.CMD_CHAR_UUID;
+    var bufCharUuid=($('#bufUuid') && $('#bufUuid').value) ? $('#bufUuid').value : Defaults.BTBUF_CHAR_UUID;
+    var otaCharUuid=($('#otaUuid') && $('#otaUuid').value) ? $('#otaUuid').value : Defaults.OTA_CHAR_UUID;
 
     var options={optionalServices: KNOWN_SERVICES.slice()};
     if(namePrefix && namePrefix.trim().length){ options.filters=[{namePrefix:namePrefix.trim()}]; } else { options.acceptAllDevices=true; }
@@ -351,9 +351,9 @@
       log('Connected to ' + (device.name||'(unnamed)'));
 
       // Resolve chars (cross-service search if needed)
-      state.chars.cmd = await findCharacteristic(state.server, cmdUuid, svcUuid);
-      state.chars.buf = await findCharacteristic(state.server, bufUuid, svcUuid);
-      state.chars.ota = await findCharacteristic(state.server, otaUuid, svcUuid);
+      state.chars.cmd = await findCharacteristic(state.server, cmdCharUuid, svcUuid);
+      state.chars.buf = await findCharacteristic(state.server, bufCharUuid, svcUuid);
+      state.chars.ota = await findCharacteristic(state.server, otaCharUuid, svcUuid);
 
       if(state.chars.buf){ await state.chars.buf.startNotifications(); state.chars.buf.addEventListener('characteristicvaluechanged', onNotify); }
 
@@ -421,6 +421,7 @@
     setupAccordion();
     if(!('bluetooth' in navigator)) log('Web Bluetooth not detected. Try Chrome/Edge desktop or Chrome on Android.');
     log('UI loaded');
+    log('Defaults in use: CMD='+(Defaults.CMD_CHAR_UUID||'-')+' BUF='+(Defaults.BTBUF_CHAR_UUID||'-')+' OTA='+(Defaults.OTA_CHAR_UUID||'-'));
   })();
 
   // JS error hooks → Status panel
