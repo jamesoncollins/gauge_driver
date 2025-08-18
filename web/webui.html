@@ -212,10 +212,17 @@
   var Defaults = {
     namePrefix: '3000GT',
     SERVICE_UUID: '',
-    CMD_CHAR_UUID: '',
-    BTBUF_CHAR_UUID: '',
-    OTA_CHAR_UUID: ''
+    CMD_CHAR_UUID: '00000001-8e22-4541-9d4c-21edae82ed19',
+    BTBUF_CHAR_UUID: '00000003-8e22-4541-9d4c-21edae82ed19',
+    OTA_CHAR_UUID: '0000fe11-8e22-4541-9d4c-21edae82ed19'
   };
+
+  // Known custom services required to reach our characteristics
+  var KNOWN_SERVICES = [
+    '00000000-cc7a-482a-984a-7f2ed5b3e58f', // UserButtonService (commands)
+    '00000002-cc7a-482a-984a-7f2ed5b3e58f', // ClientReadService (BTBuffer/READNEXT)
+    '00000a00-cc7a-482a-984a-7f2ed5b3e58f'  // RebootReqService (OTA reboot)
+  ];
 
   // Button codes (matches your enum)
   var CommandMap = { LEFT:[3], RIGHT:[4], UP:[1], DOWN:[2], ENTER:[0], BACK:[255] };
@@ -232,7 +239,7 @@
   function $(s){ return document.querySelector(s); }
   function log(msg){ var el=$('#status'); if(!el) return; el.textContent += String(msg)+'\n'; el.scrollTop = el.scrollHeight; }
   function setState(txt){ var pill=$('#connState'); if(pill) pill.textContent = '● ' + txt; }
-  function hex(u8){ var out=[],i; for(i=0;i<u8.length;i++){ var s=u8[i].toString(16); if(s.length<2) s='0'+s; out.push(s);} return out.join('\n'); }
+  function hex(u8){ var out=[],i; for(i=0;i<u8.length;i++){ var s=u8[i].toString(16); if(s.length<2) s='0'+s; out.push(s);} return out.join(' '); }
   function toBytes(hexStr){ var bytes=[]; String(hexStr).replace(/[^0-9a-fA-F]/g,'').replace(/(..)/g,function(m,b){ bytes.push(parseInt(b,16)); }); return new Uint8Array(bytes); }
   function le16(b0,b1){ return (b0 | (b1<<8)); }
   function clamp(v,min,max){ if(v<min) return min; if(v>max) return max; return v; }
@@ -242,8 +249,30 @@
   var KEYS = ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'];
   function saveCfg(){ var cfg={}; for(var i=0;i<KEYS.length;i++){ var k=KEYS[i]; var el=$('#'+k); if(el) cfg[k]=el.value; } localStorage.setItem('gauge-ble-ui', JSON.stringify(cfg)); log('Config saved'); }
   function loadCfg(){ var s=localStorage.getItem('gauge-ble-ui'); if(!s) return; var cfg=JSON.parse(s); for(var i=0;i<KEYS.length;i++){ var k=KEYS[i]; var el=$('#'+k); if(el && cfg[k]!==undefined) el.value=cfg[k]; } log('Config loaded'); }
-  function clearCfg(){ try{ localStorage.removeItem('gauge-ble-ui'); log('Config cleared'); }catch(e){ log(e.message); } }
-  function applyDefaults(){ if(!localStorage.getItem('gauge-ble-ui')){ var np=$('#namePrefix'); if(np) np.value=Defaults.namePrefix; var su=$('#svcUuid'); if(su) su.value=Defaults.SERVICE_UUID; var cu=$('#cmdUuid'); if(cu) cu.value=Defaults.CMD_CHAR_UUID; var bu=$('#bufUuid'); if(bu) bu.value=Defaults.BTBUF_CHAR_UUID; var ou=$('#otaUuid'); if(ou) ou.value=Defaults.OTA_CHAR_UUID; } else { loadCfg(); } }
+  function clearCfg(){ try{ localStorage.removeItem('gauge-ble-ui'); log('Config cleared'); }catch(e){ log(e.message); } applyDefaults(); }catch(e){ log(e.message); } }
+  function applyDefaults(){
+    var had = !!localStorage.getItem('gauge-ble-ui');
+    if(!had){
+      var np=$('#namePrefix'); if(np) np.value=Defaults.namePrefix;
+      var su=$('#svcUuid');    if(su) su.value=Defaults.SERVICE_UUID;
+      var cu=$('#cmdUuid');    if(cu) cu.value=Defaults.CMD_CHAR_UUID;
+      var bu=$('#bufUuid');    if(bu) bu.value=Defaults.BTBUF_CHAR_UUID;
+      var ou=$('#otaUuid');    if(ou) ou.value=Defaults.OTA_CHAR_UUID;
+      return;
+    }
+    // If config exists, load it then fill any missing/blank fields from Defaults
+    loadCfg();
+    var map = {
+      namePrefix: Defaults.namePrefix,
+      svcUuid:    Defaults.SERVICE_UUID,
+      cmdUuid:    Defaults.CMD_CHAR_UUID,
+      bufUuid:    Defaults.BTBUF_CHAR_UUID,
+      otaUuid:    Defaults.OTA_CHAR_UUID
+    };
+    ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'].forEach(function(k){
+      var el = $('#'+k); if(!el) return; var v = (el.value||'').trim(); if(!v) el.value = map[k] || '';
+    });
+  } else { loadCfg(); } }
 
   // Reassembler for notify stream
   function Reassembler(){ this.buf=new Uint8Array(0); }
@@ -310,9 +339,9 @@
     var bufUuid=($('#bufUuid') && $('#bufUuid').value) ? $('#bufUuid').value : Defaults.BTBUF_CHAR_UUID;
     var otaUuid=($('#otaUuid') && $('#otaUuid').value) ? $('#otaUuid').value : Defaults.OTA_CHAR_UUID;
 
-    var options={optionalServices:[]};
+    var options={optionalServices: KNOWN_SERVICES.slice()};
     if(namePrefix && namePrefix.trim().length){ options.filters=[{namePrefix:namePrefix.trim()}]; } else { options.acceptAllDevices=true; }
-    if(svcUuid) options.optionalServices.push(svcUuid);
+    if(svcUuid && options.optionalServices.indexOf(svcUuid)===-1) options.optionalServices.push(svcUuid);
 
     try{
       var device=await navigator.bluetooth.requestDevice(options);
