@@ -249,7 +249,6 @@
   var KEYS = ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'];
   function saveCfg(){ var cfg={}; for(var i=0;i<KEYS.length;i++){ var k=KEYS[i]; var el=$('#'+k); if(el) cfg[k]=el.value; } localStorage.setItem('gauge-ble-ui', JSON.stringify(cfg)); log('Config saved'); }
   function loadCfg(){ var s=localStorage.getItem('gauge-ble-ui'); if(!s) return; var cfg=JSON.parse(s); for(var i=0;i<KEYS.length;i++){ var k=KEYS[i]; var el=$('#'+k); if(el && cfg[k]!==undefined) el.value=cfg[k]; } log('Config loaded'); }
-<<<<<<< HEAD
   function clearCfg(){
     try{
       localStorage.removeItem('gauge-ble-ui');
@@ -282,32 +281,6 @@
       var el = $('#'+k); if(!el) return; var v = (el.value||'').trim(); if(!v) el.value = map[k] || '';
     });
   }
-=======
-  function clearCfg(){ try{ localStorage.removeItem('gauge-ble-ui'); log('Config cleared'); }catch(e){ log(e.message); } applyDefaults(); }catch(e){ log(e.message); } }
-  function applyDefaults(){
-    var had = !!localStorage.getItem('gauge-ble-ui');
-    if(!had){
-      var np=$('#namePrefix'); if(np) np.value=Defaults.namePrefix;
-      var su=$('#svcUuid');    if(su) su.value=Defaults.SERVICE_UUID;
-      var cu=$('#cmdUuid');    if(cu) cu.value=Defaults.CMD_CHAR_UUID;
-      var bu=$('#bufUuid');    if(bu) bu.value=Defaults.BTBUF_CHAR_UUID;
-      var ou=$('#otaUuid');    if(ou) ou.value=Defaults.OTA_CHAR_UUID;
-      return;
-    }
-    // If config exists, load it then fill any missing/blank fields from Defaults
-    loadCfg();
-    var map = {
-      namePrefix: Defaults.namePrefix,
-      svcUuid:    Defaults.SERVICE_UUID,
-      cmdUuid:    Defaults.CMD_CHAR_UUID,
-      bufUuid:    Defaults.BTBUF_CHAR_UUID,
-      otaUuid:    Defaults.OTA_CHAR_UUID
-    };
-    ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'].forEach(function(k){
-      var el = $('#'+k); if(!el) return; var v = (el.value||'').trim(); if(!v) el.value = map[k] || '';
-    });
-  } else { loadCfg(); } }
->>>>>>> branch 'master' of https://github.com/jamesoncollins/gauge_driver.git
 
   // Reassembler for notify stream
   function Reassembler(){ this.buf=new Uint8Array(0); }
@@ -464,8 +437,4 @@
   window.addEventListener('unhandledrejection', function(e){ var r=e && e.reason; log('Unhandled promise: ' + (r && (r.message||r) || 'unknown')); });
 })();
 </script></body>
-<<<<<<< HEAD
 </html>
-=======
-</html>
->>>>>>> branch 'master' of https://github.com/jamesoncollins/gauge_driver.git
