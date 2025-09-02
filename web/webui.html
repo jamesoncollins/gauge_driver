@@ -1,4 +1,5 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -65,7 +66,9 @@
         <button id="btnDisconnect" class="ghost" disabled>Disconnect</button>
       </div>
     </div>
-  </header>  <main>
+  </header>
+
+  <main>
     <details class="section" open>
       <summary><span class="chev">▶</span><span class="summary-title">Dashboard</span><span class="spacer"></span><span class="pill">Live</span></summary>
       <div class="panel">
@@ -119,91 +122,94 @@
           </div>
         </div>
       </div>
-    </details><details class="section" open>
-  <summary><span class="chev">▶</span><span class="summary-title">Connection & UUIDs</span><span class="spacer"></span><span class="pill">Setup</span></summary>
-  <div class="panel">
-    <div class="grid">
-      <div>
-        <label>Device filter (name prefix)</label>
-        <input id="namePrefix" type="text" placeholder="e.g., 3000GT" />
+    </details>
+
+    <details class="section" open>
+      <summary><span class="chev">▶</span><span class="summary-title">Connection & UUIDs</span><span class="spacer"></span><span class="pill">Setup</span></summary>
+      <div class="panel">
+        <div class="grid">
+          <div>
+            <label>Device filter (name prefix)</label>
+            <input id="namePrefix" type="text" placeholder="e.g., 3000GT" />
+          </div>
+          <div>
+            <label>Custom Service UUID (optional)</label>
+            <input id="svcUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          </div>
+          <div>
+            <label>Commands Char UUID (write)</label>
+            <input id="cmdUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          </div>
+          <div>
+            <label>BTBuffer Char UUID (notify)</label>
+            <input id="bufUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          </div>
+          <div>
+            <label>OTA Control Char UUID (write)</label>
+            <input id="otaUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button id="btnSaveCfg">Save</button>
+          <button id="btnLoadCfg" class="ghost">Load</button>
+          <button id="btnClearCfg" class="ghost">Clear</button>
+        </div>
       </div>
-      <div>
-        <label>Custom Service UUID (optional)</label>
-        <input id="svcUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+    </details>
+
+    <details class="section" open>
+      <summary><span class="chev">▶</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
+      <div class="panel">
+        <div class="row" style="margin-bottom:10px">
+          <button data-cmd="LEFT">◀ Left</button>
+          <button data-cmd="RIGHT">▶ Right</button>
+          <button data-cmd="UP">▲ Up</button>
+          <button data-cmd="DOWN">▼ Down</button>
+          <button data-cmd="ENTER">⏎ Enter</button>
+          <button data-cmd="BACK">↩ Back</button>
+        </div>
+        <div class="row">
+          <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
+          <button id="btnSendRaw">Send Raw</button>
+        </div>
       </div>
-      <div>
-        <label>Commands Char UUID (write)</label>
-        <input id="cmdUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+    </details>
+
+    <details class="section" open>
+      <summary><span class="chev">▶</span><span class="summary-title">ECU Stream (BTBuffer)</span><span class="spacer"></span><span class="pill">Notify</span></summary>
+      <div class="panel">
+        <div class="row" style="margin-bottom:10px">
+          <button id="btnStartLog">Start Log</button>
+          <button id="btnStopLog" disabled>Stop Log</button>
+          <button id="btnDownload" disabled>Download CSV</button>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th style="width:180px">Time</th><th>Payload (hex)</th><th>Parsed</th></tr></thead>
+            <tbody id="tblBody"></tbody>
+          </table>
+        </div>
       </div>
-      <div>
-        <label>BTBuffer Char UUID (notify)</label>
-        <input id="bufUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+    </details>
+
+    <details class="section">
+      <summary><span class="chev">▶</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot</span></summary>
+      <div class="panel">
+        <button id="btnOta" style="border-color:var(--warn)">Reboot to OTA</button>
       </div>
-      <div>
-        <label>OTA Control Char UUID (write)</label>
-        <input id="otaUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+    </details>
+
+    <details class="section" open>
+      <summary><span class="chev">▶</span><span class="summary-title">Status</span><span class="spacer"></span><span class="pill">Debug</span></summary>
+      <div class="panel">
+        <pre id="status" class="mono"></pre>
       </div>
-    </div>
-    <div class="row" style="margin-top:10px">
-      <button id="btnSaveCfg">Save</button>
-      <button id="btnLoadCfg" class="ghost">Load</button>
-      <button id="btnClearCfg" class="ghost">Clear</button>
-    </div>
-  </div>
-</details>
+    </details>
 
-<details class="section" open>
-  <summary><span class="chev">▶</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
-  <div class="panel">
-    <div class="row" style="margin-bottom:10px">
-      <button data-cmd="LEFT">◀ Left</button>
-      <button data-cmd="RIGHT">▶ Right</button>
-      <button data-cmd="UP">▲ Up</button>
-      <button data-cmd="DOWN">▼ Down</button>
-      <button data-cmd="ENTER">⏎ Enter</button>
-      <button data-cmd="BACK">↩ Back</button>
-    </div>
-    <div class="row">
-      <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
-      <button id="btnSendRaw">Send Raw</button>
-    </div>
-  </div>
-</details>
+    <footer>Tip: this UI works best on HTTPS or <span class="mono">localhost</span>.</footer>
+  </main>
 
-<details class="section" open>
-  <summary><span class="chev">▶</span><span class="summary-title">ECU Stream (BTBuffer)</span><span class="spacer"></span><span class="pill">Notify</span></summary>
-  <div class="panel">
-    <div class="row" style="margin-bottom:10px">
-      <button id="btnStartLog">Start Log</button>
-      <button id="btnStopLog" disabled>Stop Log</button>
-      <button id="btnDownload" disabled>Download CSV</button>
-    </div>
-    <div class="card">
-      <table>
-        <thead><tr><th style="width:180px">Time</th><th>Payload (hex)</th><th>Parsed</th></tr></thead>
-        <tbody id="tblBody"></tbody>
-      </table>
-    </div>
-  </div>
-</details>
-
-<details class="section">
-  <summary><span class="chev">▶</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot</span></summary>
-  <div class="panel">
-    <button id="btnOta" style="border-color:var(--warn)">Reboot to OTA</button>
-  </div>
-</details>
-
-<details class="section" open>
-  <summary><span class="chev">▶</span><span class="summary-title">Status</span><span class="spacer"></span><span class="pill">Debug</span></summary>
-  <div class="panel">
-    <pre id="status" class="mono"></pre>
-  </div>
-</details>
-
-<footer>Tip: this UI works best on HTTPS or <span class="mono">localhost</span>.</footer>
-
-  </main><script>
+<script>
 (function(){
   'use strict';
   var UI_VERSION = 'v0.6.3';
@@ -249,15 +255,7 @@
   var KEYS = ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'];
   function saveCfg(){ var cfg={}; for(var i=0;i<KEYS.length;i++){ var k=KEYS[i]; var el=$('#'+k); if(el) cfg[k]=el.value; } localStorage.setItem('gauge-ble-ui', JSON.stringify(cfg)); log('Config saved'); }
   function loadCfg(){ var s=localStorage.getItem('gauge-ble-ui'); if(!s) return; var cfg=JSON.parse(s); for(var i=0;i<KEYS.length;i++){ var k=KEYS[i]; var el=$('#'+k); if(el && cfg[k]!==undefined) el.value=cfg[k]; } log('Config loaded'); }
-  function clearCfg(){
-    try{
-      localStorage.removeItem('gauge-ble-ui');
-      log('Config cleared');
-    }catch(e){
-      log(e.message);
-    }
-    applyDefaults();
-  }
+  function clearCfg(){ try{ localStorage.removeItem('gauge-ble-ui'); log('Config cleared'); }catch(e){ log(e.message); } applyDefaults(); }catch(e){ log(e.message); } }
   function applyDefaults(){
     var had = !!localStorage.getItem('gauge-ble-ui');
     if(!had){
@@ -280,7 +278,7 @@
     ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'].forEach(function(k){
       var el = $('#'+k); if(!el) return; var v = (el.value||'').trim(); if(!v) el.value = map[k] || '';
     });
-  }
+  } else { loadCfg(); } }
 
   // Reassembler for notify stream
   function Reassembler(){ this.buf=new Uint8Array(0); }
@@ -436,5 +434,6 @@
   window.addEventListener('error', function(e){ log('Script error: ' + (e && (e.message||e.error) || 'unknown')); });
   window.addEventListener('unhandledrejection', function(e){ var r=e && e.reason; log('Unhandled promise: ' + (r && (r.message||r) || 'unknown')); });
 })();
-</script></body>
+</script>
+</body>
 </html>
