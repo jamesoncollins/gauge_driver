@@ -20,8 +20,6 @@
 //
 //#define GDISP_LLD_PIXELFORMAT			GDISP_PIXELFORMAT_RGB565
 
-
-
 #define GDISP_HARDWARE_FLUSH                    GFXON           // This controller requires flushing
 #define GDISP_HARDWARE_DRAWPIXEL                GFXON
 //#define GDISP_HARDWARE_PIXELREAD                GFXON

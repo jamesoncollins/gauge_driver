@@ -24,12 +24,15 @@
 /* Driver local definitions.                                                 */
 /*===========================================================================*/
 
-#define GDISP_FLG_NEEDFLUSH                     (GDISP_FLG_DRIVER<<0)
 
-// trim height from the bottom
-// trim width from the left and right
-#define TRIM_HEIGHT 65
+#ifndef TRIM_HEIGHT
+#define TRIM_HEIGHT 0
+#endif
+#ifndef TRIM_WIDTH
 #define TRIM_WIDTH 0
+#endif
+
+#define GDISP_FLG_NEEDFLUSH                     (GDISP_FLG_DRIVER<<0)
 
 #ifndef GDISP_SCREEN_HEIGHT
 #define GDISP_SCREEN_HEIGHT		(320 - TRIM_HEIGHT) //320

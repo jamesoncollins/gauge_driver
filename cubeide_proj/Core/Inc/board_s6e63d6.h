@@ -13,6 +13,11 @@
 #include "common.h"
 #include "gfx.h"
 
+// trim height from the bottom
+// trim width from the left and right
+#define TRIM_HEIGHT 65
+#define TRIM_WIDTH 0
+
 extern SPI_HandleTypeDef hspi2;
 extern I2C_HandleTypeDef hi2c3;
 extern DMA_HandleTypeDef hdma_spi2_tx;
