@@ -161,7 +161,14 @@
       <summary><span class="chev">▶</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
       <div class="panel">
         <div class="row" style="margin-bottom:10px">
-          <button data-cmd="LEFT">◀ Left</button>
+      <label style="min-width:160px">Command encoding</label>
+      <select id="cmdEncoding">
+        <option value="ascii" selected>ASCII (U/D/L/R/E/B)</option>
+        <option value="enum">Enum (0,1,2,3,4,255)</option>
+      </select>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <button data-cmd="LEFT">◀ Left</button>
           <button data-cmd="RIGHT">▶ Right</button>
           <button data-cmd="UP">▲ Up</button>
           <button data-cmd="DOWN">▼ Down</button>
@@ -212,9 +219,9 @@
 <script>
 (function(){
   'use strict';
-  var UI_VERSION = 'v0.6.3';
+  var UI_VERSION = 'v0.6.4';
 
-  // Defaults
+  // ===== Defaults & Known Services =====
   var Defaults = {
     namePrefix: '3000GT',
     SERVICE_UUID: '',
@@ -222,40 +229,49 @@
     BTBUF_CHAR_UUID: '00000003-8e22-4541-9d4c-21edae82ed19',
     OTA_CHAR_UUID: '0000fe11-8e22-4541-9d4c-21edae82ed19'
   };
-
-  // Known custom services required to reach our characteristics
   var KNOWN_SERVICES = [
     '00000000-cc7a-482a-984a-7f2ed5b3e58f', // UserButtonService (commands)
     '00000002-cc7a-482a-984a-7f2ed5b3e58f', // ClientReadService (BTBuffer/READNEXT)
     '00000a00-cc7a-482a-984a-7f2ed5b3e58f'  // RebootReqService (OTA reboot)
   ];
 
-  // Button codes (matches your enum)
-  var CommandMap = { LEFT:[3], RIGHT:[4], UP:[1], DOWN:[2], ENTER:[0], BACK:[255] };
+  // ===== Command Encoding =====
+  var CommandMapEnum  = { LEFT:[3], RIGHT:[4], UP:[1], DOWN:[2], ENTER:[0], BACK:[255] };
+  var CommandMapASCII = { LEFT:[0x4C], RIGHT:[0x52], UP:[0x55], DOWN:[0x44], ENTER:[0x45], BACK:[0x42] };
+  function getCmdMap(){ var sel=document.querySelector('#cmdEncoding'); var mode=sel?sel.value:'ascii'; return mode==='enum'?CommandMapEnum:CommandMapASCII; }
 
-  // OTA payload (adjust if firmware expects 4 bytes)
+  // ===== OTA magic =====
   var OTA_MAGIC = [0xA5];
 
-  // Frame settings (BTBuffer)
+  // ===== Frame reassembly =====
   var USE_LENGTH_PREFIX = true; // set false if ASCII-delimited
   var LENGTH_BYTES = 2;         // u16 little-endian
-  var DELIM = 0x0A;             // newline delimiter ("\n")
+  var DELIM = 0x0A;             // for ASCII mode
 
-  // Helpers
+  // ===== Helpers =====
   function $(s){ return document.querySelector(s); }
   function log(msg){ var el=$('#status'); if(!el) return; el.textContent += String(msg)+'\n'; el.scrollTop = el.scrollHeight; }
   function setState(txt){ var pill=$('#connState'); if(pill) pill.textContent = '● ' + txt; }
   function hex(u8){ var out=[],i; for(i=0;i<u8.length;i++){ var s=u8[i].toString(16); if(s.length<2) s='0'+s; out.push(s);} return out.join(' '); }
   function toBytes(hexStr){ var bytes=[]; String(hexStr).replace(/[^0-9a-fA-F]/g,'').replace(/(..)/g,function(m,b){ bytes.push(parseInt(b,16)); }); return new Uint8Array(bytes); }
   function le16(b0,b1){ return (b0 | (b1<<8)); }
-  function clamp(v,min,max){ if(v<min) return min; if(v>max) return max; return v; }
+  function clamp(v,min,max){ return v<min?min:(v>max?max:v); }
   function setNeedle(id,value,min,max){ var el=document.getElementById(id); if(!el) return; var span=max-min; if(span<=0) return; var v=clamp(value,min,max); var pct=(v-min)/span; var angle=-90 + pct*180; el.setAttribute('transform','rotate('+angle+' 50 50)'); }
+  function propsStr(ch){ if(!ch||!ch.properties) return 'none'; var p=ch.properties,a=[]; if(p.read)a.push('read'); if(p.write)a.push('write'); if(p.writeWithoutResponse)a.push('wwr'); if(p.notify)a.push('notify'); if(p.indicate)a.push('indicate'); return a.join('|')||'none'; }
 
-  // Persist inputs
+  // ===== Persist inputs =====
   var KEYS = ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'];
   function saveCfg(){ var cfg={}; for(var i=0;i<KEYS.length;i++){ var k=KEYS[i]; var el=$('#'+k); if(el) cfg[k]=el.value; } localStorage.setItem('gauge-ble-ui', JSON.stringify(cfg)); log('Config saved'); }
   function loadCfg(){ var s=localStorage.getItem('gauge-ble-ui'); if(!s) return; var cfg=JSON.parse(s); for(var i=0;i<KEYS.length;i++){ var k=KEYS[i]; var el=$('#'+k); if(el && cfg[k]!==undefined) el.value=cfg[k]; } log('Config loaded'); }
-  function clearCfg(){ try{ localStorage.removeItem('gauge-ble-ui'); log('Config cleared'); }catch(e){ log(e.message); } applyDefaults(); }catch(e){ log(e.message); } }
+  function clearCfg(){
+    try {
+      localStorage.removeItem('gauge-ble-ui');
+      log('Config cleared');
+    } catch(e) {
+      log(e.message);
+    }
+    applyDefaults();
+  }
   function applyDefaults(){
     var had = !!localStorage.getItem('gauge-ble-ui');
     if(!had){
@@ -278,9 +294,9 @@
     ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'].forEach(function(k){
       var el = $('#'+k); if(!el) return; var v = (el.value||'').trim(); if(!v) el.value = map[k] || '';
     });
-  } else { loadCfg(); } }
+  }
 
-  // Reassembler for notify stream
+  // ===== Reassembler =====
   function Reassembler(){ this.buf=new Uint8Array(0); }
   Reassembler.prototype.push = function(chunk){
     var combined=new Uint8Array(this.buf.length+chunk.length); combined.set(this.buf,0); combined.set(chunk,this.buf.length); this.buf=combined;
@@ -299,23 +315,22 @@
   };
   Reassembler.prototype.reset = function(){ this.buf=new Uint8Array(0); };
 
-  // Decode BTBuffer frames → parsed fields
+  // ===== Decoder =====
   function decodeFrame(payload){
     var dv=new DataView(payload.buffer,payload.byteOffset,payload.byteLength);
     if(payload.byteLength<8) return {len:payload.length};
     var id1=dv.getUint16(0,true); var id2=dv.getUint16(2,true); if(id2===0xFFFF) id2=-1; var tick=dv.getUint32(4,true);
-    var words=[]; var off; for(off=8; off+4<=payload.byteLength; off+=4){ words.push(dv.getUint32(off,true)); }
+    var words=[]; for(var off=8; off+4<=payload.byteLength; off+=4){ words.push(dv.getUint32(off,true)); }
     var obj={id1:id1,id2:id2,tick:tick,wordsCount:words.length};
     if(id1===0 && id2===0 && words.length>=6){ obj.loopCnt=words[0]; obj.loopPeriod_ms=words[1]; obj.worstLoop_ms=words[2]; obj.speed=words[4]; obj.rpm=words[5]; }
     if(id1===1 && id2===-1 && words.length>=1){ obj.ecu_req=words[0]; }
-    // Update tiles
     if(typeof obj.rpm==='number'){ var tr=$('#tileRpm'); if(tr) tr.textContent=String(obj.rpm); setNeedle('rpmNeedle', obj.rpm, 0, 8000); }
     if(typeof obj.speed==='number'){ var ts=$('#tileSpeed'); if(ts) ts.textContent=String(obj.speed); setNeedle('speedNeedle', obj.speed, 0, 160); }
     if(typeof obj.loopPeriod_ms==='number'){ var tl=$('#tileLoop'); if(tl) tl.textContent=String(obj.loopPeriod_ms); var tw=$('#tileWorst'); if(tw && typeof obj.worstLoop_ms==='number') tw.textContent='Worst: '+obj.worstLoop_ms; }
     return obj;
   }
 
-  // BLE session state
+  // ===== BLE session =====
   var state={ device:null, server:null, reasm:new Reassembler(), chars:{cmd:null,buf:null,ota:null}, logging:false, logRows:[] };
 
   function findCharacteristic(server, charUuid, svcUuid){
@@ -325,7 +340,9 @@
         try{
           if(svcUuid){ var svc=await server.getPrimaryService(svcUuid); var ch=await svc.getCharacteristic(charUuid); return resolve(ch); }
           var services=await server.getPrimaryServices();
-          for(var i=0;i<services.length;i++){ try{ var ch2=await services[i].getCharacteristic(charUuid); if(ch2){ return resolve(ch2); } }catch(_e){} }
+          for(var i=0;i<services.length;i++){
+            try{ var ch2=await services[i].getCharacteristic(charUuid); if(ch2){ return resolve(ch2); } }catch(_e){}
+          }
         }catch(err){ log('Find char error: '+err.message); }
         resolve(null);
       })();
@@ -333,7 +350,7 @@
   }
 
   async function connect(){
-    var status=$('#status'); if(status) status.textContent='';
+    var statusEl=$('#status'); if(statusEl) statusEl.textContent='';
     log('Connect clicked');
     if(!('bluetooth' in navigator)){ log('Web Bluetooth not supported. Use Chrome/Edge desktop or Chrome on Android over HTTPS.'); return; }
     if(!window.isSecureContext){ log('Warning: not HTTPS/localhost. Web Bluetooth may be blocked.'); }
@@ -356,10 +373,13 @@
       state.server=await device.gatt.connect();
       log('Connected to ' + (device.name||'(unnamed)'));
 
-      // Resolve chars (cross-service search if needed)
       state.chars.cmd = await findCharacteristic(state.server, cmdCharUuid, svcUuid);
       state.chars.buf = await findCharacteristic(state.server, bufCharUuid, svcUuid);
       state.chars.ota = await findCharacteristic(state.server, otaCharUuid, svcUuid);
+
+      log('CMD char: ' + (state.chars.cmd ? (state.chars.cmd.uuid + ' [' + propsStr(state.chars.cmd) + ']') : 'NOT FOUND'));
+      log('BUF char: ' + (state.chars.buf ? (state.chars.buf.uuid + ' [' + propsStr(state.chars.buf) + ']') : 'NOT FOUND'));
+      log('OTA char: ' + (state.chars.ota ? (state.chars.ota.uuid + ' [' + propsStr(state.chars.ota) + ']') : 'NOT FOUND'));
 
       if(state.chars.buf){ await state.chars.buf.startNotifications(); state.chars.buf.addEventListener('characteristicvaluechanged', onNotify); }
 
@@ -389,18 +409,35 @@
     var tbody=$('#tblBody'); if(!tbody) return; tbody.prepend(tr); while(tbody.rows.length>300) tbody.deleteRow(-1);
   }
 
-  async function sendCommand(kind){ if(!state.chars.cmd) return log('No command characteristic'); var bytes=CommandMap[kind]; if(!bytes) return log('Unknown command '+kind); try{ await state.chars.cmd.writeValueWithoutResponse(new Uint8Array(bytes)); log('Sent '+kind+': '+bytes.map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')); }catch(err){ log('Send error: '+err.message); } }
-  async function sendRaw(){ if(!state.chars.cmd) return log('No command characteristic'); var text=$('#rawHex') && $('#rawHex').value ? $('#rawHex').value.trim() : ''; if(!text) return; try{ var buf=toBytes(text); var CHUNK=20; for(var i=0;i<buf.length;i+=CHUNK){ await state.chars.cmd.writeValueWithoutResponse(buf.slice(i,Math.min(i+CHUNK,buf.length))); } log('Sent RAW: '+text); }catch(err){ log('Raw send error: '+err.message); } }
+  async function sendCommand(kind){
+    if(!state.chars.cmd) return log('No command characteristic');
+    var map=getCmdMap(); var bytes=map[kind]; if(!bytes) return log('Unknown command '+kind);
+    var u8=new Uint8Array(bytes); var props=state.chars.cmd && state.chars.cmd.properties; var mode=(document.querySelector('#cmdEncoding')||{value:'ascii'}).value;
+    try{
+      if(props && props.writeWithoutResponse){ await state.chars.cmd.writeValueWithoutResponse(u8); return log('Sent '+kind+' ('+mode+') via WWR: '+bytes.map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')); }
+      if(props && props.write){ await state.chars.cmd.writeValue(u8); return log('Sent '+kind+' ('+mode+') via WRITE: '+bytes.map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')); }
+      try{ await state.chars.cmd.writeValueWithoutResponse(u8); return log('Sent '+kind+' ('+mode+') via WWR (fallback)'); }
+      catch(_e2){ await state.chars.cmd.writeValue(u8); return log('Sent '+kind+' ('+mode+') via WRITE (fallback)'); }
+    }catch(err){ log('Send error ('+kind+'): '+err.message); }
+  }
+
+  async function sendRaw(){
+    if(!state.chars.cmd) return log('No command characteristic');
+    var text=$('#rawHex') && $('#rawHex').value ? $('#rawHex').value.trim() : ''; if(!text) return;
+    try{
+      var buf=toBytes(text); var CHUNK=20; for(var i=0;i<buf.length;i+=CHUNK){ await state.chars.cmd.writeValueWithoutResponse(buf.slice(i,Math.min(i+CHUNK,buf.length))); }
+      log('Sent RAW: '+text);
+    }catch(err){ log('Raw send error: '+err.message); }
+  }
+
   async function doOta(){ if(!state.chars.ota) return log('No OTA characteristic'); if(!window.confirm('Reboot device into OTA firmware?')) return; try{ await state.chars.ota.writeValueWithoutResponse(new Uint8Array(OTA_MAGIC)); log('OTA reboot requested'); }catch(err){ log('OTA write error: '+err.message); } }
 
   function startLog(){ state.logging=true; state.logRows=[]; var dl=$('#btnDownload'); if(dl) dl.disabled=true; var st=$('#btnStartLog'); if(st) st.disabled=true; var sp=$('#btnStopLog'); if(sp) sp.disabled=false; }
   function stopLog(){ state.logging=false; var sp=$('#btnStopLog'); if(sp) sp.disabled=true; var st=$('#btnStartLog'); if(st) st.disabled=false; var dl=$('#btnDownload'); if(dl && state.logRows.length) dl.disabled=false; }
-  function download(){ var rows=[["time","payload_hex","parsed_json"]].concat(state.logRows); var csv=rows.map(function(r){ return r.map(function(x){ var s=String(x).replace(/\"/g,'\"\"'); return '"'+s+'"'; }).join(','); }).join('\n'); var blob=new Blob([csv],{type:'text/csv'}); var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download='ecu_log_'+Date.now()+'.csv'; a.click(); setTimeout(function(){ URL.revokeObjectURL(url); },1000); }
+  function download(){ var rows=[["time","payload_hex","parsed_json"]].concat(state.logRows); var csv=rows.map(function(r){ return r.map(function(x){ var s=String(x).replace(/\"/g,'""'); return '"'+s+'"'; }).join(','); }).join('\n'); var blob=new Blob([csv],{type:'text/csv'}); var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download='ecu_log_'+Date.now()+'.csv'; a.click(); setTimeout(function(){ URL.revokeObjectURL(url); },1000); }
 
-  // Accordion: one section open at a time
   function setupAccordion(){ var all=document.querySelectorAll('details.section'); for(var i=0;i<all.length;i++){ (function(d){ d.addEventListener('toggle', function(){ if(d.open){ for(var j=0;j<all.length;j++){ if(all[j]!==d) all[j].open=false; } } }); })(all[i]); } }
 
-  // UI wiring
   function wireHandlers(){
     function wire(sel,fn){ var el=$(sel); if(!el){ log('Missing element '+sel); return false;} el.addEventListener('click',fn); return true; }
     var ok = true;
@@ -419,7 +456,7 @@
     log('Event handlers attached' + (ok?'':' (some missing)'));
   }
 
-  // Init
+  // ===== Boot =====
   (function boot(){
     var ver=$('#ver'); if(ver) ver.textContent=UI_VERSION;
     applyDefaults();
@@ -430,7 +467,7 @@
     log('Defaults in use: CMD='+(Defaults.CMD_CHAR_UUID||'-')+' BUF='+(Defaults.BTBUF_CHAR_UUID||'-')+' OTA='+(Defaults.OTA_CHAR_UUID||'-'));
   })();
 
-  // JS error hooks → Status panel
+  // ===== Error hooks → Status panel =====
   window.addEventListener('error', function(e){ log('Script error: ' + (e && (e.message||e.error) || 'unknown')); });
   window.addEventListener('unhandledrejection', function(e){ var r=e && e.reason; log('Unhandled promise: ' + (r && (r.message||r) || 'unknown')); });
 })();
