@@ -62,6 +62,12 @@ public:
         float min_value_care = 0.0f;          // e.g., 5 mph, 400 rpm
         float min_hz_care_override = NAN;     // if set (finite), overrides computation from value
         float care_timeout_margin = 1.30f;    // multiplier on that period (adds slack)
+
+        // --- Consecutive-agreement gate (pre-EMA, in ISR) ---
+        uint8_t consec_required = 2;         // X: need this many in a row
+        float   consec_pct_between = 0.20f;  // Y1: spread among the X must be <= 20%
+        float   consec_pct_vs_state = 1.0; // Y2: each tick within 30% of current EMA (ignored if EMA≈0)
+        uint32_t consec_max_gap_us = 1000000; // reset the chain if no edge for this long
     };
 
     struct Snapshot {
@@ -91,6 +97,11 @@ public:
         pending_overflow_ticks_ = 0;
         last_ccr_ = 0;
         last_ticks_ = 0;
+
+        consec_count_ = 0;
+        consec_min_hz_ = 0.f;
+        consec_max_hz_ = 0.f;
+        consec_start_us_ = last_edge_us_;
 
         seq_.store(0u);
         recomputeCareThreshold_();
@@ -296,6 +307,71 @@ private:
             }
         }
 
+        // ----- Consecutive-agreement gate -----
+        {
+            // Reset chain if too much time has elapsed between samples
+            if ((now_us - consec_start_us_) > cfg_.consec_max_gap_us) {
+                consec_count_ = 0;
+                consec_min_hz_ = consec_max_hz_ = 0.f;
+            }
+
+            // Start or extend the chain
+            if (consec_count_ == 0) {
+                consec_min_hz_ = consec_max_hz_ = hz_inst;
+                consec_start_us_ = now_us;
+                consec_count_ = 1;
+            } else {
+                // Update spread
+                if (hz_inst < consec_min_hz_) consec_min_hz_ = hz_inst;
+                if (hz_inst > consec_max_hz_) consec_max_hz_ = hz_inst;
+
+                float denom = (consec_max_hz_ > 1e-6f) ? consec_max_hz_ : 1.0f;
+                float spread = (consec_max_hz_ - consec_min_hz_) / denom;
+
+                // Check vs current filtered state (relaxed if EMA ~ 0)
+                bool vs_state_ok = true;
+                if (hz_ema_ > 1e-3f && std::isfinite(cfg_.consec_pct_vs_state)) {
+                    float dden = (hz_inst > hz_ema_) ? hz_inst : hz_ema_;
+                    float dev  = (dden > 1e-6f) ? std::fabs(hz_inst - hz_ema_) / dden : 0.f;
+                    vs_state_ok = (dev <= cfg_.consec_pct_vs_state);
+                }
+
+                if ((spread <= cfg_.consec_pct_between) && vs_state_ok) {
+                    if (consec_count_ < 0xFF) ++consec_count_;
+                } else {
+                    // Reset chain starting from this sample
+                    consec_min_hz_ = consec_max_hz_ = hz_inst;
+                    consec_start_us_ = now_us;
+                    consec_count_ = 1;
+                }
+            }
+
+            // If not enough consecutive agreement yet, just update last_raw/last_edge and bail.
+            if (consec_count_ < cfg_.consec_required) {
+                // Keep last_raw for diagnostics, but do NOT touch EMA/value
+                hz_last_raw_ = hz_inst;
+                last_edge_us_ = now_us;
+                return;
+            }
+
+            // Optional: collapse to cluster center to reduce residual jitter
+            // (You can just use hz_inst; using mid-spread is slightly calmer.)
+            float hz_cluster = 0.5f * (consec_min_hz_ + consec_max_hz_);
+
+            // Make it easy to keep accepting the stream without re-waiting N every time:
+            // keep the chain "warm" at (required-1) so one bad tick won’t fully flush it.
+            if (cfg_.consec_required > 0) {
+                consec_count_ = (uint8_t)(cfg_.consec_required - 1);
+                consec_min_hz_ = hz_cluster;
+                consec_max_hz_ = hz_cluster;
+            }
+
+            // Replace hz_inst with the cluster value for the rest of the pipeline
+            hz_inst = hz_cluster;
+        }
+        // ----- end consecutive-agreement gate -----
+
+
         // Clamp raw Hz to guards
         if (hz_inst < 0.f) hz_inst = 0.f;
         if (hz_inst > cfg_.max_hz) hz_inst = cfg_.max_hz;
@@ -377,6 +453,13 @@ private:
     volatile float hz_ema_{0.0f};
     volatile float value_{0.0f};
     volatile float last_value_filt_{0.0f};
+
+    // --- Consecutive-agreement state ---
+    volatile uint8_t  consec_count_{0};
+    volatile float    consec_min_hz_{0.f};
+    volatile float    consec_max_hz_{0.f};
+    volatile uint32_t consec_start_us_{0};
+
 
     // --- Lightweight 32-bit atomic seq counter ---
     struct Seq32 {
