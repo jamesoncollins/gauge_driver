@@ -70,8 +70,8 @@ void Error_Handler(void);
 #define INT_GYR_Pin GPIO_PIN_3
 #define INT_GYR_GPIO_Port GPIOC
 #define INT_GYR_EXTI_IRQn EXTI3_IRQn
-#define GPIO3_Pin GPIO_PIN_8
-#define GPIO3_GPIO_Port GPIOA
+#define GPIO3_LPTIM2_Pin GPIO_PIN_8
+#define GPIO3_LPTIM2_GPIO_Port GPIOA
 #define GPIO2_Pin GPIO_PIN_4
 #define GPIO2_GPIO_Port GPIOC
 #define IGN_Pin GPIO_PIN_5

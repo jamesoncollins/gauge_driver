@@ -36,16 +36,31 @@ HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const u
  * Note, you can use both of these at the same time.
  */
 //#define PRINT_TO_USB
-//#define USB_DISPLAY
+#define USB_DISPLAY
 
-const int RPM_ALERT_INIT = 5500; // soft alert threshold
-const int RPM_ALERT_FINAL = 6700; // hard threshold (i.e. red screen, constant buzz)
+/*
+ * Optional debug / diagnostic print on the screen
+ */
+//#define DIAG_SQUARE
+
+/*
+ * RPM/Shift alert points
+ */
+const int RPM_ALERT_RESET = 5200; // soft alert OFF
+const int RPM_ALERT_INIT = 5500; // soft alert / early warn
+const int RPM_ALERT_FINAL = 6700; // SHIFT
 
 /*
  * dots per inch for this screen
  */
 const int DPI = 240. / 1.4456693; //166
 const int DPMM = 240. / 36.72; // 6.53 dots per mm
+
+/*
+ * gauge measurement settings
+ */
+const float MPH_PER_HZ = ( 0.8425872f * 1.015625f ); //(1.11746031667) //( 1.07755102 )
+const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
 
 /*
  * button type for bluetooth UI

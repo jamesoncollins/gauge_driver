@@ -11,7 +11,8 @@ extern "C" {
 #include "custom_stm.h"
 #include "../MCP4725-lib/MCP4725.h"
 #include "../BMI088-lib/BMI088.h"
-//#include "board_s6e63d6.h" // cant include this
+
+// functions inside board_s6e63d6.h
 extern bool bus_busy();
 extern void setAutoClear(bool);
 }
@@ -28,14 +29,16 @@ extern void setAutoClear(bool);
 #include "../PI4IOE5V6416/PI4IOE5V6416.hpp"
 #include "../ECUK-lib/MUTII.hpp"
 #include "../BTbuffer-lib/BTBuffer.hpp"
-
+#include "HzSensorFilter.hpp"
+#include "tachTest.hpp"
 
 extern I2C_HandleTypeDef hi2c1, hi2c3;
 extern SPI_HandleTypeDef hspi1;
-extern TIM_HandleTypeDef htim1;
-extern TIM_HandleTypeDef htim2;
-extern TIM_HandleTypeDef htim16;
-extern TIM_HandleTypeDef htim17;
+extern LPTIM_HandleTypeDef hlptim2; // sim signals for tach/rpm on GPIO3 / PA8
+extern TIM_HandleTypeDef htim1; // speaker SPI-DMA control i think, (64MHz counting to 6399+1 = 10khz)
+extern TIM_HandleTypeDef htim2; // speed/tach measurement (capture control), 64MHz / (63+1) = 1MHz
+extern TIM_HandleTypeDef htim16; // handle ecu at 2khz, 64MHz counting to 31999+1
+extern TIM_HandleTypeDef htim17; // stepper motor ticks.  64MHz/64.  we update the ARR on the fly to change the duty cycle.
 extern UART_HandleTypeDef huart1;
 extern RTC_HandleTypeDef hrtc;
 
@@ -51,7 +54,18 @@ volatile static bool ecuTxDone = false;
 volatile static bool ecuRxDone = false;
 static MUTII ecu(&huart1, &ecuTxDone, &ecuRxDone);
 
+static HzSensorFilter g_speed;
+static HzSensorFilter g_tach;
 volatile static float rpm, speed;
+
+typedef enum
+{
+	RPM_MODE_LOW = 0,
+	RPM_MODE_EARLY_WARN = 1,
+	RPM_MODE_SHIFT = 2
+}
+rpmMode_e;
+volatile static rpmMode_e rpm_mode = RPM_MODE_LOW; // 0 - no alert, 1 - early warning, 2 - critical
 
 /*
  * one per i2c channel
@@ -171,6 +185,13 @@ int main_cpp(void)
   BTBuffer::CreateInstance( NULL, 0 );
 
   /*
+   * used to simulate tach/speed PWM signals on GPIO3 (PA8)
+   *
+   * Call once during init, after MX_LPTIM2_Init() and GPIO init
+   */
+  TachTest_Init();
+
+  /*
    * init graphics library
    */
   gfxInit();
@@ -237,7 +258,9 @@ int main_cpp(void)
   /*
    * start timers
    */
-  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_Base_Start(&htim2);                // no _IT
+  __HAL_TIM_DISABLE_IT(&htim2, TIM_IT_UPDATE);
+  __HAL_TIM_CLEAR_IT(&htim2, TIM_IT_UPDATE);
   HAL_TIM_Base_Start_IT(&htim16);
   HAL_TIM_Base_Start_IT(&htim17);
 
@@ -246,6 +269,45 @@ int main_cpp(void)
    */
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3); // speed
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4); // tach
+
+  /*
+   * speed and tach measurement class init
+   */
+  // ---------- Tach (RPM) ----------
+  HzSensorFilter::Config tach{};
+  tach.timer_freq_hz  = 1000000;
+  tach.timer_max_tick = __HAL_TIM_GET_AUTORELOAD(&htim2);
+  tach.K = RPM_PER_HZ;                                    // 20.0f
+  tach.B = 0.0f;
+
+  // filtering + limits...
+  tach.alpha_normal  = 0.25f;
+  tach.alpha_outlier = 0.06f;
+  tach.outlier_ratio = 0.50f;
+  tach.max_value = 9000.0f;
+  tach.max_accel_up_value_per_s   = 9000.0f;
+  tach.max_accel_down_value_per_s = 15000.0f;
+  tach.accel_clamp = true;
+
+  // NEW: minimum displayable RPM -> auto staleness from this
+  tach.min_value_care     = 400.0f;   // below this, treat as zero
+  tach.care_timeout_margin = 1.30f;   // 30% slack on the period at 400 RPM
+
+  g_tach.init(tach, [](){ return (uint32_t)(HAL_GetTick()*1000u); });
+
+  // ---------- Speed (MPH) ----------
+  HzSensorFilter::Config spd = tach;
+  spd.K = MPH_PER_HZ;                 // your calibrated constant
+  spd.max_value = 180.0f;
+  spd.max_accel_up_value_per_s   = 25.0f;
+  spd.max_accel_down_value_per_s = 40.0f;
+
+  //  minimum displayable MPH
+  spd.min_value_care      = 5.0f;     // below this, show 0
+  spd.care_timeout_margin = 1.30f;
+
+  g_speed.init(spd, [](){ return (uint32_t)(HAL_GetTick()*1000u); });
+
 
   /*
    * needle drivers
@@ -295,15 +357,6 @@ int main_cpp(void)
   odoX12.currentStep = 0;
   odoX12.targetStep = 0;
 
-  /*
-   * SMA filters for RPM and Speed.
-   * Note that the frequency measurement itself has a long SMA
-   * applied as well.  This one will be shorted and is basically just
-   * performing interpolation at low speed/rpm where tick updates are
-   * infrequent.
-   */
-  iir_ma_state_t ema_state_rpm = { .alpha = 0.3, .yz1 = 0 };
-  iir_ma_state_t ema_state_speed = { .alpha = 0.3, .yz1 = 0 };
 
   HAL_GPIO_WritePin ( RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET );
   HAL_Delay(10);
@@ -606,12 +659,7 @@ int main_cpp(void)
            * we dont enter this section of code uncless the display bus isn't busy
            * then we know this function call below will always return immediatly
            */
-          if(rpm > RPM_ALERT_INIT)
-            gdispClear(GFX_YELLOW);
-          else if (rpm > RPM_ALERT_FINAL)
-            gdispClear(GFX_RED);
-          else
-            gdispClear(GFX_BLACK);
+          gdispClear(GFX_BLACK);
           break;
 
         case 1:
@@ -743,13 +791,33 @@ int main_cpp(void)
           }
           break;
 
+        case 7:
+        	/*
+        	 * Shift warning
+        	 */
+            if (rpm_mode >= RPM_MODE_SHIFT)
+            	gdispFillArea(
+            			(screenWidth>>1)-50,
+						(screenHeight>>1)-50,
+						100,100,
+						GFX_RED);
+            if(rpm_mode >= RPM_MODE_EARLY_WARN)
+            	gdispFillArea(
+            			(screenWidth>>1)-30,
+						(screenHeight>>1)-30,
+						60,60,
+						GFX_YELLOW);
+
+            break;
+
+
         default:
           // debug / diag messages
-//#define DIAG_SQUARE
 #ifdef DIAG_SQUARE
           static uint32_t displayTime = 0;
           static const int xdiag = 30, ydiag = 192;
-          gdispDrawBox(xdiag-1,ydiag-1,60,62,GFX_AMBER);
+          gdispFillArea(xdiag-1,ydiag-1,65,65,GFX_BLACK);
+          gdispDrawBox(xdiag-1,ydiag-1,65,65,GFX_AMBER);
 
           snprintf (logBuf, bufLen, "ECU: %lu/%lu", ecu.getMsgRate(), ecu.getMissedReplyResetCnt());
           gdispFillString(xdiag, ydiag+00, logBuf, font10, GFX_AMBER, GFX_BLACK);
@@ -810,6 +878,18 @@ int main_cpp(void)
     tachX12.setPosition( get_x12_ticks_rpm(rpm) );
     speedX12.setPosition( get_x12_ticks_speed(speed) );
 #else
+
+    /*
+     * get current rpm and speed values from the tick conversion class
+     */
+    if (needles_ready && measure_freq)
+    {
+        auto tach  = g_tach.readSnapshot();
+        auto spd   = g_speed.readSnapshot();
+        rpm   = tach.stale  ? 0.0f : tach.value;   // already in RPM via RPM_PER_HZ
+        speed = spd.stale   ? 0.0f : spd.value;    // already in MPH via MPH_PER_HZ
+    }
+
     static float last_rpm = 0.0f;
     static uint32_t last_rpm_time = 0;
     static float rpm_rate = 0.0f; // RPM change per ms
@@ -823,22 +903,20 @@ int main_cpp(void)
     uint32_t dt_speed = now - last_speed_time;
 
     // --- Check for new RPM tick ---
-    if (rpm != last_rpm) {
-        if (dt_rpm > 0) {
+    if (rpm != last_rpm)
+    {
+        if (dt_rpm > 0)
+        {
             rpm_rate = (rpm - last_rpm) / (float)dt_rpm; // RPM change per ms
-        } else {
+        }
+        else
+        {
             rpm_rate = 0.0f;
         }
         last_rpm = rpm;
         last_rpm_time = now;
     }
-
-    // --- Extrapolate RPM ---
     float extrapolated_rpm = last_rpm + rpm_rate * dt_rpm;
-
-    // Smooth extrapolated RPM
-    // TODO: Is this still necessary, or is the extrapolation enough?
-    float smoothed_rpm = iir_ma(&ema_state_rpm, extrapolated_rpm);
 
     // --- Check for new Speed tick ---
     if (speed != last_speed) {
@@ -850,55 +928,73 @@ int main_cpp(void)
         last_speed = speed;
         last_speed_time = now;
     }
-
-    // --- Extrapolate Speed ---
     float extrapolated_speed = last_speed + speed_rate * dt_speed;
 
-    // Smooth extrapolated Speed
-    // TODO: Is this still necessary, or is the extrapolation enough?
-    float smoothed_speed = iir_ma(&ema_state_speed, extrapolated_speed);
-
     // Update needle targets
-    tachX12.setPosition(get_x12_ticks_rpm(smoothed_rpm));
-    speedX12.setPosition(get_x12_ticks_speed(smoothed_speed));
-
+    tachX12.setPosition(get_x12_ticks_rpm(extrapolated_rpm));
+    speedX12.setPosition(get_x12_ticks_speed(extrapolated_speed));
 #endif
     odoX12.setPosition(odo_ticks);
 
 
     /*
-     * shift alert
+     * The RPM/Shift alert mode.
      */
-    static int rpm_mode = -1; // 0 - no alert, 1 - early warning, 2 - critical
+    if(rpm <  RPM_ALERT_RESET)
+    {
+    	rpm_mode = RPM_MODE_LOW;
+    }
+    else if ( rpm>=RPM_ALERT_INIT && rpm<RPM_ALERT_FINAL )
+    {
+    	rpm_mode = RPM_MODE_EARLY_WARN;
+    }
+    else if(rpm>=RPM_ALERT_FINAL)
+    {
+    	rpm_mode = RPM_MODE_SHIFT;
+    }
+
+
+    /*
+     * Shift alert AUDIO indicator
+     */
+    static int lastRpmMode = rpm_mode;
     static int toggle_mode = 0;
     static int toggleTime_last = 0;
-    if(rpm <  RPM_ALERT_INIT)
+    if(rpm_mode == RPM_MODE_LOW)
     {
-      if(rpm_mode!=0)
-      {
-        rpm_mode = 0;
+    	/*
+    	 * No alert, turn off audio
+    	 */
+    	lastRpmMode = rpm_mode;
         HAL_TIM_Base_Stop_DMA(&htim1);
-      }
     }
-    else if (rpm>RPM_ALERT_INIT && rpm<RPM_ALERT_FINAL && rpm_mode<=1 )
+    else if ( rpm_mode == RPM_MODE_EARLY_WARN )
     {
-      if(rpm_mode!=1)
-      {
-        HAL_TIM_Base_Stop_DMA(&htim1);
-        htim1.Instance->ARR = 2200;
-        HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t*)tone_buffer, current_tone_len);
-        rpm_mode = 1;
-      }
+    	/*
+    	 * early warning alert
+    	 * play a constant, low-ish freq, tone
+    	 */
+    	if(lastRpmMode != rpm_mode)
+    	{
+    		lastRpmMode = rpm_mode;
+			HAL_TIM_Base_Stop_DMA(&htim1);
+			htim1.Instance->ARR = 1200; //2200;
+			HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t*)tone_buffer, current_tone_len);
+    	}
     }
-    else
+    else if ( rpm_mode == RPM_MODE_SHIFT )
     {
-      if(rpm_mode!=2)
+    	/*
+    	 * shift NOW.
+    	 * play high-freq beeping
+    	 */
+      if(lastRpmMode != rpm_mode)
       {
+        lastRpmMode = rpm_mode;
         toggle_mode = 0;
         toggleTime_last = HAL_GetTick ();
         HAL_TIM_Base_Stop_DMA(&htim1);
         htim1.Instance->ARR = 800;
-        rpm_mode = 2;
       }
 
       if(HAL_GetTick () - toggleTime_last < 50 && toggle_mode == 0)
@@ -926,7 +1022,7 @@ int main_cpp(void)
      * this pins will toggle at the same rate the the oboard speaker toggles.
      * i.e. it goes solid for the first alert, then rapidly beeps for the critical alert.
      */
-    if( rpm_mode==1 || (toggle_mode==1 && rpm_mode==2) )
+    if( rpm_mode==RPM_MODE_EARLY_WARN || (toggle_mode==1 && rpm_mode==RPM_MODE_SHIFT) )
     {
       for(int i=11; i<=14; i++)
       {
@@ -942,6 +1038,50 @@ int main_cpp(void)
           ioexp_speedo.set_IT(i,0);
       }
     }
+
+
+    /*
+     * Simulated tach/speed PWM on GPIO3/PA8
+     */
+    if(true)
+    {
+        // Tunables
+        static float    rpm_peak    = 7000.0f; // top RPM
+        static uint32_t t_hold0_ms  = 2000U;   // NEW: hold at 0 RPM
+        static uint32_t t_rise_ms   = 2*7000U;   // ramp up duration
+        static uint32_t t_hold_ms   = 2000U;   // hold at peak
+        static uint32_t t_fall_ms   = 2*7000U;   // ramp down duration
+
+        static uint32_t t0_ms = HAL_GetTick();
+
+        const uint32_t cycle_ms = t_hold0_ms + t_rise_ms + t_hold_ms + t_fall_ms;
+        if (cycle_ms == 0U) {
+            TachTest_SetFromRPM(0.0f);
+        } else {
+            uint32_t now_ms = HAL_GetTick();
+            uint32_t t_ms   = (now_ms - t0_ms) % cycle_ms;
+
+            float rpm_cmd = 0.0f;
+
+            if (t_ms < t_hold0_ms) {
+                // Phase 0: hold at 0 RPM
+                rpm_cmd = 0.0f;
+            } else if ((t_ms -= t_hold0_ms) < t_rise_ms) {
+                // Phase 1: 0 -> rpm_peak
+                rpm_cmd = rpm_peak * ((float)t_ms / (float)t_rise_ms);
+            } else if ((t_ms -= t_rise_ms) < t_hold_ms) {
+                // Phase 2: hold at peak
+                rpm_cmd = rpm_peak;
+            } else {
+                // Phase 3: ramp back to 0
+                t_ms -= t_hold_ms;
+                rpm_cmd = rpm_peak * (1.0f - ((float)t_ms / (float)t_fall_ms));
+            }
+
+            TachTest_SetFromRPM(rpm_cmd);
+        }
+    }
+
 
 
 
@@ -1274,141 +1414,58 @@ void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
  * Initial testing is showing this to be way off.  I display 100mph,
  * but gps says 60mph.
  *
- * speed and RPM are measured by TIM2, which is 1MHz and ticks 100000 times (100ms) per overflow
+ * speed and RPM are measured by TIM2, at 1MHz, using capture-compare registers.
  *
  */
-enum
-{
-  SPEEDOIND = 0,
-  TACHIND = 1,
-};
-enum
-{
-  IDLE = 0,
-  DONE = 1,
-};
-#define F_CLK  (1000000)        // TIM2 uses 1MHz cock
-#define TIM2_MAX_CNT 100000
-#define OVERFLOW_MS ((int)(100)) // TIM2 counts to 100000-1, so every 100ms
-const float MPH_PER_HZ = ( 0.8425872 ); //(1.11746031667) //( 1.07755102 )
-const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
-volatile static uint8_t state[2] = {IDLE, IDLE};
-volatile static uint32_t T1[2] = {0,0};
-volatile static uint32_t T2[2] = {0,0};
-volatile static float ticks[2] = {0,0};
-volatile static uint32_t rejects[2];
-volatile static uint32_t TIM2_OVC[2] = {0,0};
 volatile static uint32_t speed_tick_count = 0;
-static std::array<SMA<8>, 2> sma = {
-	SMA<8>(0.10f, 0.125f, true), // speed
-    SMA<8>(0.40f, 0.125f, true), //rpm
-};
 
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 {
-  int ch = (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) ? SPEEDOIND : TACHIND;
-  if (state[ch] == IDLE)
-  {
-    T1[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
-    TIM2_OVC[ch] = 0;
-    state[ch] = DONE;
-  }
-  else if (state[ch] == DONE)
-  {
-    T2[ch] = (ch==SPEEDOIND) ? TIM2->CCR3 : TIM2->CCR4;
-    float tmp = (T2[ch] + (TIM2_OVC[ch] * TIM2_MAX_CNT)) - T1[ch];
-    state[ch] = IDLE;
-    TIM2_OVC[ch] = 0;
-    ticks[ch] = sma[ch].add(tmp);
-  }
+  if (htim->Instance != TIM2) return;
 
-  /*
-   * flag for an odo tick every 3 (or whatever) speedo ticks
-   * as this is a unidirectional flag we dont need a mutex
-   *
-   * todo: this is a a single threaded devies, use an odo tick
-   * count instead of a flag, and just incrment it here and decrement
-   * it elsewhere
-   */
-  if(ch == SPEEDOIND)
+  if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) 
   {
+    g_speed.isrOnCaptureCCR(TIM2->CCR3);
+
+    // Odometer ticks with speed
     speed_tick_count++;
-    if(speed_tick_count == SPEED_TICKS_PER_ODO_TICK)
+    if (speed_tick_count == SPEED_TICKS_PER_ODO_TICK) 
     {
       speed_tick_count = 0;
       odo_ticks += ODO_STEPS_PER_TICK;
     }
+  } 
+  else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4) 
+  {
+    g_tach.isrOnCaptureCCR(TIM2->CCR4);
   }
 }
 
 
 
 /*
- * keep track of how many times the timer elapsed so we can use
- * that to calc the actual time between ticks.
+ * Timer-period-elapsed callback.
  *
- * note, if this gets too high then assume no more ticks are coming
- * and we need to say the freq is 0
+ * Used for several housekeeping functions.
  */
 void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
 {
   static int worst_timing = 0;
   int end, start = HAL_GetTick();
 
-  if(htim->Instance == TIM2)
-  {
-    TIM2_OVC[0]++;
-    TIM2_OVC[1]++;
-    if(TIM2_OVC[0]*OVERFLOW_MS > 1200)
-    {
-      TIM2_OVC[0] = 0;
-      ticks[0] = 0;
-      state[0] = IDLE;
-      resetCnt1++;
-    }
-    if(TIM2_OVC[1]*OVERFLOW_MS > 1200)
-    {
-      TIM2_OVC[1] = 0;
-      ticks[1] = 0;
-      state[1] = IDLE;
-      resetCnt2++;
-    }
-  }
-  else if(htim->Instance == TIM16)
+  if (htim->Instance == TIM16)
   {
     /*
-     * 2khz
+     * 2 kHz
      */
-    if(needles_ready)
-    {
-      if(measure_freq)
-      {
-#ifndef SWEEP_GAUGES
-#ifndef SIM_GAUGES
-        /*
-         * convert ticks, to Hz, to RPM and Speed
-         *
-         * TODO: get rid of float division
-         */
-        float tmp = (ticks[TACHIND]==0) ? 0 : RPM_PER_HZ * (float)F_CLK / (float)ticks[TACHIND];
-        if( tmp > 9000 )
-          tmp = rpm;
-        rpm = tmp;
-
-        tmp = (ticks[SPEEDOIND]==0) ? 0 : MPH_PER_HZ * (float)F_CLK / (float)ticks[SPEEDOIND];
-        if( tmp > 180 )
-          tmp = speed;
-        speed = tmp;
-#endif
-#endif
-      }
-    }
     ecu.update();
   }
   else if(htim->Instance == TIM17)
   {
     /*
-     * ticks at 1us
+     * Stepper motor ticks/steps.
+     *
+     * ticks at 1us.
      */
     if(needles_ready)
     {
@@ -1428,6 +1485,9 @@ void HAL_TIM_PeriodElapsedCallback (TIM_HandleTypeDef *htim)
   if(end-start>worst_timing)
     worst_timing = end-start;
 }
+
+
+
 
 /*
  * override the _weak definition in the hal
