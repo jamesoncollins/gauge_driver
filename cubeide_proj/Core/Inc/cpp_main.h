@@ -36,7 +36,7 @@ HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const u
  * Note, you can use both of these at the same time.
  */
 //#define PRINT_TO_USB
-#define USB_DISPLAY
+//#define USB_DISPLAY
 
 /*
  * Optional debug / diagnostic print on the screen
@@ -46,9 +46,10 @@ HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const u
 /*
  * RPM/Shift alert points
  */
-const int RPM_ALERT_RESET = 5200; // soft alert OFF
-const int RPM_ALERT_INIT = 5500; // soft alert / early warn
-const int RPM_ALERT_FINAL = 6700; // SHIFT
+const int RPM_ALERT_RESET = 5500; // soft alert OFF, provides some hysteresis
+const int RPM_ALERT_INIT = 5700; // soft alert / early warn
+const int RPM_ALERT_FINAL = 6500; // SHIFT
+
 
 /*
  * dots per inch for this screen

@@ -671,6 +671,9 @@ int main_cpp(void)
           break;
 
         case 2:
+          snprintf (logBuf, bufLen, "%s", ecu.getValString(MUTII::ECU_PARAM_MAP));
+          gdispFillString(70, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+
           snprintf (logBuf, bufLen, "%s", ecu.getValString(MUTII::ECU_PARAM_WB));
           gdispFillString(20, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
           drawHorzBarGraph (20, 57, 80, 15, 19, 9, ecu.getVal(MUTII::ECU_PARAM_WB));
@@ -792,23 +795,44 @@ int main_cpp(void)
           break;
 
         case 7:
+        {
         	/*
         	 * Shift warning
         	 */
+        	const int WARN_SIZE = 20;
+        	const int WARN_FINAL_SIZE = 70;
+        	const int SHIFT_SIZE = 100;
+        	const int range = RPM_ALERT_FINAL - RPM_ALERT_INIT;
+        	int over = rpm - RPM_ALERT_INIT;
+        	int percent = (64 * over) / range;
+        	int current_warn_size = WARN_SIZE + (((WARN_FINAL_SIZE-WARN_SIZE) * percent)>>6);
+
             if (rpm_mode >= RPM_MODE_SHIFT)
-            	gdispFillArea(
-            			(screenWidth>>1)-50,
-						(screenHeight>>1)-50,
-						100,100,
+            {
+            	gdispFillCircle(
+            			(screenWidth>>1),//-SHIFT_SIZE/2,
+						(screenHeight>>1),//-SHIFT_SIZE/2,
+						SHIFT_SIZE,
 						GFX_RED);
-            if(rpm_mode >= RPM_MODE_EARLY_WARN)
-            	gdispFillArea(
-            			(screenWidth>>1)-30,
-						(screenHeight>>1)-30,
-						60,60,
+            }
+            else if(rpm_mode >= RPM_MODE_EARLY_WARN && current_warn_size>0)
+            {
+            	gdispFillDualCircle(
+            			(screenWidth>>1),//-WARN_FINAL_SIZE/2,
+						(screenHeight>>1),//-WARN_FINAL_SIZE/2,
+						WARN_FINAL_SIZE, GFX_BLACK,
+						WARN_FINAL_SIZE, GFX_GREEN
+						);
+
+            	gdispFillCircle(
+            			(screenWidth>>1),//-(current_warn_size>>1),
+						(screenHeight>>1),//-(current_warn_size>>1),
+						current_warn_size,
 						GFX_YELLOW);
+            }
 
             break;
+        }
 
 
         default:
@@ -939,12 +963,15 @@ int main_cpp(void)
 
     /*
      * The RPM/Shift alert mode.
+     *
+     * We NEVER go from shift back to warn.  We only can go from:
+     *    low->warn->low, low->warn->shift->low
      */
-    if(rpm <  RPM_ALERT_RESET)
+    if(rpm <  RPM_ALERT_INIT)
     {
     	rpm_mode = RPM_MODE_LOW;
     }
-    else if ( rpm>=RPM_ALERT_INIT && rpm<RPM_ALERT_FINAL )
+    else if ( rpm_mode==RPM_MODE_LOW && rpm>=RPM_ALERT_INIT && rpm<RPM_ALERT_FINAL )
     {
     	rpm_mode = RPM_MODE_EARLY_WARN;
     }
