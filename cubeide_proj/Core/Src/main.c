@@ -505,7 +505,7 @@ static void MX_LPTIM2_Init(void)
   /* USER CODE END LPTIM2_Init 1 */
   hlptim2.Instance = LPTIM2;
   hlptim2.Init.Clock.Source = LPTIM_CLOCKSOURCE_APBCLOCK_LPOSC;
-  hlptim2.Init.Clock.Prescaler = LPTIM_PRESCALER_DIV64;
+  hlptim2.Init.Clock.Prescaler = LPTIM_PRESCALER_DIV128;
   hlptim2.Init.Trigger.Source = LPTIM_TRIGSOURCE_SOFTWARE;
   hlptim2.Init.OutputPolarity = LPTIM_OUTPUTPOLARITY_HIGH;
   hlptim2.Init.UpdateMode = LPTIM_UPDATE_IMMEDIATE;
@@ -735,7 +735,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 63;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 0xffffffff;
+  htim2.Init.Period = 0xffffffff-1;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -760,7 +760,7 @@ static void MX_TIM2_Init(void)
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 2;
+  sConfigIC.ICFilter = 15;
   if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_3) != HAL_OK)
   {
     Error_Handler();
@@ -955,7 +955,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13|GPIO_PIN_6|PWREN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13|GPIO2_Pin|GPIO_PIN_6|PWREN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, RESET_MOTOR_Pin|DIR_TACH_Pin|DIR_SPEED_Pin|SPI_LCD_nCS_Pin
@@ -967,8 +967,8 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, STEP_ODO_Pin|DIR_ODO_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PC13 PC6 PWREN_Pin */
-  GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_6|PWREN_Pin;
+  /*Configure GPIO pins : PC13 GPIO2_Pin PC6 PWREN_Pin */
+  GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO2_Pin|GPIO_PIN_6|PWREN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -985,12 +985,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : GPIO2_Pin PC11 GPIO1_Pin */
-  GPIO_InitStruct.Pin = GPIO2_Pin|GPIO_PIN_11|GPIO1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : IGN_Pin */
   GPIO_InitStruct.Pin = IGN_Pin;
@@ -1019,6 +1013,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PC11 GPIO1_Pin */
+  GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : STEP_ODO_Pin DIR_ODO_Pin */
   GPIO_InitStruct.Pin = STEP_ODO_Pin|DIR_ODO_Pin;
