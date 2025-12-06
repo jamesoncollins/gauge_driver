@@ -29,7 +29,7 @@ extern void setAutoClear(bool);
 #include "../PI4IOE5V6416/PI4IOE5V6416.hpp"
 #include "../ECUK-lib/MUTII.hpp"
 #include "../BTbuffer-lib/BTBuffer.hpp"
-#include "HzSensorFilter.hpp"
+#include "HzSensorKalmanFilter.hpp"
 #include "tachTest.hpp"
 
 extern I2C_HandleTypeDef hi2c1, hi2c3;
@@ -54,8 +54,8 @@ volatile static bool ecuTxDone = false;
 volatile static bool ecuRxDone = false;
 static MUTII ecu(&huart1, &ecuTxDone, &ecuRxDone);
 
-static HzSensorFilter g_speed;
-static HzSensorFilter g_tach;
+static HzSensorKalmanFilter<16> g_speed;
+static HzSensorKalmanFilter<16> g_tach;
 volatile static float rpm, speed;
 
 typedef enum
@@ -273,40 +273,36 @@ int main_cpp(void)
   /*
    * speed and tach measurement class init
    */
+
+  // Configure the filter for "speed" in MPH
+  HzSensorKalmanFilter<16>::Config cfg_speed{};
+  cfg_speed.units_per_hz              = MPH_PER_HZ;  // 3000GT-ish mph per Hz
+  cfg_speed.units_bias                = 0.0f;
+  cfg_speed.clock_hz                  = 1'000'000;
+  cfg_speed.q_jerk                    = 5.0f;
+  cfg_speed.meas_var                  = 1.0f * 1.0f;   // ~0.5 mph std-dev
+  cfg_speed.gate_sigma                = 5.f;
+  cfg_speed.zero_speed_thresh_units   = 5.0f;          // "effectively zero" below 5 mph
+  cfg_speed.zero_periods_without_tick = 3.0f;          // ~3 periods at that speed
+  cfg_speed.max_accel_units_per_s     = 60.0f;         // clamp accel magnitude
+  cfg_speed.max_units                 = 180.0f;
+
+
   // ---------- Tach (RPM) ----------
-  HzSensorFilter::Config tach{};
-  tach.timer_freq_hz  = 1000000;
-  tach.timer_max_tick = __HAL_TIM_GET_AUTORELOAD(&htim2);
-  tach.K = RPM_PER_HZ;                                    // 20.0f
-  tach.B = 0.0f;
+  HzSensorKalmanFilter<16>::Config cfg_tach{};
+  cfg_tach.units_per_hz              = RPM_PER_HZ;  // 3000GT-ish mph per Hz
+  cfg_tach.units_bias                = 0.0f;
+  cfg_tach.clock_hz                  = 1'000'000;
+  cfg_tach.q_jerk                    = 10000.0f;
+  cfg_tach.meas_var                  = 3.f * 3.f;
+  cfg_tach.gate_sigma                = 5.f;
+  cfg_tach.zero_speed_thresh_units   = 400.f;          // "effectively zero" below 5 mph
+  cfg_tach.zero_periods_without_tick = 3.0f;          // ~3 periods at that speed
+  cfg_tach.max_accel_units_per_s     = 4000.0f;         // clamp accel magnitude
+  cfg_tach.max_units                 = 10000.0f;
 
-  // filtering + limits...
-  tach.alpha_normal  = 0.25f;
-  tach.alpha_outlier = 0.06f;
-  tach.outlier_ratio = 0.50f;
-  tach.max_value = 9000.0f;
-  tach.max_accel_up_value_per_s   = 9000.0f;
-  tach.max_accel_down_value_per_s = 15000.0f;
-  tach.accel_clamp = true;
-
-  // NEW: minimum displayable RPM -> auto staleness from this
-  tach.min_value_care     = 400.0f;   // below this, treat as zero
-  tach.care_timeout_margin = 1.30f;   // 30% slack on the period at 400 RPM
-
-  g_tach.init(tach, [](){ return (uint32_t)(HAL_GetTick()*1000u); });
-
-  // ---------- Speed (MPH) ----------
-  HzSensorFilter::Config spd = tach;
-  spd.K = MPH_PER_HZ;                 // your calibrated constant
-  spd.max_value = 180.0f;
-  spd.max_accel_up_value_per_s   = 25.0f;
-  spd.max_accel_down_value_per_s = 40.0f;
-
-  //  minimum displayable MPH
-  spd.min_value_care      = 5.0f;     // below this, show 0
-  spd.care_timeout_margin = 1.30f;
-
-  g_speed.init(spd, [](){ return (uint32_t)(HAL_GetTick()*1000u); });
+  g_tach.init(cfg_tach, [](){ return (uint32_t)(HAL_GetTick()*1000u); });
+  g_speed.init(cfg_speed, [](){ return (uint32_t)(HAL_GetTick()*1000u); });
 
 
   /*
@@ -614,7 +610,10 @@ int main_cpp(void)
     {
 #ifdef PRINT_TO_USB
       timerPrint = HAL_GetTick ();
-      logBufInd += snprintf (logBuf+logBufInd, bufLen-logBufInd, " tach: %d , speedo %d  \n",  (int)rpm,  (int)speed);
+      logBufInd += snprintf (logBuf+logBufInd, bufLen-logBufInd,
+    		  "%d\t%f\t%f\t%f\n\r",
+			  HAL_GetTick (), TachTest_getCurrentCmd()*RPM_PER_HZ, rpm,  speed
+			  );
       CDC_Transmit_FS ((uint8_t*) logBuf, logBufInd);
 #endif
     }
@@ -672,14 +671,14 @@ int main_cpp(void)
 
         case 2:
           snprintf (logBuf, bufLen, "%s", ecu.getValString(MUTII::ECU_PARAM_MAP));
-          gdispFillString(70, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+          gdispFillString(20, 52, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
 
           snprintf (logBuf, bufLen, "%s", ecu.getValString(MUTII::ECU_PARAM_WB));
-          gdispFillString(20, 20, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
-          drawHorzBarGraph (20, 57, 80, 15, 19, 9, ecu.getVal(MUTII::ECU_PARAM_WB));
+          gdispFillString(20, 7, logBuf, fontLCD, GFX_AMBER, GFX_BLACK);
+          //drawHorzBarGraph (20, 57, 80, 15, 19, 9, ecu.getVal(MUTII::ECU_PARAM_WB));
 
-          snprintf (logBuf, bufLen, "ECU:%s-%ld", ecu.getStatus(), ecu.getMsgRate());
-          gdispFillString(20, 80, logBuf, font20, GFX_AMBER, GFX_BLACK);
+          //snprintf (logBuf, bufLen, "ECU:%s-%ld", ecu.getStatus(), ecu.getMsgRate());
+          //gdispFillString(20, 80, logBuf, font20, GFX_AMBER, GFX_BLACK);
 
           if(!ecu.isConnected())
           {
@@ -711,7 +710,7 @@ int main_cpp(void)
             default:
               break;
           }
-          gdispFillString(20, 100, tmpString, font20, GFX_AMBER, GFX_BLACK);
+          gdispFillString(210, 74, tmpString, font20, GFX_AMBER, GFX_BLACK);
         }
         break;
 
@@ -840,8 +839,8 @@ int main_cpp(void)
 #ifdef DIAG_SQUARE
           static uint32_t displayTime = 0;
           static const int xdiag = 30, ydiag = 192;
-          gdispFillArea(xdiag-1,ydiag-1,65,65,GFX_BLACK);
-          gdispDrawBox(xdiag-1,ydiag-1,65,65,GFX_AMBER);
+          gdispFillArea(xdiag-1,ydiag-1,70,70,GFX_BLACK);
+          gdispDrawBox(xdiag-1,ydiag-1,70,70,GFX_AMBER);
 
           snprintf (logBuf, bufLen, "ECU: %lu/%lu", ecu.getMsgRate(), ecu.getMissedReplyResetCnt());
           gdispFillString(xdiag, ydiag+00, logBuf, font10, GFX_AMBER, GFX_BLACK);
@@ -908,10 +907,10 @@ int main_cpp(void)
      */
     if (needles_ready && measure_freq)
     {
-        auto tach  = g_tach.readSnapshot();
-        auto spd   = g_speed.readSnapshot();
-        rpm   = tach.stale  ? 0.0f : tach.value;   // already in RPM via RPM_PER_HZ
-        speed = spd.stale   ? 0.0f : spd.value;    // already in MPH via MPH_PER_HZ
+        auto tach  = g_tach.retrieveValue();
+        auto spd   = g_speed.retrieveValue();
+        rpm   = tach.stale  ? 0.0f : tach.units;   // already in RPM via RPM_PER_HZ
+        speed = spd.stale   ? 0.0f : spd.units;    // already in MPH via MPH_PER_HZ
     }
 
     static float last_rpm = 0.0f;
@@ -1070,20 +1069,24 @@ int main_cpp(void)
     /*
      * Simulated tach/speed PWM on GPIO3/PA8
      */
-    if(true)
+    if (true)
     {
         // Tunables
-        static float    rpm_peak    = 7000.0f; // top RPM
-        static uint32_t t_hold0_ms  = 2000U;   // NEW: hold at 0 RPM
-        static uint32_t t_rise_ms   = 2*7000U;   // ramp up duration
+        static float    rpm_peak    = 8000.0f; // top RPM
+        static uint32_t t_hold0_ms  = 1000U;   // hold at 0 RPM
+        static uint32_t t_rise_ms   = 3000;   // ramp up duration
         static uint32_t t_hold_ms   = 2000U;   // hold at peak
-        static uint32_t t_fall_ms   = 2*7000U;   // ramp down duration
+        static uint32_t t_fall_ms   = 2000;   // ramp down duration
+        static float scale = RPM_PER_HZ;
 
-        static uint32_t t0_ms = HAL_GetTick();
+        static uint32_t t0_ms = 0U;
+        if (t0_ms == 0U) {
+            t0_ms = HAL_GetTick();
+        }
 
         const uint32_t cycle_ms = t_hold0_ms + t_rise_ms + t_hold_ms + t_fall_ms;
         if (cycle_ms == 0U) {
-            TachTest_SetFromRPM(0.0f);
+        	TachTest_SetHz(0);
         } else {
             uint32_t now_ms = HAL_GetTick();
             uint32_t t_ms   = (now_ms - t0_ms) % cycle_ms;
@@ -1093,19 +1096,30 @@ int main_cpp(void)
             if (t_ms < t_hold0_ms) {
                 // Phase 0: hold at 0 RPM
                 rpm_cmd = 0.0f;
+
             } else if ((t_ms -= t_hold0_ms) < t_rise_ms) {
-                // Phase 1: 0 -> rpm_peak
-                rpm_cmd = rpm_peak * ((float)t_ms / (float)t_rise_ms);
+                // Phase 1: smooth 0 -> rpm_peak ramp (half-cosine)
+                // u goes 0..1 over the rise
+                float u = (float)t_ms / (float)t_rise_ms;       // 0..1
+                // 0.5 * (1 - cos(pi*u)) goes from 0 to 1 with zero slope at ends
+                float s = 0.5f * (1.0f - cosf((float)M_PI * u));
+                rpm_cmd = rpm_peak * s;
+
             } else if ((t_ms -= t_rise_ms) < t_hold_ms) {
-                // Phase 2: hold at peak
+                // Phase 2: hold at peak RPM
                 rpm_cmd = rpm_peak;
+
             } else {
-                // Phase 3: ramp back to 0
+                // Phase 3: smooth rpm_peak -> 0 ramp (half-cosine)
                 t_ms -= t_hold_ms;
-                rpm_cmd = rpm_peak * (1.0f - ((float)t_ms / (float)t_fall_ms));
+                float u = (float)t_ms / (float)t_fall_ms;       // 0..1
+                // 0.5 * (1 + cos(pi*u)) goes from 1 to 0 with zero slope at ends
+                float s = 0.5f * (1.0f + cosf((float)M_PI * u));
+                rpm_cmd = rpm_peak * s;
             }
 
-            TachTest_SetFromRPM(rpm_cmd);
+            // Offset if desired
+            TachTest_SetHz( rpm_cmd / scale );
         }
     }
 
@@ -1445,14 +1459,16 @@ void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
  *
  */
 volatile static uint32_t speed_tick_count = 0;
-
 void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 {
   if (htim->Instance != TIM2) return;
 
   if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) 
   {
-    g_speed.isrOnCaptureCCR(TIM2->CCR3);
+	static uint32_t last = 0, diff = 0;
+	diff = TIM2->CCR3 - last;
+	last = TIM2->CCR3;
+	g_speed.tick(diff);
 
     // Odometer ticks with speed
     speed_tick_count++;
@@ -1464,7 +1480,10 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
   } 
   else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4) 
   {
-    g_tach.isrOnCaptureCCR(TIM2->CCR4);
+	static uint32_t last, diff = 0;
+	diff = TIM2->CCR4 - last;
+	last = TIM2->CCR4;
+	g_tach.tick(diff);
   }
 }
 

@@ -18,7 +18,7 @@ HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const u
 
 // main loop timers
 #define SAMPLE_TIME_MS_LED       1000
-#define SAMPLE_TIME_MS_PRINT     750
+#define SAMPLE_TIME_MS_PRINT     50
 #define TARGET_FPS               20
 #define SAMPLE_TIME_MS_DRAW     (1000/TARGET_FPS) // it takes 60ms to refresh the screen
                                                    // with -O2 you can draw in about 10.
