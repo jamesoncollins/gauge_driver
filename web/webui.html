@@ -59,7 +59,7 @@
     <div class="bar">
       <div class="row">
         <div class="title">Gauge BLE Web UI <span id="ver" style="font-size:12px;color:var(--muted);margin-left:6px"></span></div>
-        <span id="connState" class="pill">● Disconnected</span>
+        <span id="connState" class="pill">Disconnected</span>
       </div>
       <div class="row">
         <button id="btnConnect" class="primary">Connect</button>
@@ -70,12 +70,12 @@
 
   <main>
     <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">Dashboard</span><span class="spacer"></span><span class="pill">Live</span></summary>
+      <summary><span class="chev">&gt;</span><span class="summary-title">Dashboard</span><span class="spacer"></span><span class="pill">Live</span></summary>
       <div class="panel">
         <div class="grid">
           <div class="card" style="padding:14px">
             <div style="font-size:12px;color:var(--muted);margin-bottom:6px">RPM</div>
-            <div id="tileRpm" style="font-size:36px;font-weight:800">—</div>
+            <div id="tileRpm" style="font-size:36px;font-weight:800">--</div>
             <div class="gauge">
               <svg viewBox="0 0 100 60" aria-label="RPM gauge">
                 <path class="arc" d="M5 50 A45 45 0 0 1 95 50"/>
@@ -90,13 +90,13 @@
                   <line x1="50" y1="50" x2="50" y2="8" class="needle"/>
                 </g>
                 <circle cx="50" cy="50" r="3" class="hub"/>
-                <text x="50" y="58" text-anchor="middle" class="label">0 — 8k</text>
+                <text x="50" y="58" text-anchor="middle" class="label">0 - 8k</text>
               </svg>
             </div>
           </div>
           <div class="card" style="padding:14px">
             <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Speed</div>
-            <div id="tileSpeed" style="font-size:36px;font-weight:800">—</div>
+            <div id="tileSpeed" style="font-size:36px;font-weight:800">--</div>
             <div class="gauge">
               <svg viewBox="0 0 100 60" aria-label="Speed gauge">
                 <path class="arc" d="M5 50 A45 45 0 0 1 95 50"/>
@@ -111,21 +111,21 @@
                   <line x1="50" y1="50" x2="50" y2="8" class="needle"/>
                 </g>
                 <circle cx="50" cy="50" r="3" class="hub"/>
-                <text x="50" y="58" text-anchor="middle" class="label">0 — 160</text>
+                <text x="50" y="58" text-anchor="middle" class="label">0 - 160</text>
               </svg>
             </div>
           </div>
           <div class="card" style="padding:14px">
             <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Loop (ms)</div>
-            <div id="tileLoop" style="font-size:24px;font-weight:700">—</div>
-            <div id="tileWorst" style="font-size:12px;color:var(--muted)">Worst: —</div>
+            <div id="tileLoop" style="font-size:24px;font-weight:700">--</div>
+            <div id="tileWorst" style="font-size:12px;color:var(--muted)">Worst: --</div>
           </div>
         </div>
       </div>
     </details>
 
     <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">Connection & UUIDs</span><span class="spacer"></span><span class="pill">Setup</span></summary>
+      <summary><span class="chev">&gt;</span><span class="summary-title">Connection & UUIDs</span><span class="spacer"></span><span class="pill">Setup</span></summary>
       <div class="panel">
         <div class="grid">
           <div>
@@ -158,22 +158,22 @@
     </details>
 
     <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
+      <summary><span class="chev">&gt;</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
       <div class="panel">
         <div class="row" style="margin-bottom:10px">
       <label style="min-width:160px">Command encoding</label>
       <select id="cmdEncoding">
-        <option value="ascii" selected>ASCII (U/D/L/R/E/B)</option>
-        <option value="enum">Enum (0,1,2,3,4,255)</option>
+        <option value="ascii">ASCII (U/D/L/R/E/B)</option>
+        <option value="enum" selected>Enum (0,1,2,3,4,255)</option>
       </select>
     </div>
-    <div class="row" style="margin-bottom:10px">
-      <button data-cmd="LEFT">◀ Left</button>
-          <button data-cmd="RIGHT">▶ Right</button>
-          <button data-cmd="UP">▲ Up</button>
-          <button data-cmd="DOWN">▼ Down</button>
-          <button data-cmd="ENTER">⏎ Enter</button>
-          <button data-cmd="BACK">↩ Back</button>
+        <div class="row" style="margin-bottom:10px">
+      <button data-cmd="LEFT">&lt; Left</button>
+          <button data-cmd="RIGHT">Right &gt;</button>
+          <button data-cmd="UP">Up</button>
+          <button data-cmd="DOWN">Down</button>
+          <button data-cmd="ENTER">Enter</button>
+          <button data-cmd="BACK">Back</button>
         </div>
         <div class="row">
           <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
@@ -183,7 +183,7 @@
     </details>
 
     <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">ECU Stream (BTBuffer)</span><span class="spacer"></span><span class="pill">Notify</span></summary>
+      <summary><span class="chev">&gt;</span><span class="summary-title">ECU Stream (BTBuffer)</span><span class="spacer"></span><span class="pill">Notify</span></summary>
       <div class="panel">
         <div class="row" style="margin-bottom:10px">
           <button id="btnStartLog">Start Log</button>
@@ -200,14 +200,64 @@
     </details>
 
     <details class="section">
-      <summary><span class="chev">▶</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot</span></summary>
+      <summary><span class="chev">&gt;</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot + Upload</span></summary>
       <div class="panel">
-        <button id="btnOta" style="border-color:var(--warn)">Reboot to OTA</button>
+        <div class="row" style="margin-bottom:10px">
+          <button id="btnOta" style="border-color:var(--warn)">Reboot to OTA</button>
+          <span style="font-size:12px;color:var(--muted)">Writes magic then reboots into OTA loader</span>
+        </div>
+        <div class="card" style="padding:12px;display:grid;gap:10px">
+          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
+            <div>
+              <label>OTA Service UUID</label>
+              <input id="otaSvcUuid" type="text" placeholder="service UUID"/>
+            </div>
+            <div>
+              <label>Base Addr Char UUID</label>
+              <input id="otaBaseUuid" type="text" placeholder="base address char UUID"/>
+            </div>
+            <div>
+              <label>Raw Data Char UUID</label>
+              <input id="otaDataUuid" type="text" placeholder="raw data char UUID"/>
+            </div>
+            <div>
+              <label>Config Char UUID</label>
+              <input id="otaConfUuid" type="text" placeholder="config char UUID"/>
+            </div>
+            <div>
+              <label>Event Char UUID</label>
+              <input id="otaEvtUuid" type="text" placeholder="event/indicate char UUID"/>
+            </div>
+            <div>
+              <label>App Base Offset (hex, 3 bytes)</label>
+              <input id="otaBaseAddr" type="text" placeholder="0007000"/>
+            </div>
+            <div>
+              <label>Chunk size (bytes)</label>
+              <input id="otaChunk" type="text" placeholder="244"/>
+            </div>
+            <div>
+              <label>Number of sectors</label>
+              <input id="otaNumSectors" type="text" placeholder="0"/>
+            </div>
+            <div>
+              <label>Chunk delay (ms)</label>
+              <input id="otaChunkDelay" type="text" placeholder="0"/>
+            </div>
+          </div>
+          <div class="row" style="align-items:center;gap:10px;flex-wrap:wrap">
+            <input id="otaFile" type="file" accept=".bin" style="color:var(--muted)"/>
+            <button id="btnOtaUpload">Start OTA Upload</button>
+            <button id="btnOtaCancel" class="ghost" disabled>Cancel</button>
+            <span id="otaStatusTxt" class="pill" style="background:var(--pill);border-color:var(--line)">Idle</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted)">After the device reboots into OTA mode, connect again and start the upload.</div>
+        </div>
       </div>
     </details>
 
     <details class="section" open>
-      <summary><span class="chev">▶</span><span class="summary-title">Status</span><span class="spacer"></span><span class="pill">Debug</span></summary>
+      <summary><span class="chev">&gt;</span><span class="summary-title">Status</span><span class="spacer"></span><span class="pill">Debug</span></summary>
       <div class="panel">
         <pre id="status" class="mono"></pre>
       </div>
@@ -223,7 +273,7 @@
 
   // ===== Defaults & Known Services =====
   var Defaults = {
-    namePrefix: '3000GT',
+    namePrefix: '',
     SERVICE_UUID: '',
     CMD_CHAR_UUID: '00000001-8e22-4541-9d4c-21edae82ed19',
     BTBUF_CHAR_UUID: '00000003-8e22-4541-9d4c-21edae82ed19',
@@ -241,23 +291,49 @@
   function getCmdMap(){ var sel=document.querySelector('#cmdEncoding'); var mode=sel?sel.value:'ascii'; return mode==='enum'?CommandMapEnum:CommandMapASCII; }
 
   // ===== OTA magic =====
-  var OTA_MAGIC = [0xA5];
+  // OTA reboot payload: [reboot_flag, start_sector_idx, num_sectors] per CubeWB BLE_Ota app_conf
+  // 0x01 = reboot into BLE OTA app, sector index defaults to 7, num_sectors left 0
+  var OTA_MAGIC = [0x01, 0x07, 0x00];
+  var OTA_UPLOAD_DEFAULTS = {
+    // STM32WB OTA loader service/characteristics
+    svc: '0000fe20-cc7a-482a-984a-7f2ed5b3e58f',
+    base: '0000fe22-8e22-4541-9d4c-21edae82ed19',
+    conf: '0000fe23-8e22-4541-9d4c-21edae82ed19',
+    data: '0000fe24-8e22-4541-9d4c-21edae82ed19',
+    evt:  '0000fe25-8e22-4541-9d4c-21edae82ed19', // not used in legacy loader, keep placeholder
+    appBase: '0007000',                               // 3-byte offset (0x007000) for app slot
+    chunkSize: 244,
+    numSectors: 0,                                    // if 0, auto-calc from bin size
+    chunkDelayMs: 0
+  };
 
   // ===== Frame reassembly =====
-  var USE_LENGTH_PREFIX = true; // set false if ASCII-delimited
-  var LENGTH_BYTES = 2;         // u16 little-endian
-  var DELIM = 0x0A;             // for ASCII mode
+  var USE_LENGTH_PREFIX = false; // notifications already arrive as full frames
+  var LENGTH_BYTES = 2;         // u16 little-endian (unused when above is false)
+  var DELIM = 0x0A;             // for ASCII mode (unused here)
 
   // ===== Helpers =====
   function $(s){ return document.querySelector(s); }
   function log(msg){ var el=$('#status'); if(!el) return; el.textContent += String(msg)+'\n'; el.scrollTop = el.scrollHeight; }
-  function setState(txt){ var pill=$('#connState'); if(pill) pill.textContent = '● ' + txt; }
+  function setState(txt){ var pill=$('#connState'); if(pill) pill.textContent = txt; }
   function hex(u8){ var out=[],i; for(i=0;i<u8.length;i++){ var s=u8[i].toString(16); if(s.length<2) s='0'+s; out.push(s);} return out.join(' '); }
   function toBytes(hexStr){ var bytes=[]; String(hexStr).replace(/[^0-9a-fA-F]/g,'').replace(/(..)/g,function(m,b){ bytes.push(parseInt(b,16)); }); return new Uint8Array(bytes); }
   function le16(b0,b1){ return (b0 | (b1<<8)); }
   function clamp(v,min,max){ return v<min?min:(v>max?max:v); }
   function setNeedle(id,value,min,max){ var el=document.getElementById(id); if(!el) return; var span=max-min; if(span<=0) return; var v=clamp(value,min,max); var pct=(v-min)/span; var angle=-90 + pct*180; el.setAttribute('transform','rotate('+angle+' 50 50)'); }
   function propsStr(ch){ if(!ch||!ch.properties) return 'none'; var p=ch.properties,a=[]; if(p.read)a.push('read'); if(p.write)a.push('write'); if(p.writeWithoutResponse)a.push('wwr'); if(p.notify)a.push('notify'); if(p.indicate)a.push('indicate'); return a.join('|')||'none'; }
+  async function ensureNotifications(ch,label){
+    if(!ch) return false;
+    if(!(ch.properties && (ch.properties.indicate || ch.properties.notify))) return false;
+    try{
+      await ch.startNotifications();
+      log(label+' notifications enabled');
+      return true;
+    }catch(err){
+      log(label+' notify error: '+err.message);
+      return false;
+    }
+  }
 
   // ===== Persist inputs =====
   var KEYS = ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'];
@@ -280,6 +356,16 @@
       var cu=$('#cmdUuid');    if(cu) cu.value=Defaults.CMD_CHAR_UUID;
       var bu=$('#bufUuid');    if(bu) bu.value=Defaults.BTBUF_CHAR_UUID;
       var ou=$('#otaUuid');    if(ou) ou.value=Defaults.OTA_CHAR_UUID;
+      // OTA upload defaults
+      $('#otaSvcUuid') && ($('#otaSvcUuid').value = OTA_UPLOAD_DEFAULTS.svc);
+      $('#otaBaseUuid') && ($('#otaBaseUuid').value = OTA_UPLOAD_DEFAULTS.base);
+      $('#otaDataUuid') && ($('#otaDataUuid').value = OTA_UPLOAD_DEFAULTS.data);
+      $('#otaConfUuid') && ($('#otaConfUuid').value = OTA_UPLOAD_DEFAULTS.conf);
+      $('#otaEvtUuid') && ($('#otaEvtUuid').value = OTA_UPLOAD_DEFAULTS.evt);
+      $('#otaBaseAddr') && ($('#otaBaseAddr').value = OTA_UPLOAD_DEFAULTS.appBase);
+      $('#otaChunk') && ($('#otaChunk').value = OTA_UPLOAD_DEFAULTS.chunkSize);
+      $('#otaNumSectors') && ($('#otaNumSectors').value = OTA_UPLOAD_DEFAULTS.numSectors);
+      $('#otaChunkDelay') && ($('#otaChunkDelay').value = OTA_UPLOAD_DEFAULTS.chunkDelayMs);
       return;
     }
     // If config exists, load it then fill any missing/blank fields from Defaults
@@ -296,6 +382,22 @@
     });
   }
 
+  function getOtaCfg(){
+    function val(id, def){ var el=$(id); var v=el && el.value ? el.value.trim() : ''; return v || def || ''; }
+    var cfg={
+      svc: val('#otaSvcUuid', OTA_UPLOAD_DEFAULTS.svc),
+      base: val('#otaBaseUuid', OTA_UPLOAD_DEFAULTS.base),
+      data: val('#otaDataUuid', OTA_UPLOAD_DEFAULTS.data),
+      conf: val('#otaConfUuid', OTA_UPLOAD_DEFAULTS.conf),
+      evt: val('#otaEvtUuid', OTA_UPLOAD_DEFAULTS.evt),
+      baseAddr: val('#otaBaseAddr', OTA_UPLOAD_DEFAULTS.appBase),
+      chunkSize: parseInt(val('#otaChunk', OTA_UPLOAD_DEFAULTS.chunkSize),10) || OTA_UPLOAD_DEFAULTS.chunkSize,
+      numSectors: parseInt(val('#otaNumSectors', OTA_UPLOAD_DEFAULTS.numSectors),10) || OTA_UPLOAD_DEFAULTS.numSectors,
+      chunkDelayMs: parseInt(val('#otaChunkDelay', OTA_UPLOAD_DEFAULTS.chunkDelayMs),10) || OTA_UPLOAD_DEFAULTS.chunkDelayMs
+    };
+    return cfg;
+  }
+
   // ===== Reassembler =====
   function Reassembler(){ this.buf=new Uint8Array(0); }
   Reassembler.prototype.push = function(chunk){
@@ -309,7 +411,9 @@
         this.buf=this.buf.slice(LENGTH_BYTES+len);
       }
     } else {
-      var idx=-1; while((idx=this.buf.indexOf(DELIM))!==-1){ frames.push(this.buf.slice(0,idx)); this.buf=this.buf.slice(idx+1); }
+      // Each notification is already a complete frame
+      frames.push(this.buf);
+      this.buf=new Uint8Array(0);
     }
     return frames;
   };
@@ -330,19 +434,158 @@
     return obj;
   }
 
+  // ===== OTA upload helpers =====
+  function setOtaStatus(txt){ var el=$('#otaStatusTxt'); if(el) el.textContent=txt; log('OTA: '+txt); }
+
+  async function writeChar(ch,u8,forceResp){
+    if(!ch) throw new Error('characteristic missing');
+    var props=ch.properties||{};
+    if(forceResp && props.write){ return ch.writeValue(u8); }
+    if(!forceResp && props.writeWithoutResponse){ return ch.writeValueWithoutResponse(u8); }
+    if(props.write){ return ch.writeValue(u8); }
+    return ch.writeValue(u8);
+  }
+
+  async function discoverOta(){
+    var cfg=getOtaCfg();
+    state.ota={svc:cfg.svc,base:null,data:null,conf:null,evt:null};
+    if(!cfg.svc) return;
+    try{
+      state.ota.base = await findCharacteristic(state.server, cfg.base, cfg.svc);
+      state.ota.data = await findCharacteristic(state.server, cfg.data, cfg.svc);
+      state.ota.conf = await findCharacteristic(state.server, cfg.conf, cfg.svc);
+      state.ota.evt  = await findCharacteristic(state.server, cfg.evt,  cfg.svc);
+      log('OTA service: '+(cfg.svc||'(none)'));
+      ['base','data','conf','evt'].forEach(function(k){
+        var ch=state.ota[k];
+        log(' OTA '+k+': '+(ch ? (ch.uuid + ' ['+propsStr(ch)+']') : 'NOT FOUND'));
+      });
+      // Subscribe to OTA conf/event indications if present
+      var confOk = await ensureNotifications(state.ota.conf,'OTA conf');
+      if(confOk){
+        state.ota.conf.addEventListener('characteristicvaluechanged', function(ev){
+          var v=new Uint8Array(ev.target.value.buffer,ev.target.value.byteOffset,ev.target.value.byteLength);
+          log('OTA conf event: '+hex(v));
+          if(state.otaUpload.confResolve){ state.otaUpload.confResolve(); state.otaUpload.confResolve=null; }
+        });
+      } else {
+        log('OTA conf notifications NOT enabled; conf indications may be missed');
+      }
+      var evtOk = await ensureNotifications(state.ota.evt,'OTA evt');
+      if(evtOk){
+        state.ota.evt.addEventListener('characteristicvaluechanged', function(ev){
+          var v=new Uint8Array(ev.target.value.buffer,ev.target.value.byteOffset,ev.target.value.byteLength);
+          log('OTA event: '+hex(v));
+        });
+      }
+    }catch(err){
+      log('OTA discovery error: '+err.message);
+    }
+  }
+
+  async function otaUpload(){
+    var cfg=getOtaCfg();
+    if(!state.device || !state.server){ return log('Connect to device in OTA mode first'); }
+    if(!state.ota.base || !state.ota.data || !state.ota.conf){ await discoverOta(); }
+    if(!state.ota.base || !state.ota.data || !state.ota.conf) return log('OTA characteristics not found');
+    var fileEl=$('#otaFile'); if(!fileEl || !fileEl.files || !fileEl.files.length) return log('Select a firmware file first');
+    var file=fileEl.files[0];
+    setOtaStatus('Reading '+file.name+'...');
+    var buf=await file.arrayBuffer();
+    var bin=new Uint8Array(buf);
+    var chunkSize=Math.max(20, Math.min(248, cfg.chunkSize||OTA_UPLOAD_DEFAULTS.chunkSize));
+    var baseAddr=parseInt(cfg.baseAddr,16); if(isNaN(baseAddr)) baseAddr=0x0007000;
+    baseAddr = baseAddr & 0xFFFFFF; // 3-byte offset expected
+    var startSector = Math.floor(baseAddr / 4096); // derive from offset (4KB pages)
+    var pageSize = 4096;
+    var autoSectors = Math.ceil(bin.length / pageSize);
+    var numSectors = (cfg.numSectors && cfg.numSectors>0) ? cfg.numSectors : autoSectors;
+    setOtaStatus('Computed sectors: '+numSectors+' (bin '+bin.length+' bytes)');
+    state.otaUpload.cancel=false;
+    $('#btnOtaUpload') && ($('#btnOtaUpload').disabled=true);
+    $('#btnOtaCancel') && ($('#btnOtaCancel').disabled=false);
+    try{
+      // write base address command: [cmd, addr0, addr1, addr2]
+      var baseU8=new Uint8Array(4);
+      baseU8[0]=0x02; // application upload
+      baseU8[1]= baseAddr & 0xFF;
+      baseU8[2]= (baseAddr>>8) & 0xFF;
+      baseU8[3]= (baseAddr>>16) & 0xFF;
+      setOtaStatus('Setting base addr 0x'+baseAddr.toString(16)+' (cmd 0x02)');
+      await writeChar(state.ota.base, baseU8, true); // force write with response
+      setOtaStatus('Base addr set 0x'+baseAddr.toString(16));
+      setOtaStatus('Upload started ('+bin.length+' bytes, chunk '+chunkSize+')');
+      for(var off=0; off<bin.length; off+=chunkSize){
+        if(state.otaUpload.cancel) throw new Error('Cancelled');
+        var slice=bin.slice(off, Math.min(off+chunkSize, bin.length));
+        await writeChar(state.ota.data, slice, false);
+        if(cfg.chunkDelayMs>0) await new Promise(function(res){ setTimeout(res, cfg.chunkDelayMs); });
+        if((off/chunkSize)%25===0) setOtaStatus('Sending... '+Math.min(bin.length, off+chunkSize)+' / '+bin.length);
+      }
+      // upload finished command (with sectors)
+      var fin1=new Uint8Array([0x07, startSector & 0xFF, numSectors & 0xFF, 0x00]);
+      await writeChar(state.ota.base, fin1, true);
+      setOtaStatus('Finish command sent (1)');
+      await new Promise(function(res){ setTimeout(res, 50); });
+      await writeChar(state.ota.base, fin1, true);
+      setOtaStatus('Finish command sent (2)');
+      setOtaStatus('Upload finished, waiting for reboot/indication');
+      // wait for conf indication or timeout
+      var waited=false;
+      var timeoutId=null;
+      var waitConf = new Promise(function(resolve){
+        state.otaUpload.confResolve = function(){
+          if(timeoutId){ clearTimeout(timeoutId); timeoutId=null; }
+          resolve();
+        };
+        timeoutId = setTimeout(function(){ waited=true; resolve(); }, 20000);
+      });
+      await waitConf;
+      state.otaUpload.confResolve = null;
+      if(waited){ setOtaStatus('No conf indication within timeout; check device'); }
+      else {
+        setOtaStatus('Conf indication received; waiting for reboot');
+        await new Promise(function(res){ setTimeout(res, 1000); });
+      }
+      // optional: leave connection open; user can disconnect manually
+    }catch(err){
+      setOtaStatus('Error: '+err.message);
+    }finally{
+      $('#btnOtaUpload') && ($('#btnOtaUpload').disabled=false);
+      $('#btnOtaCancel') && ($('#btnOtaCancel').disabled=true);
+    }
+  }
+
+
   // ===== BLE session =====
-  var state={ device:null, server:null, reasm:new Reassembler(), chars:{cmd:null,buf:null,ota:null}, logging:false, logRows:[] };
+  var state={
+    device:null,
+    server:null,
+    reasm:new Reassembler(),
+    chars:{cmd:null,buf:null,ota:null},
+    ota:{svc:null,base:null,data:null,conf:null,evt:null},
+    logging:false,
+    logRows:[],
+    otaUpload:{file:null,cancel:false,confResolve:null}
+  };
 
   function findCharacteristic(server, charUuid, svcUuid){
     if(!charUuid) return Promise.resolve(null);
     return new Promise(function(resolve){
       (async function(){
         try{
-          if(svcUuid){ var svc=await server.getPrimaryService(svcUuid); var ch=await svc.getCharacteristic(charUuid); return resolve(ch); }
+          if(svcUuid){
+            try{
+              var svc=await server.getPrimaryService(svcUuid);
+              var ch=await svc.getCharacteristic(charUuid);
+              if(ch) return resolve(ch);
+            }catch(err){ log('Find char error: '+err.message); }
+          }
           var services=await server.getPrimaryServices();
           for(var i=0;i<services.length;i++){
             try{ var ch2=await services[i].getCharacteristic(charUuid); if(ch2){ return resolve(ch2); } }catch(_e){}
           }
+          log('Find char error: No Services matching UUID '+svcUuid+' found in Device.');
         }catch(err){ log('Find char error: '+err.message); }
         resolve(null);
       })();
@@ -361,10 +604,12 @@
     var cmdCharUuid=($('#cmdUuid') && $('#cmdUuid').value) ? $('#cmdUuid').value : Defaults.CMD_CHAR_UUID;
     var bufCharUuid=($('#bufUuid') && $('#bufUuid').value) ? $('#bufUuid').value : Defaults.BTBUF_CHAR_UUID;
     var otaCharUuid=($('#otaUuid') && $('#otaUuid').value) ? $('#otaUuid').value : Defaults.OTA_CHAR_UUID;
+    var otaSvcCfg=getOtaCfg();
 
     var options={optionalServices: KNOWN_SERVICES.slice()};
     if(namePrefix && namePrefix.trim().length){ options.filters=[{namePrefix:namePrefix.trim()}]; } else { options.acceptAllDevices=true; }
     if(svcUuid && options.optionalServices.indexOf(svcUuid)===-1) options.optionalServices.push(svcUuid);
+    if(otaSvcCfg && otaSvcCfg.svc && options.optionalServices.indexOf(otaSvcCfg.svc)===-1) options.optionalServices.push(otaSvcCfg.svc);
 
     try{
       var device=await navigator.bluetooth.requestDevice(options);
@@ -382,6 +627,12 @@
       log('OTA char: ' + (state.chars.ota ? (state.chars.ota.uuid + ' [' + propsStr(state.chars.ota) + ']') : 'NOT FOUND'));
 
       if(state.chars.buf){ await state.chars.buf.startNotifications(); state.chars.buf.addEventListener('characteristicvaluechanged', onNotify); }
+      // Discover OTA upload chars (if present in loader)
+      await discoverOta();
+      try{
+        var svcs=await state.server.getPrimaryServices();
+        log('Services found: '+svcs.map(function(s){return s.uuid;}).join(', '));
+      }catch(_e){}
 
       var btnDis=$('#btnDisconnect'); if(btnDis) btnDis.disabled=false; var btnCon=$('#btnConnect'); if(btnCon) btnCon.disabled=true; setState('Connected');
     }catch(err){ log('Connect error: ' + err.message); setState('Disconnected'); }
@@ -430,7 +681,18 @@
     }catch(err){ log('Raw send error: '+err.message); }
   }
 
-  async function doOta(){ if(!state.chars.ota) return log('No OTA characteristic'); if(!window.confirm('Reboot device into OTA firmware?')) return; try{ await state.chars.ota.writeValueWithoutResponse(new Uint8Array(OTA_MAGIC)); log('OTA reboot requested'); }catch(err){ log('OTA write error: '+err.message); } }
+  async function doOta(){
+    if(!state.chars.ota) return log('No OTA characteristic');
+    if(!window.confirm('Reboot device into OTA firmware?')) return;
+    try{
+      var u8=new Uint8Array(OTA_MAGIC);
+      var props=state.chars.ota && state.chars.ota.properties;
+      if(props && props.writeWithoutResponse){ await state.chars.ota.writeValueWithoutResponse(u8); }
+      else if(props && props.write){ await state.chars.ota.writeValue(u8); }
+      else { await state.chars.ota.writeValueWithoutResponse(u8); }
+      log('OTA reboot requested (magic '+OTA_MAGIC.map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')+')');
+    }catch(err){ log('OTA write error: '+err.message); }
+  }
 
   function startLog(){ state.logging=true; state.logRows=[]; var dl=$('#btnDownload'); if(dl) dl.disabled=true; var st=$('#btnStartLog'); if(st) st.disabled=true; var sp=$('#btnStopLog'); if(sp) sp.disabled=false; }
   function stopLog(){ state.logging=false; var sp=$('#btnStopLog'); if(sp) sp.disabled=true; var st=$('#btnStartLog'); if(st) st.disabled=false; var dl=$('#btnDownload'); if(dl && state.logRows.length) dl.disabled=false; }
@@ -450,6 +712,8 @@
     ok = wire('#btnStartLog',startLog) && ok;
     ok = wire('#btnStopLog',stopLog) && ok;
     ok = wire('#btnDownload',download) && ok;
+    ok = wire('#btnOtaUpload', function(){ otaUpload(); }) && ok;
+    ok = wire('#btnOtaCancel', function(){ state.otaUpload.cancel=true; setOtaStatus('Cancelling...'); }) && ok;
     ok = wire('#btnSaveCfg',saveCfg) && ok;
     ok = wire('#btnLoadCfg',loadCfg) && ok;
     ok = wire('#btnClearCfg',clearCfg) && ok;
@@ -467,10 +731,11 @@
     log('Defaults in use: CMD='+(Defaults.CMD_CHAR_UUID||'-')+' BUF='+(Defaults.BTBUF_CHAR_UUID||'-')+' OTA='+(Defaults.OTA_CHAR_UUID||'-'));
   })();
 
-  // ===== Error hooks → Status panel =====
+  // ===== Error hooks & Status panel =====
   window.addEventListener('error', function(e){ log('Script error: ' + (e && (e.message||e.error) || 'unknown')); });
   window.addEventListener('unhandledrejection', function(e){ var r=e && e.reason; log('Unhandled promise: ' + (r && (r.message||r) || 'unknown')); });
 })();
 </script>
 </body>
 </html>
+
