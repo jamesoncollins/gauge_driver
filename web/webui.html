@@ -44,6 +44,14 @@
     #status{max-height:220px;overflow:auto;padding:12px;margin:0;background:#0a0f19;border-top:1px solid var(--line)}
     footer{color:var(--muted);font-size:12px;text-align:center;margin:18px 0}
     .spacer{flex:1}
+    /* Modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:30;transition:opacity .2s ease;}
+    .modal{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;max-width:420px;width:90%;}
+    .modal h3{margin:0 0 8px 0;font-size:18px;}
+    .modal p{margin:4px 0;color:var(--muted);}
+    .modal .actions{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;}
+    .spinner{width:28px;height:28px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--acc);animation:spin 1s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg)}}
     /* Gauges */
     .gauge svg{width:100%;height:120px;display:block}
     .gauge .arc{fill:none;stroke:#223049;stroke-width:10}
@@ -202,59 +210,30 @@
     <details class="section">
       <summary><span class="chev">&gt;</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot + Upload</span></summary>
       <div class="panel">
-        <div class="row" style="margin-bottom:10px">
-          <button id="btnOta" style="border-color:var(--warn)">Reboot to OTA</button>
-          <span style="font-size:12px;color:var(--muted)">Writes magic then reboots into OTA loader</span>
-        </div>
         <div class="card" style="padding:12px;display:grid;gap:10px">
-          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
-            <div>
-              <label>OTA Service UUID</label>
-              <input id="otaSvcUuid" type="text" placeholder="service UUID"/>
-            </div>
-            <div>
-              <label>Base Addr Char UUID</label>
-              <input id="otaBaseUuid" type="text" placeholder="base address char UUID"/>
-            </div>
-            <div>
-              <label>Raw Data Char UUID</label>
-              <input id="otaDataUuid" type="text" placeholder="raw data char UUID"/>
-            </div>
-            <div>
-              <label>Config Char UUID</label>
-              <input id="otaConfUuid" type="text" placeholder="config char UUID"/>
-            </div>
-            <div>
-              <label>Event Char UUID</label>
-              <input id="otaEvtUuid" type="text" placeholder="event/indicate char UUID"/>
-            </div>
-            <div>
-              <label>App Base Offset (hex, 3 bytes)</label>
-              <input id="otaBaseAddr" type="text" placeholder="0007000"/>
-            </div>
-            <div>
-              <label>Chunk size (bytes)</label>
-              <input id="otaChunk" type="text" placeholder="244"/>
-            </div>
-            <div>
-              <label>Number of sectors</label>
-              <input id="otaNumSectors" type="text" placeholder="0"/>
-            </div>
-            <div>
-              <label>Chunk delay (ms)</label>
-              <input id="otaChunkDelay" type="text" placeholder="0"/>
-            </div>
-          </div>
           <div class="row" style="align-items:center;gap:10px;flex-wrap:wrap">
             <input id="otaFile" type="file" accept=".bin" style="color:var(--muted)"/>
-            <button id="btnOtaUpload">Start OTA Upload</button>
-            <button id="btnOtaCancel" class="ghost" disabled>Cancel</button>
+            <button id="btnOtaAuto" class="primary">Upload (reboot + OTA + reconnect)</button>
             <span id="otaStatusTxt" class="pill" style="background:var(--pill);border-color:var(--line)">Idle</span>
           </div>
-          <div style="font-size:12px;color:var(--muted)">After the device reboots into OTA mode, connect again and start the upload.</div>
+          <div style="font-size:12px;color:var(--muted)">Select a .bin and click upload. We will reboot into the loader, upload, and reconnect to the app.</div>
         </div>
       </div>
     </details>
+
+    <div id="otaModalWrap" class="modal-backdrop" style="display:none">
+      <div class="modal">
+        <div class="row" style="align-items:center;gap:12px">
+          <div class="spinner" aria-label="Uploading"></div>
+          <div>
+            <h3 style="margin:0;font-size:18px">Uploading firmware...</h3>
+            <p id="otaModalText" style="margin:4px 0">Preparing...</p>
+            <p style="margin:4px 0;color:var(--muted)">Keep this tab open; the device will reboot twice.</p>
+            <div id="otaModalAction" class="actions"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <details class="section" open>
       <summary><span class="chev">&gt;</span><span class="summary-title">Status</span><span class="spacer"></span><span class="pill">Debug</span></summary>
@@ -273,7 +252,7 @@
 
   // ===== Defaults & Known Services =====
   var Defaults = {
-    namePrefix: '',
+    namePrefix: '3000GT',
     SERVICE_UUID: '',
     CMD_CHAR_UUID: '00000001-8e22-4541-9d4c-21edae82ed19',
     BTBUF_CHAR_UUID: '00000003-8e22-4541-9d4c-21edae82ed19',
@@ -334,6 +313,28 @@
       return false;
     }
   }
+  function waitForDisconnect(timeoutMs){
+    return new Promise(function(resolve){
+      if(!state.device || !state.server || !state.server.connected) return resolve(true);
+      var done=false;
+      var timer=setTimeout(function(){ if(done) return; done=true; cleanup(); resolve(false); }, timeoutMs||12000);
+      function handler(){ if(done) return; done=true; cleanup(); resolve(true); }
+      function cleanup(){ if(timer) clearTimeout(timer); if(state.device) state.device.removeEventListener('gattserverdisconnected', handler); }
+      state.device.addEventListener('gattserverdisconnected', handler);
+    });
+  }
+  async function ensureNotifications(ch,label){
+    if(!ch) return false;
+    if(!(ch.properties && (ch.properties.indicate || ch.properties.notify))) return false;
+    try{
+      await ch.startNotifications();
+      log(label+' notifications enabled');
+      return true;
+    }catch(err){
+      log(label+' notify error: '+err.message);
+      return false;
+    }
+  }
 
   // ===== Persist inputs =====
   var KEYS = ['namePrefix','svcUuid','cmdUuid','bufUuid','otaUuid'];
@@ -356,16 +357,6 @@
       var cu=$('#cmdUuid');    if(cu) cu.value=Defaults.CMD_CHAR_UUID;
       var bu=$('#bufUuid');    if(bu) bu.value=Defaults.BTBUF_CHAR_UUID;
       var ou=$('#otaUuid');    if(ou) ou.value=Defaults.OTA_CHAR_UUID;
-      // OTA upload defaults
-      $('#otaSvcUuid') && ($('#otaSvcUuid').value = OTA_UPLOAD_DEFAULTS.svc);
-      $('#otaBaseUuid') && ($('#otaBaseUuid').value = OTA_UPLOAD_DEFAULTS.base);
-      $('#otaDataUuid') && ($('#otaDataUuid').value = OTA_UPLOAD_DEFAULTS.data);
-      $('#otaConfUuid') && ($('#otaConfUuid').value = OTA_UPLOAD_DEFAULTS.conf);
-      $('#otaEvtUuid') && ($('#otaEvtUuid').value = OTA_UPLOAD_DEFAULTS.evt);
-      $('#otaBaseAddr') && ($('#otaBaseAddr').value = OTA_UPLOAD_DEFAULTS.appBase);
-      $('#otaChunk') && ($('#otaChunk').value = OTA_UPLOAD_DEFAULTS.chunkSize);
-      $('#otaNumSectors') && ($('#otaNumSectors').value = OTA_UPLOAD_DEFAULTS.numSectors);
-      $('#otaChunkDelay') && ($('#otaChunkDelay').value = OTA_UPLOAD_DEFAULTS.chunkDelayMs);
       return;
     }
     // If config exists, load it then fill any missing/blank fields from Defaults
@@ -383,19 +374,18 @@
   }
 
   function getOtaCfg(){
-    function val(id, def){ var el=$(id); var v=el && el.value ? el.value.trim() : ''; return v || def || ''; }
-    var cfg={
-      svc: val('#otaSvcUuid', OTA_UPLOAD_DEFAULTS.svc),
-      base: val('#otaBaseUuid', OTA_UPLOAD_DEFAULTS.base),
-      data: val('#otaDataUuid', OTA_UPLOAD_DEFAULTS.data),
-      conf: val('#otaConfUuid', OTA_UPLOAD_DEFAULTS.conf),
-      evt: val('#otaEvtUuid', OTA_UPLOAD_DEFAULTS.evt),
-      baseAddr: val('#otaBaseAddr', OTA_UPLOAD_DEFAULTS.appBase),
-      chunkSize: parseInt(val('#otaChunk', OTA_UPLOAD_DEFAULTS.chunkSize),10) || OTA_UPLOAD_DEFAULTS.chunkSize,
-      numSectors: parseInt(val('#otaNumSectors', OTA_UPLOAD_DEFAULTS.numSectors),10) || OTA_UPLOAD_DEFAULTS.numSectors,
-      chunkDelayMs: parseInt(val('#otaChunkDelay', OTA_UPLOAD_DEFAULTS.chunkDelayMs),10) || OTA_UPLOAD_DEFAULTS.chunkDelayMs
+    return {
+      svc: OTA_UPLOAD_DEFAULTS.svc,
+      base: OTA_UPLOAD_DEFAULTS.base,
+      data: OTA_UPLOAD_DEFAULTS.data,
+      conf: OTA_UPLOAD_DEFAULTS.conf,
+      evt: OTA_UPLOAD_DEFAULTS.evt,
+      baseAddr: OTA_UPLOAD_DEFAULTS.appBase,
+      chunkSize: OTA_UPLOAD_DEFAULTS.chunkSize,
+      numSectors: OTA_UPLOAD_DEFAULTS.numSectors,
+      chunkDelayMs: OTA_UPLOAD_DEFAULTS.chunkDelayMs,
+      loaderPrefix: 'STM_OTA'
     };
-    return cfg;
   }
 
   // ===== Reassembler =====
@@ -435,7 +425,40 @@
   }
 
   // ===== OTA upload helpers =====
-  function setOtaStatus(txt){ var el=$('#otaStatusTxt'); if(el) el.textContent=txt; log('OTA: '+txt); }
+  function setOtaStatus(txt){
+    var el=$('#otaStatusTxt'); if(el) el.textContent=txt;
+    var mt=$('#otaModalText'); if(mt) mt.textContent=txt;
+    log('OTA: '+txt);
+  }
+  function showOtaModal(msg){
+    var wrap=$('#otaModalWrap'); if(wrap) wrap.style.display='flex';
+    var act=$('#otaModalAction'); if(act) act.innerHTML='';
+    if(msg) setOtaStatus(msg);
+  }
+  function hideOtaModal(){
+    var wrap=$('#otaModalWrap'); if(wrap) wrap.style.display='none';
+    var act=$('#otaModalAction'); if(act) act.innerHTML='';
+  }
+  function promptDeviceSelection(label, options){
+    return new Promise(function(resolve,reject){
+      var act=$('#otaModalAction'); if(act){
+        act.innerHTML='';
+        var btn=document.createElement('button');
+        btn.textContent=label;
+        btn.className='primary';
+        btn.addEventListener('click', async function(){
+          try{
+            var dev=await navigator.bluetooth.requestDevice(options);
+            act.innerHTML='';
+            resolve(dev);
+          }catch(err){ reject(err); }
+        });
+        act.appendChild(btn);
+      } else {
+        reject(new Error('Action area missing'));
+      }
+    });
+  }
 
   async function writeChar(ch,u8,forceResp){
     if(!ch) throw new Error('characteristic missing');
@@ -502,8 +525,9 @@
     var numSectors = (cfg.numSectors && cfg.numSectors>0) ? cfg.numSectors : autoSectors;
     setOtaStatus('Computed sectors: '+numSectors+' (bin '+bin.length+' bytes)');
     state.otaUpload.cancel=false;
-    $('#btnOtaUpload') && ($('#btnOtaUpload').disabled=true);
-    $('#btnOtaCancel') && ($('#btnOtaCancel').disabled=false);
+    var autoBtn=$('#btnOtaAuto'); var fileEl=$('#otaFile');
+    if(autoBtn) autoBtn.disabled=true;
+    if(fileEl) fileEl.disabled=true;
     try{
       // write base address command: [cmd, addr0, addr1, addr2]
       var baseU8=new Uint8Array(4);
@@ -551,8 +575,8 @@
     }catch(err){
       setOtaStatus('Error: '+err.message);
     }finally{
-      $('#btnOtaUpload') && ($('#btnOtaUpload').disabled=false);
-      $('#btnOtaCancel') && ($('#btnOtaCancel').disabled=true);
+      if(autoBtn) autoBtn.disabled=false;
+      if(fileEl) fileEl.disabled=false;
     }
   }
 
@@ -684,6 +708,10 @@
   async function doOta(){
     if(!state.chars.ota) return log('No OTA characteristic');
     if(!window.confirm('Reboot device into OTA firmware?')) return;
+    await sendOtaMagic();
+  }
+
+  async function sendOtaMagic(){
     try{
       var u8=new Uint8Array(OTA_MAGIC);
       var props=state.chars.ota && state.chars.ota.properties;
@@ -693,6 +721,86 @@
       log('OTA reboot requested (magic '+OTA_MAGIC.map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')+')');
     }catch(err){ log('OTA write error: '+err.message); }
   }
+
+  async function setupConnectedDevice(device, svcUuid, cmdCharUuid, bufCharUuid, otaCharUuid){
+    state.device=device;
+    device.addEventListener('gattserverdisconnected', onDisconnect);
+    setState('Connecting...');
+    state.server=await device.gatt.connect();
+    log('Connected to ' + (device.name||'(unnamed)'));
+
+    state.chars.cmd = await findCharacteristic(state.server, cmdCharUuid, svcUuid);
+    state.chars.buf = await findCharacteristic(state.server, bufCharUuid, svcUuid);
+    state.chars.ota = await findCharacteristic(state.server, otaCharUuid, svcUuid);
+
+    log('CMD char: ' + (state.chars.cmd ? (state.chars.cmd.uuid + ' [' + propsStr(state.chars.cmd) + ']') : 'NOT FOUND'));
+    log('BUF char: ' + (state.chars.buf ? (state.chars.buf.uuid + ' [' + propsStr(state.chars.buf) + ']') : 'NOT FOUND'));
+    log('OTA char: ' + (state.chars.ota ? (state.chars.ota.uuid + ' [' + propsStr(state.chars.ota) + ']') : 'NOT FOUND'));
+
+    if(state.chars.buf){ await state.chars.buf.startNotifications(); state.chars.buf.addEventListener('characteristicvaluechanged', onNotify); }
+    await discoverOta();
+    try{
+      var svcs=await state.server.getPrimaryServices();
+      log('Services found: '+svcs.map(function(s){return s.uuid;}).join(', '));
+    }catch(_e){}
+    var btnDis=$('#btnDisconnect'); if(btnDis) btnDis.disabled=false; var btnCon=$('#btnConnect'); if(btnCon) btnCon.disabled=true; setState('Connected');
+  }
+
+  async function autoOtaFlow(){
+    var autoBtn=$('#btnOtaAuto'); var fileEl=$('#otaFile');
+    try{
+      if(!state.device || !state.server || !state.server.connected){ return log('Auto OTA: connect to the app device first'); }
+      if(!fileEl || !fileEl.files || !fileEl.files.length) return log('Auto OTA: select a firmware file first');
+      var appPrefix = ($('#namePrefix') && $('#namePrefix').value) ? $('#namePrefix').value.trim() : Defaults.namePrefix;
+      var otaCfg = getOtaCfg();
+      var loaderPrefix = otaCfg.loaderPrefix;
+      if(autoBtn) autoBtn.disabled=true;
+      if(fileEl) fileEl.disabled=true;
+      showOtaModal('Rebooting into OTA loader...');
+
+      log('Auto OTA: requesting reboot into loader');
+      await sendOtaMagic();
+      setOtaStatus('Auto: rebooting into OTA loader...');
+      var rebooted = await waitForDisconnect(12000);
+      if(!rebooted){ setOtaStatus('Auto: reboot timeout'); hideOtaModal(); return; }
+
+      log('Auto OTA: select loader device ('+(loaderPrefix||'any')+')');
+      setOtaStatus('Select loader device ('+(loaderPrefix||'any')+')');
+      var loaderOpts = {optionalServices: []};
+      if(otaCfg.svc) loaderOpts.optionalServices.push(otaCfg.svc);
+      if(loaderPrefix && loaderPrefix.length){ loaderOpts.filters=[{namePrefix:loaderPrefix}]; } else { loaderOpts.acceptAllDevices=true; }
+      var loaderDevice = await promptDeviceSelection('Pick loader', loaderOpts);
+      await setupConnectedDevice(loaderDevice, null, '', '', '');
+      await otaUpload();
+
+      setOtaStatus('Auto: waiting for loader reboot...');
+      var loaderRebooted = await waitForDisconnect(20000);
+      if(!loaderRebooted){ setOtaStatus('Auto: loader did not reboot'); hideOtaModal(); return; }
+
+      if(!appPrefix){ setOtaStatus('Auto: finished; please reconnect manually to app'); hideOtaModal(); return; }
+      log('Auto OTA: reconnecting to app device ('+appPrefix+')');
+      setOtaStatus('Reconnecting to app device ('+appPrefix+')');
+      var svcUuid=($('#svcUuid') && $('#svcUuid').value) ? $('#svcUuid').value : Defaults.SERVICE_UUID;
+      var cmdCharUuid=($('#cmdUuid') && $('#cmdUuid').value) ? $('#cmdUuid').value : Defaults.CMD_CHAR_UUID;
+      var bufCharUuid=($('#bufUuid') && $('#bufUuid').value) ? $('#bufUuid').value : Defaults.BTBUF_CHAR_UUID;
+      var otaCharUuid=($('#otaUuid') && $('#otaUuid').value) ? $('#otaUuid').value : Defaults.OTA_CHAR_UUID;
+      var appOpts={optionalServices: KNOWN_SERVICES.slice()};
+      if(svcUuid && appOpts.optionalServices.indexOf(svcUuid)===-1) appOpts.optionalServices.push(svcUuid);
+      if(otaCfg.svc && appOpts.optionalServices.indexOf(otaCfg.svc)===-1) appOpts.optionalServices.push(otaCfg.svc);
+      if(appPrefix && appPrefix.length){ appOpts.filters=[{namePrefix:appPrefix}]; } else { appOpts.acceptAllDevices=true; }
+      var appDevice=await promptDeviceSelection('Pick app device', appOpts);
+      await setupConnectedDevice(appDevice, svcUuid, cmdCharUuid, bufCharUuid, otaCharUuid);
+      setOtaStatus('Auto OTA complete; reconnected to app');
+      hideOtaModal();
+    }catch(err){
+      setOtaStatus('Auto OTA error: '+err.message);
+      hideOtaModal();
+    }finally{
+      if(autoBtn) autoBtn.disabled=false;
+      if(fileEl) fileEl.disabled=false;
+    }
+  }
+
 
   function startLog(){ state.logging=true; state.logRows=[]; var dl=$('#btnDownload'); if(dl) dl.disabled=true; var st=$('#btnStartLog'); if(st) st.disabled=true; var sp=$('#btnStopLog'); if(sp) sp.disabled=false; }
   function stopLog(){ state.logging=false; var sp=$('#btnStopLog'); if(sp) sp.disabled=true; var st=$('#btnStartLog'); if(st) st.disabled=false; var dl=$('#btnDownload'); if(dl && state.logRows.length) dl.disabled=false; }
@@ -708,12 +816,10 @@
     var cmdBtns = document.querySelectorAll('[data-cmd]');
     for(var i=0;i<cmdBtns.length;i++){ (function(btn){ btn.addEventListener('click', function(){ sendCommand(btn.getAttribute('data-cmd')); }); })(cmdBtns[i]); }
     ok = wire('#btnSendRaw',sendRaw) && ok;
-    ok = wire('#btnOta',doOta) && ok;
     ok = wire('#btnStartLog',startLog) && ok;
     ok = wire('#btnStopLog',stopLog) && ok;
     ok = wire('#btnDownload',download) && ok;
-    ok = wire('#btnOtaUpload', function(){ otaUpload(); }) && ok;
-    ok = wire('#btnOtaCancel', function(){ state.otaUpload.cancel=true; setOtaStatus('Cancelling...'); }) && ok;
+    ok = wire('#btnOtaAuto', function(){ autoOtaFlow(); }) && ok;
     ok = wire('#btnSaveCfg',saveCfg) && ok;
     ok = wire('#btnLoadCfg',loadCfg) && ok;
     ok = wire('#btnClearCfg',clearCfg) && ok;
