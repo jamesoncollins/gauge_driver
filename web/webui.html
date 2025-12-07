@@ -132,35 +132,42 @@
       </div>
     </details>
 
-    <details class="section" open>
-      <summary><span class="chev">&gt;</span><span class="summary-title">Connection & UUIDs</span><span class="spacer"></span><span class="pill">Setup</span></summary>
-      <div class="panel">
-        <div class="grid">
-          <div>
-            <label>Device filter (name prefix)</label>
-            <input id="namePrefix" type="text" placeholder="e.g., 3000GT" />
+    <details class="section">
+      <summary><span class="chev">&gt;</span><span class="summary-title">Advanced / Debug</span><span class="spacer"></span><span class="pill">Optional</span></summary>
+      <div class="panel" style="display:grid;gap:12px">
+        <div class="card" style="padding:12px">
+          <div style="font-weight:600;margin-bottom:8px">Connection & UUIDs</div>
+          <div class="grid">
+            <div>
+              <label>Device filter (name prefix)</label>
+              <input id="namePrefix" type="text" placeholder="e.g., 3000GT" />
+            </div>
+            <div>
+              <label>Custom Service UUID (optional)</label>
+              <input id="svcUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+            </div>
+            <div>
+              <label>Commands Char UUID (write)</label>
+              <input id="cmdUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+            </div>
+            <div>
+              <label>BTBuffer Char UUID (notify)</label>
+              <input id="bufUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+            </div>
+            <div>
+              <label>OTA Control Char UUID (write)</label>
+              <input id="otaUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+            </div>
           </div>
-          <div>
-            <label>Custom Service UUID (optional)</label>
-            <input id="svcUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </div>
-          <div>
-            <label>Commands Char UUID (write)</label>
-            <input id="cmdUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </div>
-          <div>
-            <label>BTBuffer Char UUID (notify)</label>
-            <input id="bufUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </div>
-          <div>
-            <label>OTA Control Char UUID (write)</label>
-            <input id="otaUuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          <div class="row" style="margin-top:10px">
+            <button id="btnSaveCfg">Save</button>
+            <button id="btnLoadCfg" class="ghost">Load</button>
+            <button id="btnClearCfg" class="ghost">Clear</button>
           </div>
         </div>
-        <div class="row" style="margin-top:10px">
-          <button id="btnSaveCfg">Save</button>
-          <button id="btnLoadCfg" class="ghost">Load</button>
-          <button id="btnClearCfg" class="ghost">Clear</button>
+        <div class="card" style="padding:12px">
+          <div style="font-weight:600;margin-bottom:8px">Status Log</div>
+          <pre id="status" class="mono" style="margin:0;max-height:220px;overflow:auto;padding:12px;background:#0a0f19;border:1px solid var(--line)"></pre>
         </div>
       </div>
     </details>
@@ -234,13 +241,6 @@
         </div>
       </div>
     </div>
-
-    <details class="section" open>
-      <summary><span class="chev">&gt;</span><span class="summary-title">Status</span><span class="spacer"></span><span class="pill">Debug</span></summary>
-      <div class="panel">
-        <pre id="status" class="mono"></pre>
-      </div>
-    </details>
 
     <footer>Tip: this UI works best on HTTPS or <span class="mono">localhost</span>.</footer>
   </main>
