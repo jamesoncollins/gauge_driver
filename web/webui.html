@@ -516,44 +516,43 @@
     setOtaStatus('Reading '+file.name+'...');
     var buf=await file.arrayBuffer();
     var bin=new Uint8Array(buf);
-    var chunkSize=Math.max(20, Math.min(248, cfg.chunkSize||OTA_UPLOAD_DEFAULTS.chunkSize));
+    // Per ST AN5247: base write action+address, data in 20-byte WWR chunks
+    var chunkSize=20;
     var baseAddr=parseInt(cfg.baseAddr,16); if(isNaN(baseAddr)) baseAddr=0x0007000;
     baseAddr = baseAddr & 0xFFFFFF; // 3-byte offset expected
     var startSector = Math.floor(baseAddr / 4096); // derive from offset (4KB pages)
     var pageSize = 4096;
     var autoSectors = Math.ceil(bin.length / pageSize);
     var numSectors = (cfg.numSectors && cfg.numSectors>0) ? cfg.numSectors : autoSectors;
-    setOtaStatus('Computed sectors: '+numSectors+' (bin '+bin.length+' bytes)');
+    var endAddr = baseAddr + numSectors*pageSize;
+    setOtaStatus('Computed sectors: '+numSectors+' (bin '+bin.length+' bytes), start sector '+startSector+', end 0x'+endAddr.toString(16));
     state.otaUpload.cancel=false;
     var autoBtn=$('#btnOtaAuto'); var fileEl=$('#otaFile');
     if(autoBtn) autoBtn.disabled=true;
     if(fileEl) fileEl.disabled=true;
     try{
-      // write base address command: [cmd, addr0, addr1, addr2]
+      // write base address command: [action, addr0, addr1, addr2] action 0x02 = START user application file upload
       var baseU8=new Uint8Array(4);
-      baseU8[0]=0x02; // application upload
+      baseU8[0]=0x02; // START user application file upload
       baseU8[1]= baseAddr & 0xFF;
       baseU8[2]= (baseAddr>>8) & 0xFF;
       baseU8[3]= (baseAddr>>16) & 0xFF;
-      setOtaStatus('Setting base addr 0x'+baseAddr.toString(16)+' (cmd 0x02)');
-      await writeChar(state.ota.base, baseU8, true); // force write with response
+      setOtaStatus('Setting base addr 0x'+baseAddr.toString(16)+' (cmd 0x02 START app upload)');
+      await writeChar(state.ota.base, baseU8, true); // ST doc says WWR, but use response for reliability
       setOtaStatus('Base addr set 0x'+baseAddr.toString(16));
       setOtaStatus('Upload started ('+bin.length+' bytes, chunk '+chunkSize+')');
       for(var off=0; off<bin.length; off+=chunkSize){
         if(state.otaUpload.cancel) throw new Error('Cancelled');
         var slice=bin.slice(off, Math.min(off+chunkSize, bin.length));
+        // Send all data with write-without-response (20-byte chunks per AN5247)
         await writeChar(state.ota.data, slice, false);
         if(cfg.chunkDelayMs>0) await new Promise(function(res){ setTimeout(res, cfg.chunkDelayMs); });
         if((off/chunkSize)%25===0) setOtaStatus('Sending... '+Math.min(bin.length, off+chunkSize)+' / '+bin.length);
       }
-      // upload finished command (with sectors)
-      var fin1=new Uint8Array([0x07, startSector & 0xFF, numSectors & 0xFF, 0x00]);
-      await writeChar(state.ota.base, fin1, true);
-      setOtaStatus('Finish command sent (1)');
-      await new Promise(function(res){ setTimeout(res, 50); });
-      await writeChar(state.ota.base, fin1, true);
-      setOtaStatus('Finish command sent (2)');
-      setOtaStatus('Upload finished, waiting for reboot/indication');
+      // upload finished command: [0x07, addr0, addr1, addr2] per AN5247
+      var fin=new Uint8Array([0x07, baseAddr & 0xFF, (baseAddr>>8)&0xFF, (baseAddr>>16)&0xFF]);
+      await writeChar(state.ota.base, fin, true);
+      setOtaStatus('Finish command sent; waiting for conf/reboot');
       // wait for conf indication or timeout
       var waited=false;
       var timeoutId=null;
@@ -566,12 +565,12 @@
       });
       await waitConf;
       state.otaUpload.confResolve = null;
-      if(waited){ setOtaStatus('No conf indication within timeout; check device'); }
-      else {
+      if(waited){
+        setOtaStatus('No conf indication within timeout; consider reconnecting manually');
+      } else {
         setOtaStatus('Conf indication received; waiting for reboot');
         await new Promise(function(res){ setTimeout(res, 1000); });
       }
-      // optional: leave connection open; user can disconnect manually
     }catch(err){
       setOtaStatus('Error: '+err.message);
     }finally{
@@ -711,14 +710,14 @@
     await sendOtaMagic();
   }
 
-  async function sendOtaMagic(){
+  async function sendOtaMagic(payload){
     try{
-      var u8=new Uint8Array(OTA_MAGIC);
+      var u8=new Uint8Array(payload && payload.length ? payload : OTA_MAGIC);
       var props=state.chars.ota && state.chars.ota.properties;
       if(props && props.writeWithoutResponse){ await state.chars.ota.writeValueWithoutResponse(u8); }
       else if(props && props.write){ await state.chars.ota.writeValue(u8); }
       else { await state.chars.ota.writeValueWithoutResponse(u8); }
-      log('OTA reboot requested (magic '+OTA_MAGIC.map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')+')');
+      log('OTA reboot requested (magic '+Array.from(u8).map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')+')');
     }catch(err){ log('OTA write error: '+err.message); }
   }
 
@@ -759,7 +758,14 @@
       showOtaModal('Rebooting into OTA loader...');
 
       log('Auto OTA: requesting reboot into loader');
-      await sendOtaMagic();
+      // compute sectors from selected file for erase
+      var binSize = fileEl.files[0].size || 0;
+      var pageSize=4096;
+      var numSectors = Math.ceil(binSize / pageSize);
+      var startSector = Math.floor(0x0007000 / pageSize); // fixed base offset we use
+      var magic = [0x01, startSector & 0xFF, numSectors & 0xFF];
+      log('Auto OTA: reboot magic with sectors '+numSectors+' startSector '+startSector);
+      await sendOtaMagic(magic);
       setOtaStatus('Auto: rebooting into OTA loader...');
       var rebooted = await waitForDisconnect(12000);
       if(!rebooted){ setOtaStatus('Auto: reboot timeout'); hideOtaModal(); return; }
