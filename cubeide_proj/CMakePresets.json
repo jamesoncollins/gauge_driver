@@ -1,0 +1,46 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "displayName": "Base ARM toolchain",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/toolchain-arm-gcc.cmake",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "st7789vi-debug",
+      "displayName": "Debug - ST7789VI",
+      "inherits": "base",
+      "cacheVariables": {
+        "UGFX_DRIVER": "st7789vi"
+      }
+    },
+    {
+      "name": "s6e63d6-debug",
+      "displayName": "Debug - S6E63D6",
+      "inherits": "base",
+      "cacheVariables": {
+        "UGFX_DRIVER": "s6e63d6"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "st7789vi-debug",
+      "configurePreset": "st7789vi-debug"
+    },
+    {
+      "name": "s6e63d6-debug",
+      "configurePreset": "s6e63d6-debug"
+    }
+  ]
+}
