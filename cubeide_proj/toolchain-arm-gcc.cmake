@@ -6,6 +6,11 @@ set(ARM_PREFIX arm-none-eabi)
 
 # Try to locate the toolchain if not on PATH. You can also set ARM_GCC_DIR env to the bin folder.
 set(_arm_hints "")
+# Preferred default (CubeIDE 1.14, GCC 13.3). Added first so it wins if present.
+set(_arm_default_hint "C:/ST/STM32CubeIDE_1.14.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.0.202411081344/tools/bin")
+if(EXISTS "${_arm_default_hint}")
+  list(APPEND _arm_hints "${_arm_default_hint}")
+endif()
 if(DEFINED ENV{ARM_GCC_DIR})
   list(APPEND _arm_hints "$ENV{ARM_GCC_DIR}")
 endif()
