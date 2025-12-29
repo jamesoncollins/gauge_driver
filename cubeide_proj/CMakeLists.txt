@@ -136,6 +136,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_link_libraries(${PROJECT_NAME} m c gcc)
 
+# Post-build artifacts to mirror CubeIDE: .list, .hex, .bin, and size
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
   COMMAND ${CMAKE_SIZE} $<TARGET_FILE:${PROJECT_NAME}>
+  COMMAND ${CMAKE_OBJDUMP} -h -S $<TARGET_FILE:${PROJECT_NAME}> > ${PROJECT_NAME}.list
+  COMMAND ${CMAKE_OBJCOPY} -O ihex   $<TARGET_FILE:${PROJECT_NAME}> ${PROJECT_NAME}.hex
+  COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${PROJECT_NAME}> ${PROJECT_NAME}.bin
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
