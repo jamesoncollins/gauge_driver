@@ -31,11 +31,18 @@
 
 #define GDISP_FLG_NEEDFLUSH                     (GDISP_FLG_DRIVER<<0)
 
+#ifndef TRIM_HEIGHT
+#define TRIM_HEIGHT 65   // match OLED trim to reduce framebuffer height
+#endif
+#ifndef TRIM_WIDTH
+#define TRIM_WIDTH 0
+#endif
+
 #ifndef GDISP_SCREEN_HEIGHT
-#define GDISP_SCREEN_HEIGHT		320
+#define GDISP_SCREEN_HEIGHT		(320 - TRIM_HEIGHT)
 #endif
 #ifndef GDISP_SCREEN_WIDTH
-#define GDISP_SCREEN_WIDTH		240
+#define GDISP_SCREEN_WIDTH		(240 - TRIM_WIDTH)
 #endif
 #ifndef GDISP_INITIAL_CONTRAST
 #define GDISP_INITIAL_CONTRAST	50
@@ -65,6 +72,10 @@
 #define xyaddr(x, y)            (((x) + (y)*GDISP_SCREEN_WIDTH))
 //#define map_color(color) (((color & 0xff) >> 8) | (color << 8))
 #define map_color(color) ((color>>8) | (color<<8))
+
+/* Static framebuffer (trimmed) to avoid heap use and match OLED behavior */
+static gU16 ramBuffer[GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH];
+static const int ramSize = sizeof(ramBuffer);
 
 static void set_viewport (GDisplay *g)
 {
@@ -98,12 +109,17 @@ static void set_viewport (GDisplay *g)
 LLDSPEC gBool gdisp_lld_init (GDisplay *g)
 {
 
-  // The private area is the display surface.
-  g->priv = gfxAlloc (
-  GDISP_SCREEN_HEIGHT * GDISP_SCREEN_WIDTH * sizeof(*RAM(g)));
+  // The private area is the display surface (static, trimmed)
+  g->priv = ramBuffer;
+
 
   // Initialise the board interface
   init_board (g);
+  // Keep backlight off until we have cleared the panel
+  set_backlight(g, 0);
+
+  // Start with a clean RAM buffer
+  memset(ramBuffer, 0, ramSize);
 
   // Hardware reset
   setpin_reset (g, gTrue);
@@ -199,7 +215,15 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
   write_data_one (g, 0x01);
   write_data_one (g, 0x3F); // Y address set
 
-  write_index (g, 0x29); // Display on
+  // Clear full 240x320 once to avoid garbage pixels and to blank trimmed area
+  write_index(g, 0x2C); // Memory write
+  for (uint32_t i = 0; i < 240U * 320U; i++) {
+    // 16-bit color per pixel -> write two bytes
+    write_data_one(g, 0x00);
+    write_data_one(g, 0x00);
+  }
+
+  write_index (g, 0x29); // Display on (after initial clear)
   gfxSleepMilliseconds (100);
 
   // Finish Init
@@ -216,6 +240,8 @@ LLDSPEC gBool gdisp_lld_init (GDisplay *g)
   g->g.Height = GDISP_SCREEN_HEIGHT;
   g->g.Orientation = gOrientation0;
   g->g.Powermode = gPowerOn;
+  // Bring backlight up after panel is cleared
+  set_backlight(g, GDISP_INITIAL_BACKLIGHT);
   g->g.Backlight = GDISP_INITIAL_BACKLIGHT;
   g->g.Contrast = GDISP_INITIAL_CONTRAST;
   return gTrue;
@@ -278,6 +304,34 @@ LLDSPEC void gdisp_lld_flush (GDisplay *g)
   release_bus (g);
 
   g->flags &= ~GDISP_FLG_NEEDFLUSH;
+}
+#endif
+
+#if GDISP_HARDWARE_CLEARS
+LLDSPEC void gdisp_lld_clear (GDisplay *g)
+{
+  // dont destroy the ram if we're still reading it for the spi transfer
+  while (bus_busy ())
+  {
+    asm("nop");
+  }
+
+  gU16 c = map_color(gdispColor2Native(g->p.color));
+  uint32_t c2 = (uint32_t)c | ((uint32_t)c<<16);
+  setClearColor(c2);
+
+  // If auto-clear is enabled, the DMA will wipe after transmit; skip fill.
+  if(getAutoClear())
+    return;
+
+  // Fill buffer with the clear color
+  uint32_t *p = (uint32_t*)RAM(g);
+  uint32_t *end = (uint32_t*)((uint8_t*)RAM(g) + ramSize);
+  while (p < end) {
+    *p++ = c2;
+  }
+
+  g->flags |= GDISP_FLG_NEEDFLUSH;
 }
 #endif
 
