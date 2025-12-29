@@ -17,7 +17,7 @@ HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const u
  */
 
 // main loop timers
-#define SAMPLE_TIME_MS_LED       1000
+#define SAMPLE_TIME_MS_LED       100
 #define SAMPLE_TIME_MS_PRINT     50
 #define TARGET_FPS               20
 #define SAMPLE_TIME_MS_DRAW     (1000/TARGET_FPS) // it takes 60ms to refresh the screen
@@ -26,6 +26,9 @@ HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const u
 //#define SWEEP_GAUGES  // sweep needles forever
 //#define SIM_GAUGES       // generate simulated rpm and mph
 
+// WARNING
+// this feature shares a pin with teh PCD backlight.  i dont have any code yet to deconflict this.
+//#define SIM_GAUGE_SIGNALS // use lptim, on gpio3, as a pwm signal you can connect to the tach or speed inputs
 
 /*
  * USB-based diagnostics

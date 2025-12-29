@@ -30,7 +30,9 @@ extern void setAutoClear(bool);
 #include "../ECUK-lib/MUTII.hpp"
 #include "../BTbuffer-lib/BTBuffer.hpp"
 #include "HzSensorKalmanFilter.hpp"
+#ifdef SIM_GAUGE_SIGNALS
 #include "tachTest.hpp"
+#endif
 
 extern I2C_HandleTypeDef hi2c1, hi2c3;
 extern SPI_HandleTypeDef hspi1;
@@ -189,7 +191,9 @@ int main_cpp(void)
    *
    * Call once during init, after MX_LPTIM2_Init() and GPIO init
    */
+  #ifdef SIM_GAUGE_SIGNALS
   TachTest_Init();
+  #endif
 
   /*
    * init graphics library
@@ -1069,7 +1073,7 @@ int main_cpp(void)
     /*
      * Simulated tach/speed PWM on GPIO3/PA8
      */
-    if (true)
+    #ifdef SIM_GAUGE_SIGNALS
     {
         // Tunables
         static float    rpm_peak    = 8000.0f; // top RPM
@@ -1122,6 +1126,7 @@ int main_cpp(void)
             TachTest_SetHz( rpm_cmd / scale );
         }
     }
+    #endif
 
 
 
