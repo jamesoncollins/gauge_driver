@@ -2,7 +2,21 @@
 #ifndef INC_MAIN_CPP_H_
 #define INC_MAIN_CPP_H_
 
+extern "C"
+{
+void main_cpp();
+}
 
+/*
+ * button type for bluetooth UI
+ */
+typedef enum
+{
+  BTN_OK = 0,
+  BTN_U, BTN_D, BTN_L, BTN_R,
+  BTN_INV = 255
+}
+button_e;
 
 /*
  * function declarations
@@ -66,15 +80,43 @@ const int DPMM = 240. / 36.72; // 6.53 dots per mm
 const float MPH_PER_HZ = ( 0.8425872f * 1.015625f ); //(1.11746031667) //( 1.07755102 )
 const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
 
+
 /*
- * button type for bluetooth UI
+ * frequency measurement settings for rpm and speed
+ *
+ * i originally measured that every 3 ticks of the speedo, the odo was stepped once.
+ * and with our stepper i think a full step is actually 12 micro steps.
+ * so the numbers below should be 3 and 12.  but those aren't looking right.
+ * so i tweaked it.  well, i will tweak it once i get some measurements again.
  */
-typedef enum
-{
-  BTN_OK = 0,
-  BTN_U, BTN_D, BTN_L, BTN_R,
-  BTN_INV = 255
-}
-button_e;
+
+#define SPEED_TICKS_PER_ODO_TICK (3)
+#define ODO_STEPS_PER_TICK (12/2)
+
+
+/*
+ * Decalre globals that are later defined in cpp_main.cpp
+ */
+#include "../ECUK-lib/MUTII.hpp"
+extern MUTII ecu;
+extern volatile bool ecuTxDone;
+extern volatile bool ecuRxDone;
+extern volatile uint32_t odo_ticks;
+extern volatile bool needles_ready;
+#include "../SwitecX12-lib/SwitecX12.hpp"
+extern SwitecX12 *x12[3];
+
+extern volatile bool acc_int_rdy;
+extern volatile bool pendingInertial;
+
+extern volatile bool i2cPendingIrq[4];
+
+extern volatile button_e btnCmd;
+
+#include "HzSensorKalmanFilter.hpp"
+extern HzSensorKalmanFilter<16> g_speed;
+extern HzSensorKalmanFilter<16> g_tach;
+
+
 
 #endif /* INC_MAIN_CPP_H_ */

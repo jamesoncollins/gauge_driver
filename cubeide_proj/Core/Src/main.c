@@ -23,7 +23,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
-#include "main_cpp_wrapper.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -64,6 +63,7 @@ UART_HandleTypeDef huart1;
 
 DMA_HandleTypeDef hdma_memtomem_dma2_channel1;
 /* USER CODE BEGIN PV */
+extern void main_cpp();
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -260,7 +260,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  main_cpp_c();
+  main_cpp();
   while (1)
   {
     /* USER CODE END WHILE */
