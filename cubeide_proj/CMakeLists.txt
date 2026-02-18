@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(gauge_driver C CXX ASM)
 set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_C_EXTENSIONS ON)
+set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---------------------------------------------------------------------------
@@ -16,9 +18,10 @@ set(MCU_FLAGS
 add_compile_options(
   ${MCU_FLAGS}
   -ffunction-sections -fdata-sections
-  -Wall -Wextra
+  -Wall
   -fstack-usage
   -fcyclomatic-complexity
+  --specs=nano.specs
   $<$<COMPILE_LANGUAGE:C>:-MMD>
   $<$<COMPILE_LANGUAGE:C>:-MP>
   $<$<COMPILE_LANGUAGE:CXX>:-MMD>
@@ -28,6 +31,7 @@ add_compile_options(
 add_compile_options(
   $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
   $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+  $<$<COMPILE_LANGUAGE:CXX>:-fno-use-cxa-atexit>
 )
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -54,7 +58,9 @@ add_link_options(${MCU_FLAGS}
   -T${LINKER_SCRIPT}
   -Wl,--gc-sections
   -Wl,-Map=${CMAKE_BINARY_DIR}/${PROJECT_NAME}.map
-  --specs=nano.specs --specs=nosys.specs
+  -static
+  --specs=nosys.specs
+  --specs=nano.specs
   -Wl,-u,_printf_float
 )
 
@@ -73,6 +79,35 @@ else()
 endif()
 
 # ---------------------------------------------------------------------------
+# Custom code layout selection
+# - Custom shared code lives under Custom
+# - Platform-specific code lives under ARM or x86 subfolders
+# ---------------------------------------------------------------------------
+set(CUSTOM_ROOT Custom)
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}")
+  message(FATAL_ERROR "Could not find custom code folder (expected ./Custom)")
+endif()
+
+set(CUSTOM_PLATFORM arm CACHE STRING "Custom platform code to compile (arm or x86)")
+if(CUSTOM_PLATFORM STREQUAL "arm")
+  add_compile_definitions(CUSTOM_PLATFORM_ARM)
+  if(EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}/ARM/platform.cpp")
+    set(CUSTOM_PLATFORM_SRC ${CUSTOM_ROOT}/ARM/platform.cpp)
+  else()
+    message(FATAL_ERROR "Could not find ARM platform source in ${CUSTOM_ROOT}/ARM")
+  endif()
+elseif(CUSTOM_PLATFORM STREQUAL "x86")
+  add_compile_definitions(CUSTOM_PLATFORM_X86)
+  if(EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}/x86/platform.cpp")
+    set(CUSTOM_PLATFORM_SRC ${CUSTOM_ROOT}/x86/platform.cpp)
+  else()
+    message(FATAL_ERROR "Could not find x86 platform source in ${CUSTOM_ROOT}/x86")
+  endif()
+else()
+  message(FATAL_ERROR "Unknown CUSTOM_PLATFORM=${CUSTOM_PLATFORM} (valid values: arm, x86)")
+endif()
+
+# ---------------------------------------------------------------------------
 # Sources
 # - Glob all non-uGFX C/C++ sources
 # - Pick uGFX manually (core + selected driver)
@@ -85,12 +120,18 @@ file(GLOB_RECURSE PROJECT_SOURCES
   USB_Device/*.c USB_Device/*.cpp
   STM32_WPAN/*.c STM32_WPAN/*.cpp
 )
+
+file(GLOB_RECURSE CUSTOM_SOURCES
+  ${CUSTOM_ROOT}/*.c ${CUSTOM_ROOT}/*.cpp
+)
+list(FILTER CUSTOM_SOURCES EXCLUDE REGEX ".*/${CUSTOM_ROOT}/(ARM|x86)/.*")
+list(APPEND PROJECT_SOURCES ${CUSTOM_SOURCES} ${CUSTOM_PLATFORM_SRC})
+
 # Drop anything under ugfx from the generic glob
 list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/ugfx/.*")
 
-# uGFX core: take all src files but exclude gfx.c to avoid duplicate gfxInit/gfxDeinit
-file(GLOB UGFX_CORE_SRCS ugfx/src/*.c)
-list(FILTER UGFX_CORE_SRCS EXCLUDE REGEX ".*/gfx\\.c$")
+# uGFX core: CubeIDE project compiles only gfx_mk.c
+set(UGFX_CORE_SRCS ugfx/src/gfx_mk.c)
 
 set(STARTUP_FILE Core/Startup/startup_stm32wb55rgvx.s)
 
@@ -106,6 +147,7 @@ add_executable(${PROJECT_NAME}
 # ---------------------------------------------------------------------------
 target_include_directories(${PROJECT_NAME} PRIVATE
   Core/Inc
+  ${CUSTOM_ROOT}/Inc
   Drivers/STM32WBxx_HAL_Driver/Inc
   Drivers/STM32WBxx_HAL_Driver/Inc/Legacy
   Drivers/CMSIS/Device/ST/STM32WBxx/Include
@@ -134,7 +176,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
 )
 
-target_link_libraries(${PROJECT_NAME} m c gcc)
+target_link_libraries(${PROJECT_NAME} c m stdc++ supc++)
 
 # Post-build artifacts to mirror CubeIDE: .list, .hex, .bin, and size
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
