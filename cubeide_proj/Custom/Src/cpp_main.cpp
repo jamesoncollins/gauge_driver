@@ -1,14 +1,18 @@
 
 #include <array>
 
-#include "main.h"
+#include "platform_api.h"
 #include "cpp_main.h"
+#if !defined(CUSTOM_PLATFORM_X86)
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 extern "C" {
 #include "ble.h"
 #include "custom_app.h"
 #include "custom_stm.h"
+}
+#endif
+extern "C" {
 #include "../MCP4725-lib/MCP4725.h"
 #include "../BMI088-lib/BMI088.h"
 

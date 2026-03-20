@@ -2,6 +2,8 @@
 #ifndef INC_MAIN_CPP_H_
 #define INC_MAIN_CPP_H_
 
+#include "platform_api.h"
+
 extern "C"
 {
 void main_cpp();

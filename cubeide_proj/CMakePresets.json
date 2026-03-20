@@ -17,6 +17,18 @@
       }
     },
     {
+      "name": "base-x86",
+      "displayName": "Base x86 MinGW build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CUSTOM_PLATFORM": "x86",
+        "CMAKE_C_COMPILER": "C:/msys64/mingw64/bin/gcc.exe",
+        "CMAKE_CXX_COMPILER": "C:/msys64/mingw64/bin/g++.exe"
+      }
+    },
+    {
       "name": "st7789vi-debug",
       "displayName": "Debug - ST7789VI",
       "inherits": "base",
@@ -31,6 +43,14 @@
       "cacheVariables": {
         "UGFX_DRIVER": "s6e63d6"
       }
+    },
+    {
+      "name": "x86-debug",
+      "displayName": "Debug - x86",
+      "inherits": "base-x86",
+      "cacheVariables": {
+        "UGFX_DRIVER": "s6e63d6"
+      }
     }
   ],
   "buildPresets": [
@@ -41,6 +61,11 @@
     {
       "name": "s6e63d6-debug",
       "configurePreset": "s6e63d6-debug"
+    },
+    {
+      "name": "x86-debug",
+      "configurePreset": "x86-debug",
+      "jobs": 8
     }
   ]
 }

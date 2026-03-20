@@ -1,5 +1,5 @@
 
-#include "stm32wbxx_hal.h"
+#include "platform_api.h"
 
 #include "ugfx_widgets.h"
 #include "gfx.h"

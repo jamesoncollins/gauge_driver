@@ -1,0 +1,17 @@
+#include "x86_hal.h"
+#include <chrono>
+#include <thread>
+
+static const auto kTickStart = std::chrono::steady_clock::now();
+
+extern "C" uint32_t HAL_GetTick(void)
+{
+  const auto now = std::chrono::steady_clock::now();
+  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - kTickStart).count();
+  return static_cast<uint32_t>(ms);
+}
+
+extern "C" void HAL_Delay(uint32_t ms)
+{
+  std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+}
