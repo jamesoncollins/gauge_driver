@@ -1,3 +1,94 @@
+#if defined(CUSTOM_PLATFORM_X86)
+
+#include <cmath>
+#include <cstdio>
+#include <chrono>
+#include <thread>
+
+#include "cpp_main.h"
+#include "gfx.h"
+
+extern "C" void main_cpp()
+{
+  gfxInit();
+  gdispClear(GFX_BLACK);
+
+  const color_t amber = HTML2COLOR(0xFFB000);
+  const font_t font20 = gdispOpenFont("DejaVuSans20");
+  const font_t font10 = gdispOpenFont("DejaVuSans10");
+  const coord_t cx = gdispGetWidth() / 2;
+  const coord_t cy = gdispGetHeight() / 2;
+
+  uint32_t t0 = HAL_GetTick();
+  while (true)
+  {
+    const float t = (HAL_GetTick() - t0) / 1000.0f;
+    const float rpm = 900.0f + 3000.0f * (0.5f + 0.5f * std::sinf(t * 1.2f));
+    const float mph = rpm / (9000.0f / 180.0f);
+
+    char line1[64];
+    char line2[64];
+    (void)std::snprintf(line1, sizeof(line1), "RPM %4d", (int)rpm);
+    (void)std::snprintf(line2, sizeof(line2), "MPH %3d", (int)mph);
+
+    gdispClear(GFX_BLACK);
+    gdispDrawCircle(cx, cy, 90, amber);
+    gdispFillString(cx - 60, cy - 20, line1, font20, amber, GFX_BLACK);
+    gdispFillString(cx - 60, cy + 10, line2, font20, amber, GFX_BLACK);
+    gdispFillString(6, 6, "x86 host preview", font10, GFX_YELLOW, GFX_BLACK);
+    gdispFlush();
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(16));
+  }
+}
+
+HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const uint32_t *pData, uint16_t Length)
+{
+  (void)htim;
+  (void)pData;
+  (void)Length;
+  return HAL_OK;
+}
+
+int get_x12_ticks_speed(float speed)
+{
+  constexpr float MIN_MPH = 10.0f;
+  constexpr float ZERO_ANGLE = 3.0f;
+  constexpr float MIN_MPH_ANGLE = 0.0f;
+  constexpr float DEGREES_PER_MPH = 1.35f;
+  constexpr float MICROSTEPS_PER_DEGREE = 12.0f;
+
+  float angle;
+  if (speed <= 1.0f)
+    angle = ZERO_ANGLE;
+  else if (speed <= MIN_MPH)
+    angle = ZERO_ANGLE + MIN_MPH_ANGLE;
+  else
+    angle = ZERO_ANGLE + MIN_MPH_ANGLE + (speed - MIN_MPH) * DEGREES_PER_MPH;
+
+  return static_cast<int>(angle * MICROSTEPS_PER_DEGREE + 0.5f);
+}
+
+int get_x12_ticks_rpm(float rpm)
+{
+  constexpr float MIN_RPM = 500.0f;
+  constexpr float ZERO_ANGLE = 5.0f;
+  constexpr float MIN_RPM_ANGLE = 0.0f;
+  constexpr float DEGREES_PER_RPM = 22.1f / 1000.0f;
+  constexpr float MICROSTEPS_PER_DEGREE = 12.0f;
+
+  float angle;
+  if (rpm <= 1.0f)
+    angle = ZERO_ANGLE;
+  else if (rpm <= MIN_RPM)
+    angle = ZERO_ANGLE + MIN_RPM_ANGLE;
+  else
+    angle = ZERO_ANGLE + MIN_RPM_ANGLE + (rpm - MIN_RPM) * DEGREES_PER_RPM;
+
+  return static_cast<int>(angle * MICROSTEPS_PER_DEGREE + 0.5f);
+}
+
+#else
 
 #include <array>
 
@@ -1257,4 +1348,6 @@ int get_x12_ticks_rpm(float rpm)
 }
 
 
+
+#endif
 

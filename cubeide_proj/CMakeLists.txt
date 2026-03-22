@@ -160,9 +160,11 @@ if(CUSTOM_PLATFORM STREQUAL "arm")
   list(FILTER CUSTOM_SOURCES EXCLUDE REGEX ".*/${CUSTOM_ROOT}/(ARM|x86)/.*")
   list(APPEND PROJECT_SOURCES ${CUSTOM_SOURCES} ${CUSTOM_PLATFORM_SRC})
 else()
-  # x86 build: compile only the x86 platform folder for now
+  # x86 build: use host platform files plus the shared app entrypoint.
   list(FILTER CUSTOM_SOURCES INCLUDE REGEX ".*/${CUSTOM_ROOT}/x86/.*")
+  list(FILTER CUSTOM_SOURCES EXCLUDE REGEX ".*/${CUSTOM_ROOT}/x86/cpp_main\\.cpp$")
   list(APPEND PROJECT_SOURCES ${CUSTOM_SOURCES})
+  list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/cpp_main.cpp)
 endif()
 
 # Drop anything under ugfx from the generic glob
