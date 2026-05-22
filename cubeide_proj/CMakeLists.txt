@@ -3,6 +3,8 @@ project(gauge_driver C CXX)
 if(NOT MSVC)
   enable_language(ASM)
 endif()
+include(CheckCCompilerFlag)
+include(CheckCXXCompilerFlag)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_C_EXTENSIONS ON)
@@ -22,8 +24,15 @@ endif()
 set(CUSTOM_PLATFORM arm CACHE STRING "Custom platform code to compile (arm or x86)")
 if(CUSTOM_PLATFORM STREQUAL "arm")
   add_compile_definitions(CUSTOM_PLATFORM_ARM)
-  if(EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}/ARM/platform.cpp")
-    set(CUSTOM_PLATFORM_SRC ${CUSTOM_ROOT}/ARM/platform.cpp)
+  if(EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}/ARM/platform.cpp" AND
+     EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}/ARM/main_platform.cpp" AND
+     EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}/ARM/runtime.cpp")
+    set(CUSTOM_PLATFORM_SRC
+      ${CUSTOM_ROOT}/ARM/platform.cpp
+      ${CUSTOM_ROOT}/ARM/btbuffer_backend_arm.cpp
+      ${CUSTOM_ROOT}/ARM/main_platform.cpp
+      ${CUSTOM_ROOT}/ARM/runtime.cpp
+    )
   else()
     message(FATAL_ERROR "Could not find ARM platform source in ${CUSTOM_ROOT}/ARM")
   endif()
@@ -49,12 +58,20 @@ if(CUSTOM_PLATFORM STREQUAL "arm")
     -mfpu=fpv4-sp-d16
     -mfloat-abi=hard
   )
+  check_c_compiler_flag("-fcyclomatic-complexity" ARM_C_HAS_CYCLOMATIC_COMPLEXITY)
+  check_cxx_compiler_flag("-fcyclomatic-complexity" ARM_CXX_HAS_CYCLOMATIC_COMPLEXITY)
+  set(ARM_CYCLOMATIC_COMPLEXITY_FLAG "")
+  if(ARM_C_HAS_CYCLOMATIC_COMPLEXITY AND ARM_CXX_HAS_CYCLOMATIC_COMPLEXITY)
+    set(ARM_CYCLOMATIC_COMPLEXITY_FLAG -fcyclomatic-complexity)
+  else()
+    message(STATUS "Compiler does not support -fcyclomatic-complexity; disabling complexity report output")
+  endif()
   add_compile_options(
     ${MCU_FLAGS}
     -ffunction-sections -fdata-sections
     -Wall
     -fstack-usage
-    -fcyclomatic-complexity
+    ${ARM_CYCLOMATIC_COMPLEXITY_FLAG}
     --specs=nano.specs
     $<$<COMPILE_LANGUAGE:C>:-MMD>
     $<$<COMPILE_LANGUAGE:C>:-MP>
@@ -162,9 +179,9 @@ if(CUSTOM_PLATFORM STREQUAL "arm")
 else()
   # x86 build: use host platform files plus the shared app entrypoint.
   list(FILTER CUSTOM_SOURCES INCLUDE REGEX ".*/${CUSTOM_ROOT}/x86/.*")
-  list(FILTER CUSTOM_SOURCES EXCLUDE REGEX ".*/${CUSTOM_ROOT}/x86/cpp_main\\.cpp$")
   list(APPEND PROJECT_SOURCES ${CUSTOM_SOURCES})
-  list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/cpp_main.cpp)
+  list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/main_shared.cpp)
+  list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/ugfx_widgets.cpp)
 endif()
 
 # Drop anything under ugfx from the generic glob

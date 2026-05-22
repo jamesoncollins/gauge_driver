@@ -10,6 +10,7 @@
 
 #include "main.h"
 #include "cpp_main.h"
+#include "runtime_context.hpp"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 extern "C" {
@@ -17,9 +18,6 @@ extern "C" {
 #include "custom_app.h"
 #include "custom_stm.h"
 }
-#include "../SwitecX12-lib/SwitecX12.hpp"
-#include "HzSensorKalmanFilter.hpp"
-
 extern I2C_HandleTypeDef hi2c1, hi2c3;
 extern SPI_HandleTypeDef hspi1;
 extern LPTIM_HandleTypeDef hlptim2; // sim signals for tach/rpm on GPIO3 / PA8

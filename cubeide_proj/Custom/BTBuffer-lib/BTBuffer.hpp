@@ -2,30 +2,33 @@
 #pragma once
 
 #include <stdint.h>
+#include "platform_api.h"
+
+typedef struct
+{
+  uint16_t id1, id2;
+  uint32_t timestamp;
+  uint8_t data[64-8]; // fixme: SizeReadnext
+}
+BTBufferData;
+
+class BTBufferBackend;
 
 class BTBuffer
 {
 
 protected:
-  BTBuffer ( IRQn_Type *irqs, int num_irqs );
+  BTBuffer(BTBufferBackend *backend);
   static BTBuffer *BTBuffer_;
 
 public:
-
-  typedef struct
-  {
-    uint16_t id1, id2;
-    uint32_t timestamp;
-    uint8_t data[64-8]; // fixme: SizeReadnext
-  }
-  data_t;
-  static constexpr int dataLen = sizeof( ((data_t *)0)->data  );
+  static constexpr int dataLen = sizeof(((BTBufferData *)0)->data);
   static const int numBuffers = 32;
 
   BTBuffer (BTBuffer &other) = delete;
   void operator= (const BTBuffer&) = delete;
   static BTBuffer* GetInstance ();
-  static void CreateInstance( IRQn_Type *irqs, int num_irqs );
+  static void CreateInstance(BTBufferBackend *backend);
   static bool pushBuffer( uint16_t id1, uint16_t id2, uint32_t timestamp, const uint8_t *data, int datalen );
   static bool popBuffer();
 
@@ -38,17 +41,12 @@ private:
    * to lock access to the full flag.
    * https://embeddedartistry.com/blog/2017/05/17/creating-a-circular-buffer-in-c-and-c/
    */
-  data_t buffer[numBuffers];
+  BTBufferData buffer[numBuffers];
   int head = 0; // read from
   int tail = 0; // write to
   bool isEmpty(), isFull();
 
-  static const int maxIRQs = 16;
-  IRQn_Type irqList[maxIRQs];
-  int numIRQ = 0;
-
-  void disableIRQs();
-  void enableIRQs();
+  BTBufferBackend *backend_ = nullptr;
 
 };
 

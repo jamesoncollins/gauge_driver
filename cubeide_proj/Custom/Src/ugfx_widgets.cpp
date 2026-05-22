@@ -7,13 +7,13 @@
 
 uint32_t COLOR_PRIMARY = GFX_AMBER_YEL;
 uint32_t COLOR_SECONDARY = GFX_RED;
-uint32_t COLOR_BACKGROUND = GFX_BLACK;
+uint32_t COLOR_BG = GFX_BLACK;
 
 void setColors(uint32_t primary, uint32_t secondary, uint32_t background)
 {
   COLOR_PRIMARY = primary;
   COLOR_SECONDARY = secondary;
-  COLOR_BACKGROUND = background;
+  COLOR_BG = background;
 }
 
 /*
