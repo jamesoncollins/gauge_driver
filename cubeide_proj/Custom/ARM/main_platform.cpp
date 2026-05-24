@@ -10,6 +10,7 @@
 #include "runtime_context.hpp"
 #include "gfx.h"
 #include "utils.h"
+#include "app_entry.h"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 extern "C" {
@@ -158,6 +159,21 @@ static void arm_bringup_hardware(
   startupInitError |= BMI088_Init(&imu, &hi2c1);
   regAddr = BMI_ACC_DATA;
 
+  // Initialize microsecond timebase and sensor filters before enabling
+  // timer capture interrupts that call g_speed.tick()/g_tach.tick().
+  init_get_cycle_count();
+  {
+    HzSensorKalmanFilter<16>::Config speed_cfg = {};
+    speed_cfg.units_per_hz = MPH_PER_HZ;
+    speed_cfg.clock_hz = 1000000U; // TIM2 capture runs at 1 MHz
+    g_speed.init(speed_cfg, get_us_32);
+
+    HzSensorKalmanFilter<16>::Config tach_cfg = {};
+    tach_cfg.units_per_hz = RPM_PER_HZ;
+    tach_cfg.clock_hz = 1000000U; // TIM2 capture runs at 1 MHz
+    g_tach.init(tach_cfg, get_us_32);
+  }
+
   x12[0] = &tachX12;
   x12[1] = &speedX12;
   x12[2] = &odoX12;
@@ -167,14 +183,15 @@ static void arm_bringup_hardware(
   needles_ready = true;
   measure_freq = true;
 
+  // Initialize BTBuffer before enabling timer/IRQ paths that may push into it.
+  IRQn_Type bt_irqs[] = {TIM1_UP_TIM16_IRQn, TIM1_TRG_COM_TIM17_IRQn, USART1_IRQn};
+  static ArmBTBufferBackend bt_backend(bt_irqs, (int)(sizeof(bt_irqs) / sizeof(bt_irqs[0])));
+  BTBuffer::CreateInstance(&bt_backend);
+
   startupInitError |= HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
   startupInitError |= HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
   startupInitError |= HAL_TIM_Base_Start_IT(&htim16);
   startupInitError |= HAL_TIM_Base_Start_IT(&htim17);
-
-  IRQn_Type bt_irqs[] = {TIM1_UP_TIM16_IRQn, TIM1_TRG_COM_TIM17_IRQn, USART1_IRQn};
-  static ArmBTBufferBackend bt_backend(bt_irqs, (int)(sizeof(bt_irqs) / sizeof(bt_irqs[0])));
-  BTBuffer::CreateInstance(&bt_backend);
 
   arm_render_ctx = {
       .amber_ptr = (color_t *)&GFX_AMBER,
@@ -195,6 +212,9 @@ static void arm_bringup_hardware(
 
 void platform_process_ble_and_lowrate(uint32_t &timerLED, uint32_t &loopCnt, uint32_t loopPeriod, uint32_t worstLoopPeriod)
 {
+  // Required for BLE/HCI scheduling; old ARM main loop called this each iteration.
+  MX_APPE_Process();
+
   const uint32_t now = HAL_GetTick();
   if ((now - timerLED) >= SAMPLE_TIME_MS_LED)
   {
