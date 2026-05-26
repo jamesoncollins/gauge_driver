@@ -126,16 +126,9 @@ void platform_update_loop_diag(uint32_t &loopCnt, uint32_t &loopPeriod, uint32_t
 
 
 /*
- * #defnes and constants that control operation
+ * Optional build flags used for diagnostics/test behaviors.
+ * Runtime tunables are configured in build_config.
  */
-
-// main loop timers
-#define SAMPLE_TIME_MS_LED       100
-#define SAMPLE_TIME_MS_PRINT     50
-#define TARGET_FPS               20
-#define SAMPLE_TIME_MS_DRAW     (1000/TARGET_FPS) // it takes 60ms to refresh the screen
-                                                   // with -O2 you can draw in about 10.
-                                                   // so 70ms seems to be ablout the best you can do here
 //#define SWEEP_GAUGES  // sweep needles forever
 //#define SIM_GAUGES       // generate simulated rpm and mph
 
@@ -158,39 +151,5 @@ void platform_update_loop_diag(uint32_t &loopCnt, uint32_t &loopPeriod, uint32_t
  * Optional debug / diagnostic print on the screen
  */
 //#define DIAG_SQUARE
-
-/*
- * RPM/Shift alert points
- */
-const int RPM_ALERT_RESET = 5500; // soft alert OFF, provides some hysteresis
-const int RPM_ALERT_INIT = 5700; // soft alert / early warn
-const int RPM_ALERT_FINAL = 6500; // SHIFT
-
-
-/*
- * dots per inch for this screen
- */
-const int DPI = 240. / 1.4456693; //166
-const int DPMM = 240. / 36.72; // 6.53 dots per mm
-
-/*
- * gauge measurement settings
- */
-const float MPH_PER_HZ = ( 0.8425872f * 1.015625f ); //(1.11746031667) //( 1.07755102 )
-const float  RPM_PER_HZ = ( 20. ); // 3 ticks per revolution
-
-
-/*
- * frequency measurement settings for rpm and speed
- *
- * i originally measured that every 3 ticks of the speedo, the odo was stepped once.
- * and with our stepper i think a full step is actually 12 micro steps.
- * so the numbers below should be 3 and 12.  but those aren't looking right.
- * so i tweaked it.  well, i will tweak it once i get some measurements again.
- */
-
-#define SPEED_TICKS_PER_ODO_TICK (3)
-#define ODO_STEPS_PER_TICK (12/2)
-
 
 #endif /* INC_MAIN_CPP_H_ */

@@ -22,15 +22,43 @@ if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}")
 endif()
 
 set(CUSTOM_PLATFORM arm CACHE STRING "Custom platform code to compile (arm or x86)")
+set(BUILD_TARGET "" CACHE STRING "Composed target profile (sim_3000gt_soft, 3000gt_oled, 3000gt_lcd)")
+
+if(BUILD_TARGET STREQUAL "sim_3000gt_soft")
+  set(CUSTOM_PLATFORM x86 CACHE STRING "Custom platform code to compile (arm or x86)" FORCE)
+  set(UGFX_DRIVER win32 CACHE STRING "uGFX gdisp driver token (win32, s6e63d6, st7789vi)" FORCE)
+  add_compile_definitions(TARGET_SIM_3000GT_SOFT)
+elseif(BUILD_TARGET STREQUAL "3000gt_oled")
+  set(CUSTOM_PLATFORM arm CACHE STRING "Custom platform code to compile (arm or x86)" FORCE)
+  set(UGFX_DRIVER s6e63d6 CACHE STRING "uGFX gdisp driver (s6e63d6 or st7789vi)" FORCE)
+  add_compile_definitions(TARGET_3000GT_OLED)
+elseif(BUILD_TARGET STREQUAL "3000gt_lcd")
+  set(CUSTOM_PLATFORM arm CACHE STRING "Custom platform code to compile (arm or x86)" FORCE)
+  set(UGFX_DRIVER st7789vi CACHE STRING "uGFX gdisp driver (s6e63d6 or st7789vi)" FORCE)
+  add_compile_definitions(TARGET_3000GT_LCD)
+elseif(NOT BUILD_TARGET STREQUAL "")
+  message(FATAL_ERROR "Unknown BUILD_TARGET=${BUILD_TARGET} (valid values: sim_3000gt_soft, 3000gt_oled, 3000gt_lcd)")
+endif()
+
+if(CUSTOM_PLATFORM STREQUAL "x86")
+  if(NOT BUILD_TARGET STREQUAL "sim_3000gt_soft")
+    message(FATAL_ERROR "CUSTOM_PLATFORM=x86 is only supported with BUILD_TARGET=sim_3000gt_soft")
+  endif()
+else()
+  if(BUILD_TARGET STREQUAL "sim_3000gt_soft")
+    message(FATAL_ERROR "BUILD_TARGET=sim_3000gt_soft requires CUSTOM_PLATFORM=x86")
+  endif()
+endif()
+
 if(CUSTOM_PLATFORM STREQUAL "arm")
   add_compile_definitions(CUSTOM_PLATFORM_ARM)
   if(EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}/ARM/platform.cpp" AND
-     EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}/ARM/main_platform.cpp" AND
+     EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}/ARM/platform_services_arm.cpp" AND
      EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}/ARM/runtime.cpp")
     set(CUSTOM_PLATFORM_SRC
       ${CUSTOM_ROOT}/ARM/platform.cpp
       ${CUSTOM_ROOT}/ARM/btbuffer_backend_arm.cpp
-      ${CUSTOM_ROOT}/ARM/main_platform.cpp
+      ${CUSTOM_ROOT}/ARM/platform_services_arm.cpp
       ${CUSTOM_ROOT}/ARM/runtime.cpp
     )
   else()
@@ -181,6 +209,7 @@ else()
   list(FILTER CUSTOM_SOURCES INCLUDE REGEX ".*/${CUSTOM_ROOT}/x86/.*")
   list(APPEND PROJECT_SOURCES ${CUSTOM_SOURCES})
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/main_shared.cpp)
+  list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/build_config.cpp)
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/ugfx_widgets.cpp)
 endif()
 

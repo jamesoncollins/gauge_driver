@@ -7,6 +7,8 @@
 
 #include "cpp_main.h"
 #include "main_shared.h"
+#include "build_config.hpp"
+#include "platform_services.hpp"
 #include "runtime_context.hpp"
 #include "gfx.h"
 #include "utils.h"
@@ -163,13 +165,14 @@ static void arm_bringup_hardware(
   // timer capture interrupts that call g_speed.tick()/g_tach.tick().
   init_get_cycle_count();
   {
+    const VehicleConfig &vehicle = get_build_config().vehicle;
     HzSensorKalmanFilter<16>::Config speed_cfg = {};
-    speed_cfg.units_per_hz = MPH_PER_HZ;
+    speed_cfg.units_per_hz = vehicle.mph_per_hz;
     speed_cfg.clock_hz = 1000000U; // TIM2 capture runs at 1 MHz
     g_speed.init(speed_cfg, get_us_32);
 
     HzSensorKalmanFilter<16>::Config tach_cfg = {};
-    tach_cfg.units_per_hz = RPM_PER_HZ;
+    tach_cfg.units_per_hz = vehicle.rpm_per_hz;
     tach_cfg.clock_hz = 1000000U; // TIM2 capture runs at 1 MHz
     g_tach.init(tach_cfg, get_us_32);
   }
@@ -216,7 +219,7 @@ void platform_process_ble_and_lowrate(uint32_t &timerLED, uint32_t &loopCnt, uin
   MX_APPE_Process();
 
   const uint32_t now = HAL_GetTick();
-  if ((now - timerLED) >= SAMPLE_TIME_MS_LED)
+  if ((now - timerLED) >= get_led_interval_ms())
   {
     HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
     timerLED = now;
@@ -258,7 +261,7 @@ void platform_maybe_usb_print(uint32_t &timerPrint, int &logBufInd, char *logBuf
 {
 #ifdef PRINT_TO_USB
   const uint32_t now = HAL_GetTick();
-  if ((now - timerPrint) < SAMPLE_TIME_MS_PRINT)
+  if ((now - timerPrint) < get_print_interval_ms())
     return;
 
   timerPrint = now;
@@ -352,185 +355,105 @@ struct ArmMainCtx
 
 static ArmMainCtx g_arm_main;
 
-void platform_main_init(SharedRenderCtx &ctx, RuntimeState &state, int &draw_step, uint32_t &timer_draw_ms)
+class ArmPlatformServices final : public PlatformServices
 {
-  const int X27_STEPS = 240 * 12;
-  static const uint32_t ticks_per_us = (64000000 * 1e-6);
-  static const uint32_t accelTable[5][2] = {
-      {1, (uint32_t)(1.1 * 40000 * ticks_per_us)},
-      {5, (uint32_t)(1.1 * 20000 * ticks_per_us)},
-      {10, (uint32_t)(1.1 * 15000 * ticks_per_us)},
-      {20, (uint32_t)(1.1 * 10000 * ticks_per_us)},
-      {100, (uint32_t)(1.1 * 2000 * ticks_per_us)},
-  };
-
-  g_arm_main.ioexp_speedo = new PI4IOE5V6416(&hi2c1);
-  g_arm_main.ioexp_screen = new PI4IOE5V6416(&hi2c3);
-  g_arm_main.tachX12 = new SwitecX12(
-      X27_STEPS,
-      STEP_TACH_GPIO_Port,
-      STEP_TACH_Pin,
-      DIR_TACH_GPIO_Port,
-      DIR_TACH_Pin);
-  g_arm_main.speedX12 = new SwitecX12(
-      X27_STEPS,
-      STEP_SPEED_GPIO_Port,
-      STEP_SPEED_Pin,
-      DIR_SPEED_GPIO_Port,
-      DIR_SPEED_Pin);
-  g_arm_main.odoX12 = new SwitecX12(
-      0xFFFFFFFE,
-      STEP_ODO_GPIO_Port,
-      STEP_ODO_Pin,
-      DIR_ODO_GPIO_Port,
-      DIR_ODO_Pin,
-      accelTable,
-      5);
-
-  arm_bringup_hardware(
-      g_arm_main.cleanPwr,
-      g_arm_main.amber,
-      g_arm_main.font10,
-      g_arm_main.font20,
-      g_arm_main.fontLCD,
-      *g_arm_main.ioexp_speedo,
-      *g_arm_main.ioexp_screen,
-      g_arm_main.bulbVals,
-      *g_arm_main.tachX12,
-      *g_arm_main.speedX12,
-      *g_arm_main.odoX12,
-      X27_STEPS,
-      g_arm_main.battImg,
-      g_arm_main.beamImg,
-      g_arm_main.linePlotTPS,
-      g_arm_main.tpsPlotData,
-      g_arm_main.linePlotKnock,
-      g_arm_main.knockPlotData,
-      ctx,
-      g_arm_main.gimball);
-
-  const uint32_t now = HAL_GetTick();
-  g_arm_main.timerLoop = now;
-  g_arm_main.timerLED = now;
-  g_arm_main.timerIGN = now;
-  g_arm_main.timerPrint = now;
-  g_arm_main.loopPeriod = 0;
-  g_arm_main.worstLoopPeriod = 0;
-  g_arm_main.loopCnt = 0;
-  g_arm_main.rpm_mode = RPM_MODE_LOW;
-  g_arm_main.last_rpm_mode = RPM_MODE_LOW;
-  g_arm_main.audio_started = false;
-  g_arm_main.toggle_mode = 0;
-  g_arm_main.toggleTime_last = now;
-
-  draw_step = 0;
-  timer_draw_ms = now;
-  state = runtime_state_from_sample(arm_collect_platform_sample(
-      rpm,
-      speed,
-      g_arm_main.bulbVals,
-      g_arm_main.loopCnt,
-      g_arm_main.loopPeriod,
-      g_arm_main.worstLoopPeriod,
-      &g_arm_main.ecuGoodFlasher));
-}
-
-void platform_main_step(RuntimeState &state, bool &exit_requested, bool &render_requested, uint32_t timer_draw_ms)
-{
-  constexpr float pitch = 75.0f * M_PI / 180.0f;
-  constexpr float cosPitch = cos(pitch), sinPitch = sin(pitch);
-
-  g_arm_main.logBufInd = 0;
-  platform_process_ble_and_lowrate(g_arm_main.timerLED, g_arm_main.loopCnt, g_arm_main.loopPeriod, g_arm_main.worstLoopPeriod);
-  platform_drain_bt_budget();
-  platform_update_inertial(cosPitch, sinPitch);
-  platform_maybe_usb_print(g_arm_main.timerPrint, g_arm_main.logBufInd, g_arm_main.logBuf, g_arm_main.bufLen);
-
-#ifdef SWEEP_GAUGES
-  static bool set = false;
-  if (set && g_arm_main.tachX12->atTarget() && g_arm_main.speedX12->atTarget())
+public:
+  void init(SharedRenderCtx &ctx, RuntimeState &state, int &draw_step, uint32_t &timer_draw_ms) override
   {
-    set = !set;
-    g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(9000));
-    g_arm_main.speedX12->setPosition(get_x12_ticks_speed(180));
-  }
-  else if (!set && g_arm_main.tachX12->atTarget() && g_arm_main.speedX12->atTarget())
-  {
-    set = !set;
-    g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(0));
-    g_arm_main.speedX12->setPosition(get_x12_ticks_speed(0));
-  }
-#elif defined(SIM_GAUGES)
-  static int lastTime = 0;
-  int diff = HAL_GetTick() - lastTime;
-  rpm += (float)diff / 1000.0f * 3000.0f;
-  speed = rpm / (9000.0f / 180.0f);
-  if (rpm > 9000)
-  {
-    rpm = 1000;
-    speed = rpm / (9000.0f / 180.0f);
-  }
-  lastTime = HAL_GetTick();
-  g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(rpm));
-  g_arm_main.speedX12->setPosition(get_x12_ticks_speed(speed));
-#else
-  if (needles_ready && measure_freq)
-  {
-    auto tach = g_tach.retrieveValue();
-    auto spd = g_speed.retrieveValue();
-    rpm = tach.stale ? 0.0f : tach.units;
-    speed = spd.stale ? 0.0f : spd.units;
-  }
-  g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(rpm));
-  g_arm_main.speedX12->setPosition(get_x12_ticks_speed(speed));
-#endif
-  g_arm_main.odoX12->setPosition(odo_ticks);
+    const int X27_STEPS = 240 * 12;
+    static const uint32_t ticks_per_us = (64000000 * 1e-6);
+    static const uint32_t accelTable[5][2] = {
+        {1, (uint32_t)(1.1 * 40000 * ticks_per_us)},
+        {5, (uint32_t)(1.1 * 20000 * ticks_per_us)},
+        {10, (uint32_t)(1.1 * 15000 * ticks_per_us)},
+        {20, (uint32_t)(1.1 * 10000 * ticks_per_us)},
+        {100, (uint32_t)(1.1 * 2000 * ticks_per_us)},
+    };
 
-  g_arm_main.rpm_mode = (rpmMode_e)compute_rpm_mode_shared(rpm, (int)g_arm_main.rpm_mode);
+    g_arm_main.ioexp_speedo = new PI4IOE5V6416(&hi2c1);
+    g_arm_main.ioexp_screen = new PI4IOE5V6416(&hi2c3);
+    g_arm_main.tachX12 = new SwitecX12(
+        X27_STEPS,
+        STEP_TACH_GPIO_Port,
+        STEP_TACH_Pin,
+        DIR_TACH_GPIO_Port,
+        DIR_TACH_Pin);
+    g_arm_main.speedX12 = new SwitecX12(
+        X27_STEPS,
+        STEP_SPEED_GPIO_Port,
+        STEP_SPEED_Pin,
+        DIR_SPEED_GPIO_Port,
+        DIR_SPEED_Pin);
+    g_arm_main.odoX12 = new SwitecX12(
+        0xFFFFFFFE,
+        STEP_ODO_GPIO_Port,
+        STEP_ODO_Pin,
+        DIR_ODO_GPIO_Port,
+        DIR_ODO_Pin,
+        accelTable,
+        5);
 
-  // Restore shift/early warning audio behavior for ARM.
-  if (g_arm_main.rpm_mode == RPM_MODE_LOW)
-  {
-    if (g_arm_main.audio_started)
-    {
-      HAL_TIM_Base_Stop_DMA(&htim1);
-      g_arm_main.audio_started = false;
-    }
-    g_arm_main.last_rpm_mode = g_arm_main.rpm_mode;
-  }
-  else if (g_arm_main.rpm_mode == RPM_MODE_EARLY_WARN)
-  {
-    set_tone(500.0f, 0.05f);
-    HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t *)tone_buffer, (uint16_t)current_tone_len);
-    g_arm_main.audio_started = true;
-    g_arm_main.last_rpm_mode = g_arm_main.rpm_mode;
-  }
-  else if (g_arm_main.rpm_mode == RPM_MODE_SHIFT)
-  {
-    if (g_arm_main.last_rpm_mode != RPM_MODE_SHIFT)
-    {
-      g_arm_main.toggle_mode = 0;
-      g_arm_main.toggleTime_last = HAL_GetTick();
-      g_arm_main.last_rpm_mode = RPM_MODE_SHIFT;
-    }
+    arm_bringup_hardware(
+        g_arm_main.cleanPwr,
+        g_arm_main.amber,
+        g_arm_main.font10,
+        g_arm_main.font20,
+        g_arm_main.fontLCD,
+        *g_arm_main.ioexp_speedo,
+        *g_arm_main.ioexp_screen,
+        g_arm_main.bulbVals,
+        *g_arm_main.tachX12,
+        *g_arm_main.speedX12,
+        *g_arm_main.odoX12,
+        X27_STEPS,
+        g_arm_main.battImg,
+        g_arm_main.beamImg,
+        g_arm_main.linePlotTPS,
+        g_arm_main.tpsPlotData,
+        g_arm_main.linePlotKnock,
+        g_arm_main.knockPlotData,
+        ctx,
+        g_arm_main.gimball);
 
-    if ((HAL_GetTick() - g_arm_main.toggleTime_last) > 100U)
-    {
-      g_arm_main.toggleTime_last = HAL_GetTick();
-      g_arm_main.toggle_mode = !g_arm_main.toggle_mode;
-      if (g_arm_main.toggle_mode)
-        set_tone(1250.0f, 0.05f);
-      else
-        set_tone(2500.0f, 0.05f);
-      HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t *)tone_buffer, (uint16_t)current_tone_len);
-      g_arm_main.audio_started = true;
-    }
+    const uint32_t now = HAL_GetTick();
+    g_arm_main.timerLoop = now;
+    g_arm_main.timerLED = now;
+    g_arm_main.timerIGN = now;
+    g_arm_main.timerPrint = now;
+    g_arm_main.loopPeriod = 0;
+    g_arm_main.worstLoopPeriod = 0;
+    g_arm_main.loopCnt = 0;
+    g_arm_main.rpm_mode = RPM_MODE_LOW;
+    g_arm_main.last_rpm_mode = RPM_MODE_LOW;
+    g_arm_main.audio_started = false;
+    g_arm_main.toggle_mode = 0;
+    g_arm_main.toggleTime_last = now;
+    m_exit_requested = false;
+
+    draw_step = 0;
+    timer_draw_ms = now;
+    sample_state(state);
   }
 
-  render_requested = ((HAL_GetTick() - timer_draw_ms) >= SAMPLE_TIME_MS_DRAW) && !bus_busy();
-  if (render_requested)
+  void service_background() override
   {
-    platform_poll_bulb_inputs(*g_arm_main.ioexp_screen, g_arm_main.bulbVals);
+    constexpr float pitch = 75.0f * M_PI / 180.0f;
+    constexpr float cosPitch = cos(pitch), sinPitch = sin(pitch);
+    g_arm_main.logBufInd = 0;
+    platform_process_ble_and_lowrate(g_arm_main.timerLED, g_arm_main.loopCnt, g_arm_main.loopPeriod, g_arm_main.worstLoopPeriod);
+    platform_drain_bt_budget();
+    platform_update_inertial(cosPitch, sinPitch);
+    platform_maybe_usb_print(g_arm_main.timerPrint, g_arm_main.logBufInd, g_arm_main.logBuf, g_arm_main.bufLen);
+  }
+
+  void poll_inputs() override
+  {
+    if (g_arm_main.ioexp_screen != nullptr)
+      platform_poll_bulb_inputs(*g_arm_main.ioexp_screen, g_arm_main.bulbVals);
+  }
+
+  void sample_state(RuntimeState &state) override
+  {
     state = runtime_state_from_sample(arm_collect_platform_sample(
         rpm,
         speed,
@@ -542,29 +465,132 @@ void platform_main_step(RuntimeState &state, bool &exit_requested, bool &render_
     state.rpm_mode = g_arm_main.rpm_mode;
   }
 
-  exit_requested = platform_should_exit(g_arm_main.timerIGN);
-  platform_update_loop_diag(g_arm_main.loopCnt, g_arm_main.loopPeriod, g_arm_main.worstLoopPeriod, g_arm_main.timerLoop);
-}
-
-void platform_main_shutdown()
-{
-  gdispClear(GFX_BLACK);
-  gdispFillString((screenWidth >> 1) - 50, (screenHeight >> 1), "PWR", g_arm_main.fontLCD, GFX_AMBER_YEL, GFX_BLACK);
-  gdispFlush();
-
-  measure_freq = false;
-  g_arm_main.speedX12->setPosition(0);
-  g_arm_main.tachX12->setPosition(0);
-  while (1)
+  void update_actuators(RuntimeState &state) override
   {
-    if (g_arm_main.speedX12->atTarget() && g_arm_main.tachX12->atTarget())
-      break;
+#ifdef SWEEP_GAUGES
+    static bool set = false;
+    if (set && g_arm_main.tachX12->atTarget() && g_arm_main.speedX12->atTarget())
+    {
+      set = !set;
+      g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(9000));
+      g_arm_main.speedX12->setPosition(get_x12_ticks_speed(180));
+    }
+    else if (!set && g_arm_main.tachX12->atTarget() && g_arm_main.speedX12->atTarget())
+    {
+      set = !set;
+      g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(0));
+      g_arm_main.speedX12->setPosition(get_x12_ticks_speed(0));
+    }
+#elif defined(SIM_GAUGES)
+    static int lastTime = 0;
+    int diff = HAL_GetTick() - lastTime;
+    rpm += (float)diff / 1000.0f * 3000.0f;
+    speed = rpm / (9000.0f / 180.0f);
+    if (rpm > 9000)
+    {
+      rpm = 1000;
+      speed = rpm / (9000.0f / 180.0f);
+    }
+    lastTime = HAL_GetTick();
+    g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(rpm));
+    g_arm_main.speedX12->setPosition(get_x12_ticks_speed(speed));
+#else
+    if (needles_ready && measure_freq)
+    {
+      auto tach = g_tach.retrieveValue();
+      auto spd = g_speed.retrieveValue();
+      rpm = tach.stale ? 0.0f : tach.units;
+      speed = spd.stale ? 0.0f : spd.units;
+    }
+    g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(rpm));
+    g_arm_main.speedX12->setPosition(get_x12_ticks_speed(speed));
+#endif
+    g_arm_main.odoX12->setPosition(odo_ticks);
+
+    g_arm_main.rpm_mode = (rpmMode_e)compute_rpm_mode_shared(rpm, (int)g_arm_main.rpm_mode);
+
+    if (g_arm_main.rpm_mode == RPM_MODE_LOW)
+    {
+      if (g_arm_main.audio_started)
+      {
+        HAL_TIM_Base_Stop_DMA(&htim1);
+        g_arm_main.audio_started = false;
+      }
+      g_arm_main.last_rpm_mode = g_arm_main.rpm_mode;
+    }
+    else if (g_arm_main.rpm_mode == RPM_MODE_EARLY_WARN)
+    {
+      set_tone(500.0f, 0.05f);
+      HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t *)tone_buffer, (uint16_t)current_tone_len);
+      g_arm_main.audio_started = true;
+      g_arm_main.last_rpm_mode = g_arm_main.rpm_mode;
+    }
+    else if (g_arm_main.rpm_mode == RPM_MODE_SHIFT)
+    {
+      if (g_arm_main.last_rpm_mode != RPM_MODE_SHIFT)
+      {
+        g_arm_main.toggle_mode = 0;
+        g_arm_main.toggleTime_last = HAL_GetTick();
+        g_arm_main.last_rpm_mode = RPM_MODE_SHIFT;
+      }
+
+      if ((HAL_GetTick() - g_arm_main.toggleTime_last) > 100U)
+      {
+        g_arm_main.toggleTime_last = HAL_GetTick();
+        g_arm_main.toggle_mode = !g_arm_main.toggle_mode;
+        if (g_arm_main.toggle_mode)
+          set_tone(1250.0f, 0.05f);
+        else
+          set_tone(2500.0f, 0.05f);
+        HAL_TIM_Base_Start_DMA_to_SPI(&htim1, (uint32_t *)tone_buffer, (uint16_t)current_tone_len);
+        g_arm_main.audio_started = true;
+      }
+    }
+
+    state.rpm_mode = g_arm_main.rpm_mode;
+    m_exit_requested = platform_should_exit(g_arm_main.timerIGN);
+    platform_update_loop_diag(g_arm_main.loopCnt, g_arm_main.loopPeriod, g_arm_main.worstLoopPeriod, g_arm_main.timerLoop);
   }
 
-  HAL_PWR_EnableBkUpAccess();
-  HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0xBEEF);
-  HAL_PWR_DisableBkUpAccess();
+  bool should_render(uint32_t timer_draw_ms) const override
+  {
+    return ((HAL_GetTick() - timer_draw_ms) >= get_draw_interval_ms()) && !bus_busy();
+  }
 
-  HAL_GPIO_WritePin(PWREN_GPIO_Port, PWREN_Pin, GPIO_PIN_RESET);
-  HAL_Delay(1000);
+  bool should_exit() const override
+  {
+    return m_exit_requested;
+  }
+
+  void shutdown() override
+  {
+    gdispClear(GFX_BLACK);
+    gdispFillString((screenWidth >> 1) - 50, (screenHeight >> 1), "PWR", g_arm_main.fontLCD, GFX_AMBER_YEL, GFX_BLACK);
+    gdispFlush();
+
+    measure_freq = false;
+    g_arm_main.speedX12->setPosition(0);
+    g_arm_main.tachX12->setPosition(0);
+    while (1)
+    {
+      if (g_arm_main.speedX12->atTarget() && g_arm_main.tachX12->atTarget())
+        break;
+    }
+
+    HAL_PWR_EnableBkUpAccess();
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0xBEEF);
+    HAL_PWR_DisableBkUpAccess();
+
+    HAL_GPIO_WritePin(PWREN_GPIO_Port, PWREN_Pin, GPIO_PIN_RESET);
+    HAL_Delay(1000);
+  }
+
+private:
+  bool m_exit_requested = false;
+};
+
+PlatformServices *create_platform_services()
+{
+  static ArmPlatformServices services;
+  return &services;
 }

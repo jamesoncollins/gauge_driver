@@ -9,6 +9,8 @@
 #include "../../res/beam.c"
 
 #include "main_shared.h"
+#include "build_config.hpp"
+#include "platform_services.hpp"
 #include "gfx.h"
 #include "ugfx_widgets.h"
 #include "app_model.hpp"
@@ -136,44 +138,58 @@ static PlatformSample x86_collect_platform_sample()
   return sample;
 }
 
-static bool platform_should_exit()
+class X86PlatformServices final : public PlatformServices
 {
-  return false;
-}
-
-void platform_main_init(SharedRenderCtx &ctx, RuntimeState &state, int &draw_step, uint32_t &timer_draw_ms)
-{
-  x86_bringup_hardware();
-  g_sim_ecu.connect();
-  ctx = g_host_render_ctx;
-  state = runtime_state_from_sample(x86_collect_platform_sample());
-  draw_step = 0;
-  timer_draw_ms = g_host_ctx.timer_draw_ms;
-}
-
-void platform_main_step(RuntimeState &state, bool &exit_requested, bool &render_requested, uint32_t timer_draw_ms)
-{
-  exit_requested = platform_should_exit();
-  if (exit_requested)
+public:
+  void init(SharedRenderCtx &ctx, RuntimeState &state, int &draw_step, uint32_t &timer_draw_ms) override
   {
-    render_requested = false;
-    return;
+    x86_bringup_hardware();
+    g_sim_ecu.connect();
+    ctx = g_host_render_ctx;
+    state = runtime_state_from_sample(x86_collect_platform_sample());
+    draw_step = 0;
+    timer_draw_ms = g_host_ctx.timer_draw_ms;
   }
 
-  state = runtime_state_from_sample(x86_collect_platform_sample());
+  void service_background() override
+  {
+  }
 
-  render_requested = ((HAL_GetTick() - timer_draw_ms) >= SAMPLE_TIME_MS_DRAW);
-  if (!render_requested)
-    return;
+  void poll_inputs() override
+  {
+  }
 
-  g_rpm_mode = compute_rpm_mode_shared(state.rpm, g_rpm_mode);
+  void sample_state(RuntimeState &state) override
+  {
+    state = runtime_state_from_sample(x86_collect_platform_sample());
+  }
 
-  state.rpm_mode = g_rpm_mode;
-  HAL_Delay(16);
-}
+  void update_actuators(RuntimeState &state) override
+  {
+    g_rpm_mode = compute_rpm_mode_shared(state.rpm, g_rpm_mode);
+    state.rpm_mode = g_rpm_mode;
+    HAL_Delay(16);
+  }
 
-void platform_main_shutdown()
+  bool should_render(uint32_t timer_draw_ms) const override
+  {
+    return ((HAL_GetTick() - timer_draw_ms) >= get_draw_interval_ms());
+  }
+
+  bool should_exit() const override
+  {
+    return false;
+  }
+
+  void shutdown() override
+  {
+  }
+};
+
+PlatformServices *create_platform_services()
 {
+  static X86PlatformServices services;
+  return &services;
 }
 
 HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const uint32_t *pData, uint16_t Length)

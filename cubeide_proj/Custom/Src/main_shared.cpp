@@ -1,6 +1,8 @@
 #include <cstdio>
 
 #include "main_shared.h"
+#include "build_config.hpp"
+#include "platform_services.hpp"
 #include "gfx.h"
 #include "ugfx_widgets.h"
 #include "../ECUK-lib/ECUK.hpp"
@@ -43,13 +45,21 @@ RuntimeState runtime_state_from_sample(const PlatformSample &sample)
 
 int compute_rpm_mode_shared(float rpm, int prev_mode)
 {
-  if (rpm < RPM_ALERT_INIT)
-    return 0;
-  if (prev_mode == 0 && rpm >= RPM_ALERT_INIT && rpm < RPM_ALERT_FINAL)
-    return 1;
-  if (rpm >= RPM_ALERT_FINAL)
+  const VehicleConfig &vehicle = get_build_config().vehicle;
+  if (rpm >= vehicle.rpm_alert_final)
     return 2;
-  return prev_mode;
+
+  if (prev_mode > 0)
+  {
+    if (rpm < vehicle.rpm_alert_reset)
+      return 0;
+    return 1;
+  }
+
+  if (rpm >= vehicle.rpm_alert_init)
+    return 1;
+
+  return 0;
 }
 
 static void render_ecu_section(const RuntimeState &state, font_t fontLCD, font_t font20, color_t amber)
@@ -204,8 +214,9 @@ void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &dr
       const int WARN_SIZE = 20;
       const int WARN_FINAL_SIZE = 70;
       const int SHIFT_SIZE = 100;
-      const int range = RPM_ALERT_FINAL - RPM_ALERT_INIT;
-      int over = (int)state.rpm - RPM_ALERT_INIT;
+      const VehicleConfig &vehicle = get_build_config().vehicle;
+      const int range = vehicle.rpm_alert_final - vehicle.rpm_alert_init;
+      int over = (int)state.rpm - vehicle.rpm_alert_init;
       int percent = (64 * over) / (range > 0 ? range : 1);
       int current_warn_size = WARN_SIZE + (((WARN_FINAL_SIZE - WARN_SIZE) * percent) >> 6);
 
@@ -236,14 +247,21 @@ extern "C" void main_cpp()
   int draw_step = 0;
   uint32_t timer_draw_ms = HAL_GetTick();
   bool loop_exit = false;
+  PlatformServices *services = create_platform_services();
+  if (services == nullptr)
+    return;
 
-  platform_main_init(render_ctx, state, draw_step, timer_draw_ms);
+  services->init(render_ctx, state, draw_step, timer_draw_ms);
   render_ctx_init_shared(render_ctx);
   run_shared_main_loop(loop_exit, [&]() {
-    bool render_requested = false;
-    platform_main_step(state, loop_exit, render_requested, timer_draw_ms);
-    if (!loop_exit && render_requested)
+    services->service_background();
+    services->poll_inputs();
+    services->sample_state(state);
+    services->update_actuators(state);
+
+    loop_exit = services->should_exit();
+    if (!loop_exit && services->should_render(timer_draw_ms))
       render_step_shared(state, render_ctx, draw_step, timer_draw_ms);
   });
-  platform_main_shutdown();
+  services->shutdown();
 }

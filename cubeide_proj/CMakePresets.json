@@ -33,7 +33,7 @@
       "displayName": "Debug - ST7789VI",
       "inherits": "base",
       "cacheVariables": {
-        "UGFX_DRIVER": "st7789vi"
+        "BUILD_TARGET": "3000gt_lcd"
       }
     },
     {
@@ -41,7 +41,7 @@
       "displayName": "Debug - S6E63D6",
       "inherits": "base",
       "cacheVariables": {
-        "UGFX_DRIVER": "s6e63d6"
+        "BUILD_TARGET": "3000gt_oled"
       }
     },
     {
@@ -49,7 +49,7 @@
       "displayName": "Debug - x86",
       "inherits": "base-x86",
       "cacheVariables": {
-        "UGFX_DRIVER": "s6e63d6"
+        "BUILD_TARGET": "sim_3000gt_soft"
       }
     }
   ],

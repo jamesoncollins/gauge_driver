@@ -10,6 +10,7 @@
 
 #include "main.h"
 #include "cpp_main.h"
+#include "build_config.hpp"
 #include "runtime_context.hpp"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
@@ -249,10 +250,11 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 
     // Odometer ticks with speed
     speed_tick_count++;
-    if (speed_tick_count == SPEED_TICKS_PER_ODO_TICK)
+    const VehicleConfig &vehicle = get_build_config().vehicle;
+    if (speed_tick_count == vehicle.speed_ticks_per_odo_tick)
     {
       speed_tick_count = 0;
-      odo_ticks += ODO_STEPS_PER_TICK;
+      odo_ticks += vehicle.odo_steps_per_tick;
     }
   }
   else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4)
