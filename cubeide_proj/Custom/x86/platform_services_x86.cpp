@@ -37,7 +37,6 @@ struct HostPlatformCtx
 
 static HostPlatformCtx g_host_ctx;
 static SharedRenderCtx g_host_render_ctx;
-static int g_rpm_mode = 0;
 static uint32_t g_loop_count = 0;
 static uint32_t g_loop_period_ms = 0;
 static uint32_t g_worst_loop_period_ms = 0;
@@ -45,6 +44,11 @@ static uint32_t g_loop_last_tick_ms = 0;
 static CoreSignals g_signals;
 static SimECUK g_sim_ecu;
 static ECUK *g_ecu = &g_sim_ecu;
+static BoardSharedData *g_board_data = nullptr;
+static BoardWarningLight *g_warn_batt = nullptr;
+static BoardWarningLight *g_warn_brake = nullptr;
+static BoardWarningLight *g_warn_4ws = nullptr;
+static BoardWarningLight *g_warn_high_beam = nullptr;
 
 static void x86_bringup_hardware()
 {
@@ -83,6 +87,19 @@ static void x86_bringup_hardware()
 static PlatformSample x86_collect_platform_sample()
 {
   PlatformSample sample = {};
+  sample.data_mask =
+      PLATFORM_DATA_RPM |
+      PLATFORM_DATA_SPEED_MPH |
+      PLATFORM_DATA_TIMING_DIAG |
+      PLATFORM_DATA_GIMBAL |
+      PLATFORM_DATA_STARTUP_ERROR |
+      PLATFORM_DATA_WARN_BATT |
+      PLATFORM_DATA_WARN_BRAKE |
+      PLATFORM_DATA_WARN_4WS |
+      PLATFORM_DATA_WARN_LAMP |
+      PLATFORM_DATA_WARN_HIGH_BEAM |
+      PLATFORM_DATA_ECU |
+      PLATFORM_DATA_BTN;
   const uint32_t now = HAL_GetTick();
   sample.elapsed_ms = now - g_host_ctx.t0_ms;
   g_loop_period_ms = now - g_loop_last_tick_ms;
@@ -119,9 +136,6 @@ static PlatformSample x86_collect_platform_sample()
   sample.ecu_param_map_index = SimECUK::PARAM_MAP;
   sample.ecu_param_knock_index = SimECUK::PARAM_KNOCK;
   sample.ecu_flasher = nullptr;
-  const int gimbal_radius = 45;
-  sample.gimbal_x = (int)(std::sinf(t * 0.95f) * gimbal_radius * 0.7f);
-  sample.gimbal_y = (int)(std::cosf(t * 1.15f) * gimbal_radius * 0.7f);
   sample.startup_init_error = false;
 
   sample.btn = BTN_INV;
@@ -138,58 +152,80 @@ static PlatformSample x86_collect_platform_sample()
   return sample;
 }
 
-class X86PlatformServices final : public PlatformServices
+static void x86_publish_current_data()
 {
-public:
-  void init(SharedRenderCtx &ctx, RuntimeState &state, int &draw_step, uint32_t &timer_draw_ms) override
-  {
-    x86_bringup_hardware();
-    g_sim_ecu.connect();
-    ctx = g_host_render_ctx;
-    state = runtime_state_from_sample(x86_collect_platform_sample());
-    draw_step = 0;
-    timer_draw_ms = g_host_ctx.timer_draw_ms;
-  }
+  if (g_board_data == nullptr)
+    return;
 
-  void service_background() override
-  {
-  }
+  PlatformSample sample = x86_collect_platform_sample();
+  const uint32_t now = HAL_GetTick();
 
-  void poll_inputs() override
-  {
-  }
+  g_board_data->rpm.publish(sample.rpm, now);
+  g_board_data->speed_mph.publish(sample.speed_mph, now);
+  g_board_data->elapsed_ms.publish(sample.elapsed_ms, now);
+  g_board_data->loop_count.publish(sample.loop_count, now);
+  g_board_data->loop_period_ms.publish(sample.loop_period_ms, now);
+  g_board_data->worst_loop_period_ms.publish(sample.worst_loop_period_ms, now);
+  BoardAccelerationVector accel = {};
+  accel.x_mps2 = 6.3f * std::sinf((sample.elapsed_ms / 1000.0f) * 0.95f);
+  accel.y_mps2 = 24.3f * std::cosf((sample.elapsed_ms / 1000.0f) * 1.15f);
+  accel.z_mps2 = 0.0f;
+  g_board_data->acceleration_mps2.publish(accel, now);
+  g_board_data->startup_init_error.publish(sample.startup_init_error, now);
+  g_board_data->lamp_on.publish(sample.warn_lamp_on, now);
+  g_board_data->btn.publish(sample.btn, now);
 
-  void sample_state(RuntimeState &state) override
-  {
-    state = runtime_state_from_sample(x86_collect_platform_sample());
-  }
+  g_board_data->ecu_supported = true;
+  g_board_data->ecu = sample.ecu;
+  g_board_data->ecu_param_tps_index = sample.ecu_param_tps_index;
+  g_board_data->ecu_param_wb_index = sample.ecu_param_wb_index;
+  g_board_data->ecu_param_map_index = sample.ecu_param_map_index;
+  g_board_data->ecu_param_knock_index = sample.ecu_param_knock_index;
+  g_board_data->ecu_flasher = sample.ecu_flasher;
 
-  void update_actuators(RuntimeState &state) override
-  {
-    g_rpm_mode = compute_rpm_mode_shared(state.rpm, g_rpm_mode);
-    state.rpm_mode = g_rpm_mode;
-    HAL_Delay(16);
-  }
+  if (g_warn_batt != nullptr)
+    g_warn_batt->publish(sample.warn_batt);
+  if (g_warn_brake != nullptr)
+    g_warn_brake->publish(sample.warn_brake);
+  if (g_warn_4ws != nullptr)
+    g_warn_4ws->publish(sample.warn_4ws);
+  if (g_warn_high_beam != nullptr)
+    g_warn_high_beam->publish(sample.warn_high_beam);
+}
 
-  bool should_render(uint32_t timer_draw_ms) const override
-  {
-    return ((HAL_GetTick() - timer_draw_ms) >= get_draw_interval_ms());
-  }
-
-  bool should_exit() const override
-  {
-    return false;
-  }
-
-  void shutdown() override
-  {
-  }
-};
-
-PlatformServices *create_platform_services()
+void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
 {
-  static X86PlatformServices services;
-  return &services;
+  g_board_data = &data;
+  x86_bringup_hardware();
+  g_sim_ecu.connect();
+  g_warn_batt = data.add_warning_image("batt", 140, 200, &g_host_ctx.batt_img);
+  g_warn_brake = data.add_warning_light("brake", "BRAKE", 120, 233, GFX_RED);
+  g_warn_4ws = data.add_warning_light("4ws", "4WS", 175, 205, GFX_YELLOW);
+  g_warn_high_beam = data.add_warning_image("high_beam", 190, 223, &g_host_ctx.beam_img);
+  ctx = g_host_render_ctx;
+  x86_publish_current_data();
+  draw_step = 0;
+  timer_draw_ms = g_host_ctx.timer_draw_ms;
+}
+
+void board_update()
+{
+  x86_publish_current_data();
+  HAL_Delay(16);
+}
+
+bool board_check_exit()
+{
+  return false;
+}
+
+bool board_display_ready()
+{
+  return true;
+}
+
+void board_shutdown()
+{
 }
 
 HAL_StatusTypeDef HAL_TIM_Base_Start_DMA_to_SPI(TIM_HandleTypeDef *htim, const uint32_t *pData, uint16_t Length)

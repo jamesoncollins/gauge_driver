@@ -3,21 +3,14 @@
 
 #include "cpp_main.h"
 
-class PlatformServices
-{
-public:
-  virtual ~PlatformServices() = default;
-
-  virtual void init(SharedRenderCtx &ctx, RuntimeState &state, int &draw_step, uint32_t &timer_draw_ms) = 0;
-  virtual void service_background() = 0;
-  virtual void poll_inputs() = 0;
-  virtual void sample_state(RuntimeState &state) = 0;
-  virtual void update_actuators(RuntimeState &state) = 0;
-  virtual bool should_render(uint32_t timer_draw_ms) const = 0;
-  virtual bool should_exit() const = 0;
-  virtual void shutdown() = 0;
-};
-
-PlatformServices *create_platform_services();
+/*
+ * Platform lifecycle and data flow.
+ * Shared code owns the main loop and display rendering.
+ */
+void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms);
+void board_update();
+bool board_check_exit();
+bool board_display_ready();
+void board_shutdown();
 
 #endif /* INC_PLATFORM_SERVICES_HPP_ */

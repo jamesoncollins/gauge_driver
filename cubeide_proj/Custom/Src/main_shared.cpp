@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdio>
 
 #include "main_shared.h"
@@ -19,6 +20,7 @@ void render_ctx_init_shared(SharedRenderCtx &ctx)
 RuntimeState runtime_state_from_sample(const PlatformSample &sample)
 {
   RuntimeState state = {};
+  state.data_mask = sample.data_mask;
   state.rpm = sample.rpm;
   state.speed_mph = sample.speed_mph;
   state.elapsed_ms = sample.elapsed_ms;
@@ -43,6 +45,71 @@ RuntimeState runtime_state_from_sample(const PlatformSample &sample)
   return state;
 }
 
+RuntimeState runtime_state_from_board_data(const BoardSharedData &data)
+{
+  RuntimeState state = {};
+  if (data.rpm.supported)
+  {
+    state.data_mask |= PLATFORM_DATA_RPM;
+    if (data.rpm.good)
+      state.rpm = data.rpm.value;
+  }
+  if (data.speed_mph.supported)
+  {
+    state.data_mask |= PLATFORM_DATA_SPEED_MPH;
+    if (data.speed_mph.good)
+      state.speed_mph = data.speed_mph.value;
+  }
+  if (data.loop_count.supported || data.loop_period_ms.supported || data.worst_loop_period_ms.supported)
+  {
+    state.data_mask |= PLATFORM_DATA_TIMING_DIAG;
+    state.loop_count = data.loop_count.value;
+    state.loop_period_ms = data.loop_period_ms.value;
+    state.worst_loop_period_ms = data.worst_loop_period_ms.value;
+  }
+  if (data.acceleration_mps2.supported)
+  {
+    state.data_mask |= PLATFORM_DATA_GIMBAL;
+    if (data.acceleration_mps2.good)
+    {
+      constexpr float pitch_rad = 75.0f * 3.14159265358979323846f / 180.0f;
+      constexpr float gimbal_scale = 5.0f;
+      const float cos_pitch = std::cos(pitch_rad);
+      const float sin_pitch = std::sin(pitch_rad);
+      const BoardAccelerationVector &accel = data.acceleration_mps2.value;
+      const float pitch_corrected_y = (accel.y_mps2 * cos_pitch) - (accel.z_mps2 * sin_pitch);
+      state.gimbal_x = (int)(accel.x_mps2 * gimbal_scale);
+      state.gimbal_y = (int)(pitch_corrected_y * gimbal_scale);
+    }
+  }
+  if (data.startup_init_error.supported)
+  {
+    state.data_mask |= PLATFORM_DATA_STARTUP_ERROR;
+    state.startup_init_error = data.startup_init_error.good && data.startup_init_error.value;
+  }
+  if (data.lamp_on.supported)
+  {
+    state.data_mask |= PLATFORM_DATA_WARN_LAMP;
+    state.warn_lamp_on = data.lamp_on.good && data.lamp_on.value;
+  }
+  if (data.ecu_supported)
+  {
+    state.data_mask |= PLATFORM_DATA_ECU;
+    state.ecu = data.ecu;
+    state.ecu_param_tps_index = data.ecu_param_tps_index;
+    state.ecu_param_wb_index = data.ecu_param_wb_index;
+    state.ecu_param_map_index = data.ecu_param_map_index;
+    state.ecu_param_knock_index = data.ecu_param_knock_index;
+    state.ecu_flasher = data.ecu_flasher;
+  }
+  if (data.btn.supported)
+  {
+    state.data_mask |= PLATFORM_DATA_BTN;
+    state.btn = data.btn.value;
+  }
+  return state;
+}
+
 int compute_rpm_mode_shared(float rpm, int prev_mode)
 {
   const VehicleConfig &vehicle = get_build_config().vehicle;
@@ -64,7 +131,7 @@ int compute_rpm_mode_shared(float rpm, int prev_mode)
 
 static void render_ecu_section(const RuntimeState &state, font_t fontLCD, font_t font20, color_t amber)
 {
-  if (state.ecu == nullptr)
+  if (!platform_state_has(state.data_mask, PLATFORM_DATA_ECU) || state.ecu == nullptr)
     return;
 
   ECUK::ecuParam_t *map_p = state.ecu->getParam(state.ecu_param_map_index);
@@ -89,14 +156,22 @@ static void render_ecu_section(const RuntimeState &state, font_t fontLCD, font_t
 static void render_speed_rpm_section(const RuntimeState &state, font_t fontLCD, color_t amber)
 {
   char logBuf[32];
-  (void)std::snprintf(logBuf, sizeof(logBuf), "%d", (int)state.speed_mph);
+  const int speed_to_draw = platform_state_has(state.data_mask, PLATFORM_DATA_SPEED_MPH) ? (int)state.speed_mph : 0;
+  const int rpm_to_draw = platform_state_has(state.data_mask, PLATFORM_DATA_RPM) ? (int)state.rpm : 0;
+  (void)std::snprintf(logBuf, sizeof(logBuf), "%d", speed_to_draw);
   gdispFillString(15, 110 + 42, logBuf, fontLCD, amber, GFX_BLACK);
 
-  (void)std::snprintf(logBuf, sizeof(logBuf), "%d", (int)state.rpm);
+  (void)std::snprintf(logBuf, sizeof(logBuf), "%d", rpm_to_draw);
   gdispFillString(15, 155 + 42, logBuf, fontLCD, amber, GFX_BLACK);
 }
 
 void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
+{
+  static const BoardSharedData empty_data = {};
+  render_step_shared(state, empty_data, ctx, draw_step, timer_draw_ms);
+}
+
+void render_step_shared(const RuntimeState &state, const BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
 {
   color_t amber = (ctx.amber_ptr != nullptr) ? *ctx.amber_ptr : GFX_AMBER_YEL;
 
@@ -107,7 +182,7 @@ void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &dr
       break;
 
     case 1:
-      if (ctx.gimball != nullptr)
+      if (ctx.gimball != nullptr && platform_state_has(state.data_mask, PLATFORM_DATA_GIMBAL))
         drawGimball(ctx.gimball, 168 + 10, 48, 45, state.gimbal_x, state.gimbal_y);
       break;
 
@@ -167,7 +242,7 @@ void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &dr
 
     case 6:
     {
-      if (state.startup_init_error)
+      if (platform_state_has(state.data_mask, PLATFORM_DATA_STARTUP_ERROR) && state.startup_init_error)
         gdispFillString((ctx.screen_width >> 1) - 50, (ctx.screen_height >> 1), "ERR", ctx.fontLCD, GFX_RED, GFX_BLACK);
 
 #ifdef DIAG_SQUARE
@@ -185,20 +260,23 @@ void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &dr
       }
 #endif
 
-      if (state.warn_batt && ctx.batt_img != nullptr)
-        gdispImageDraw(ctx.batt_img, 140, 200, ctx.batt_img->width, ctx.batt_img->height, 0, 0);
-      if (state.warn_brake)
-        gdispFillString(120, 233, "BRAKE", ctx.font20, GFX_RED, GFX_BLACK);
-      if (state.warn_4ws)
-        gdispFillString(175, 205, "4WS", ctx.font20, GFX_YELLOW, GFX_BLACK);
+      for (std::size_t i = 0; i < data.warning_light_count; ++i)
+      {
+        const BoardWarningLight &warning = data.warning_lights[i];
+        if (!warning.supported || !warning.good || !warning.active)
+          continue;
 
-      if (state.warn_lamp_on)
+        if (warning.style == BOARD_WARNING_STYLE_IMAGE && warning.image != nullptr)
+          gdispImageDraw(warning.image, warning.x, warning.y, warning.image->width, warning.image->height, 0, 0);
+        else if (warning.label != nullptr)
+          gdispFillString(warning.x, warning.y, warning.label, ctx.font20, warning.color, GFX_BLACK);
+      }
+
+      if (platform_state_has(state.data_mask, PLATFORM_DATA_WARN_LAMP) && state.warn_lamp_on)
       {
         if (ctx.amber_ptr != nullptr)
           *ctx.amber_ptr = GFX_AMBER_SAE;
         setColors(GFX_AMBER_SAE, GFX_RED, GFX_BLACK);
-        if (state.warn_high_beam && ctx.beam_img != nullptr)
-          gdispImageDraw(ctx.beam_img, 190, 223, ctx.beam_img->width, ctx.beam_img->height, 0, 0);
       }
       else
       {
@@ -242,26 +320,33 @@ void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &dr
 
 extern "C" void main_cpp()
 {
+  BoardSharedData board_data = {};
   SharedRenderCtx render_ctx = {};
   RuntimeState state = {};
   int draw_step = 0;
   uint32_t timer_draw_ms = HAL_GetTick();
-  bool loop_exit = false;
-  PlatformServices *services = create_platform_services();
-  if (services == nullptr)
-    return;
 
-  services->init(render_ctx, state, draw_step, timer_draw_ms);
+  board_init(board_data, render_ctx, draw_step, timer_draw_ms);
+  state = runtime_state_from_board_data(board_data);
   render_ctx_init_shared(render_ctx);
-  run_shared_main_loop(loop_exit, [&]() {
-    services->service_background();
-    services->poll_inputs();
-    services->sample_state(state);
-    services->update_actuators(state);
 
-    loop_exit = services->should_exit();
-    if (!loop_exit && services->should_render(timer_draw_ms))
-      render_step_shared(state, render_ctx, draw_step, timer_draw_ms);
-  });
-  services->shutdown();
+  while (1)
+  {
+    board_update();
+
+    const int prev_rpm_mode = state.rpm_mode;
+    state = runtime_state_from_board_data(board_data);
+    state.rpm_mode = compute_rpm_mode_shared(state.rpm, prev_rpm_mode);
+
+    if (board_check_exit())
+      break;
+
+    if (((HAL_GetTick() - timer_draw_ms) >= get_draw_interval_ms()) && board_display_ready())
+    {
+      render_step_shared(state, board_data, render_ctx, draw_step, timer_draw_ms);
+      board_data.mark_all_read();
+    }
+  }
+
+  board_shutdown();
 }
