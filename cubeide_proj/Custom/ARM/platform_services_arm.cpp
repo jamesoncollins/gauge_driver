@@ -128,6 +128,7 @@ static void arm_bringup_hardware(
     font_t &font10,
     font_t &font20,
     font_t &fontLCD,
+    font_t &fontValue,
     PI4IOE5V6416 &ioexp_speedo,
     PI4IOE5V6416 &ioexp_screen,
     uint16_t &bulbVals,
@@ -161,6 +162,7 @@ static void arm_bringup_hardware(
   font10 = gdispOpenFont("DejaVuSans10");
   font20 = gdispOpenFont("DejaVuSans20");
   fontLCD = gdispOpenFont("lcddot_tr80");
+  fontValue = gdispOpenFont("BITSUMIS60_Numbers");
   GFX_AMBER = GFX_AMBER_YEL;
 
   gdispImageOpenMemory(&battImg, batt);
@@ -212,6 +214,7 @@ static void arm_bringup_hardware(
       .font10 = font10,
       .font20 = font20,
       .fontLCD = fontLCD,
+      .fontValue = fontValue,
       .screen_width = (coord_t)screenWidth,
       .screen_height = (coord_t)screenHeight,
       .batt_img = &battImg,
@@ -327,6 +330,7 @@ struct ArmMainCtx
   font_t font10 = nullptr;
   font_t font20 = nullptr;
   font_t fontLCD = nullptr;
+  font_t fontValue = nullptr;
   uint16_t bulbVals = 0;
 
   PI4IOE5V6416 *ioexp_speedo = nullptr;
@@ -455,6 +459,7 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
       g_arm_main.font10,
       g_arm_main.font20,
       g_arm_main.fontLCD,
+      g_arm_main.fontValue,
       *g_arm_main.ioexp_speedo,
       *g_arm_main.ioexp_screen,
       g_arm_main.bulbVals,

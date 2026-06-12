@@ -129,7 +129,7 @@ int compute_rpm_mode_shared(float rpm, int prev_mode)
   return 0;
 }
 
-static void render_ecu_section(const RuntimeState &state, font_t fontLCD, font_t font20, color_t amber)
+static void render_ecu_section(const RuntimeState &state, font_t fontValue, font_t font20, color_t amber)
 {
   if (!platform_state_has(state.data_mask, PLATFORM_DATA_ECU) || state.ecu == nullptr)
     return;
@@ -141,28 +141,18 @@ static void render_ecu_section(const RuntimeState &state, font_t fontLCD, font_t
 
   char map_text[16];
   char wb_text[16];
-  (void)std::snprintf(map_text, sizeof(map_text), "MAP %2.1f", map_p->val);
-  (void)std::snprintf(wb_text, sizeof(wb_text), "WB %2.1f", wb_p->val);
-  gdispFillString(20, 52, map_text, fontLCD, amber, GFX_BLACK);
-  gdispFillString(20, 7, wb_text, fontLCD, amber, GFX_BLACK);
+  (void)std::snprintf(map_text, sizeof(map_text), "%2.1f", map_p->val);
+  (void)std::snprintf(wb_text, sizeof(wb_text), "%2.1f", wb_p->val);
+  gdispFillString(20, 20, "WB", font20, amber, GFX_BLACK);
+  gdispFillString(74, 7, wb_text, fontValue, amber, GFX_BLACK);
+  gdispFillString(20, 65, "MAP", font20, amber, GFX_BLACK);
+  gdispFillString(74, 52, map_text, fontValue, amber, GFX_BLACK);
 
   bool show_error = !state.ecu->isConnected();
   if (state.ecu_flasher != nullptr)
     show_error = flasher_fun(state.ecu_flasher);
   if (!state.ecu->isConnected() && show_error)
     gdispFillString(20, 80, "ECU ERR      ", font20, GFX_RED, GFX_BLACK);
-}
-
-static void render_speed_rpm_section(const RuntimeState &state, font_t fontLCD, color_t amber)
-{
-  char logBuf[32];
-  const int speed_to_draw = platform_state_has(state.data_mask, PLATFORM_DATA_SPEED_MPH) ? (int)state.speed_mph : 0;
-  const int rpm_to_draw = platform_state_has(state.data_mask, PLATFORM_DATA_RPM) ? (int)state.rpm : 0;
-  (void)std::snprintf(logBuf, sizeof(logBuf), "%d", speed_to_draw);
-  gdispFillString(15, 110 + 42, logBuf, fontLCD, amber, GFX_BLACK);
-
-  (void)std::snprintf(logBuf, sizeof(logBuf), "%d", rpm_to_draw);
-  gdispFillString(15, 155 + 42, logBuf, fontLCD, amber, GFX_BLACK);
 }
 
 void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
@@ -183,12 +173,12 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
 
     case 1:
       if (ctx.gimball != nullptr && platform_state_has(state.data_mask, PLATFORM_DATA_GIMBAL))
-        drawGimball(ctx.gimball, 168 + 10, 48, 45, state.gimbal_x, state.gimbal_y);
+        drawGimball(ctx.gimball, 78, 205, 45, state.gimbal_x, state.gimbal_y);
       break;
 
     case 2:
     {
-      render_ecu_section(state, ctx.fontLCD, ctx.font20, amber);
+      render_ecu_section(state, ctx.fontValue, ctx.font20, amber);
       break;
     }
 
@@ -209,10 +199,6 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
     }
 
     case 4:
-      render_speed_rpm_section(state, ctx.fontLCD, amber);
-      break;
-
-    case 5:
     {
       ECUK::ecuParam_t *tps_p = nullptr;
       ECUK::ecuParam_t *knock_p = nullptr;
@@ -240,7 +226,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
       break;
     }
 
-    case 6:
+    case 5:
     {
       if (platform_state_has(state.data_mask, PLATFORM_DATA_STARTUP_ERROR) && state.startup_init_error)
         gdispFillString((ctx.screen_width >> 1) - 50, (ctx.screen_height >> 1), "ERR", ctx.fontLCD, GFX_RED, GFX_BLACK);
@@ -287,7 +273,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
       break;
     }
 
-    case 7:
+    case 6:
     {
       const int WARN_SIZE = 20;
       const int WARN_FINAL_SIZE = 70;

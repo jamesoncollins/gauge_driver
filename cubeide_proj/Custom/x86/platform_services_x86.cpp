@@ -22,6 +22,7 @@ struct HostPlatformCtx
   font_t font20;
   font_t font10;
   font_t fontLCD;
+  font_t fontValue;
   coord_t cx;
   coord_t cy;
   uint32_t t0_ms;
@@ -59,6 +60,7 @@ static void x86_bringup_hardware()
   g_host_ctx.font20 = gdispOpenFont("DejaVuSans20");
   g_host_ctx.font10 = gdispOpenFont("DejaVuSans10");
   g_host_ctx.fontLCD = gdispOpenFont("lcddot_tr80");
+  g_host_ctx.fontValue = gdispOpenFont("BITSUMIS60_Numbers");
   g_host_ctx.cx = gdispGetWidth() / 2;
   g_host_ctx.cy = gdispGetHeight() / 2;
   g_host_ctx.t0_ms = HAL_GetTick();
@@ -72,6 +74,7 @@ static void x86_bringup_hardware()
     .font10 = g_host_ctx.font10,
     .font20 = g_host_ctx.font20,
     .fontLCD = g_host_ctx.fontLCD,
+    .fontValue = g_host_ctx.fontValue,
     .screen_width = (coord_t)gdispGetWidth(),
     .screen_height = (coord_t)gdispGetHeight(),
     .batt_img = &g_host_ctx.batt_img,

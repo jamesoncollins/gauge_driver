@@ -321,6 +321,7 @@ typedef struct
   font_t font10;
   font_t font20;
   font_t fontLCD;
+  font_t fontValue;
   coord_t screen_width;
   coord_t screen_height;
   gImage *batt_img;
