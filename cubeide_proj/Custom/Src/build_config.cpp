@@ -6,29 +6,61 @@ constexpr float kMphPerHz = (0.8425872f * 1.015625f);
 constexpr float kRpmPerHz = 20.0f;
 constexpr uint8_t kSpeedTicksPerOdoTick = 3U;
 constexpr uint8_t kOdoStepsPerTick = 6U;
+
+PlatformConfig make_platform_config()
+{
+#if defined(GAUGE_PLATFORM_SIMULATOR)
+  return {PlatformKind::x86_sim, "x86_sim"};
+#elif defined(GAUGE_PLATFORM_HARDWARE)
+  return {PlatformKind::stm32wb55, "stm32wb55"};
+#else
+#error "No GAUGE_PLATFORM_* macro defined"
+#endif
+}
+
+BoardConfig make_board_config()
+{
+#if defined(GAUGE_PLATFORM_SIMULATOR)
+  return {BoardKind::sim_host, "sim_host"};
+#elif defined(GAUGE_PLATFORM_HARDWARE)
+  return {BoardKind::board_3000gt_rev_a, "board_3000gt_rev_a"};
+#else
+#error "No GAUGE_PLATFORM_* macro defined"
+#endif
+}
+
+DisplayConfig make_display_config()
+{
+#if defined(GAUGE_DISPLAY_WIN32)
+  return {DisplayKind::software, "win32", 800, 600, 20, 50, 100};
+#elif defined(GAUGE_DISPLAY_SDL)
+  return {DisplayKind::software, "sdl", 800, 600, 20, 50, 100};
+#elif defined(GAUGE_DISPLAY_ST7789VI)
+  return {DisplayKind::st7789vi_lcd, "st7789vi_lcd", 240, 280, 20, 50, 100};
+#elif defined(GAUGE_DISPLAY_S6E63D6)
+  return {DisplayKind::s6e63d6_oled, "s6e63d6_oled", 240, 320, 20, 50, 100};
+#else
+#error "No GAUGE_DISPLAY_* macro defined"
+#endif
+}
+
+VehicleConfig make_vehicle_config()
+{
+#if defined(GAUGE_SIM_PROFILE_3000GT_SOFT) || defined(GAUGE_SIM_PROFILE_NONE)
+  return {VehicleKind::vehicle_3000gt, "3000gt", 5500, 5700, 6500, kMphPerHz, kRpmPerHz, kSpeedTicksPerOdoTick, kOdoStepsPerTick};
+#else
+#error "No GAUGE_SIM_PROFILE_* macro defined"
+#endif
+}
 }
 
 const BuildConfig &get_build_config()
 {
-#if defined(TARGET_SIM_3000GT_SOFT)
   static const BuildConfig config = {
-      {PlatformKind::x86_sim, "x86_sim"},
-      {BoardKind::sim_host, "sim_host"},
-      {DisplayKind::software, "software", 800, 600, 20, 50, 100},
-      {VehicleKind::vehicle_3000gt, "3000gt", 5500, 5700, 6500, kMphPerHz, kRpmPerHz, kSpeedTicksPerOdoTick, kOdoStepsPerTick}};
-#elif defined(TARGET_3000GT_LCD)
-  static const BuildConfig config = {
-      {PlatformKind::stm32wb55, "stm32wb55"},
-      {BoardKind::board_3000gt_rev_a, "board_3000gt_rev_a"},
-      {DisplayKind::st7789vi_lcd, "st7789vi_lcd", 240, 280, 20, 50, 100},
-      {VehicleKind::vehicle_3000gt, "3000gt", 5500, 5700, 6500, kMphPerHz, kRpmPerHz, kSpeedTicksPerOdoTick, kOdoStepsPerTick}};
-#else
-  static const BuildConfig config = {
-      {PlatformKind::stm32wb55, "stm32wb55"},
-      {BoardKind::board_3000gt_rev_a, "board_3000gt_rev_a"},
-      {DisplayKind::s6e63d6_oled, "s6e63d6_oled", 240, 320, 20, 50, 100},
-      {VehicleKind::vehicle_3000gt, "3000gt", 5500, 5700, 6500, kMphPerHz, kRpmPerHz, kSpeedTicksPerOdoTick, kOdoStepsPerTick}};
-#endif
+      make_platform_config(),
+      make_board_config(),
+      make_display_config(),
+      make_vehicle_config()};
   return config;
 }
 

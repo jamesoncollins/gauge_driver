@@ -1,19 +1,36 @@
 # Target Configuration Model
 
-This project now composes builds from four axes:
+This project composes builds from explicit CMake axes. `BUILD_TARGET` remains the
+friendly preset name, while the axes describe what that preset means internally.
 
-1. `platform`: CPU/toolchain/runtime (`x86_sim`, `stm32wb55`)
-2. `board`: pinout/peripherals (`sim_host`, `board_3000gt_rev_a`)
-3. `display`: panel/driver/timing (`software`, `s6e63d6_oled`, `st7789vi_lcd`)
-4. `vehicle`: calibration and app thresholds (`3000gt`)
+## Build axes
+
+1. `PLATFORM_KIND`: runtime kind (`hardware`, `simulator`)
+2. `DISPLAY_BACKEND`: uGFX/display driver (`s6e63d6`, `st7789vi`, `win32`, `sdl`)
+3. `SIM_PROFILE`: simulator data profile (`none`, `3000gt_soft`)
+4. `HOST_BACKEND`: host runtime wrapper (`none`, `win32`, `emscripten`)
+
+`CUSTOM_PLATFORM` still exists as a compatibility selector for the current source
+layout (`arm` or `x86`), but it is now derived from the axes for composed targets.
 
 ## Current composed targets
 
-1. `sim_3000gt_soft`
-2. `3000gt_oled`
-3. `3000gt_lcd`
+| `BUILD_TARGET` | `PLATFORM_KIND` | `DISPLAY_BACKEND` | `SIM_PROFILE` | `HOST_BACKEND` |
+| --- | --- | --- | --- | --- |
+| `sim_3000gt_soft` | `simulator` | `win32` | `3000gt_soft` | `win32` |
+| `3000gt_oled` | `hardware` | `s6e63d6` | `none` | `none` |
+| `3000gt_lcd` | `hardware` | `st7789vi` | `none` | `none` |
 
 These are selected by CMake cache variable `BUILD_TARGET`.
+
+## Compatibility rules
+
+Not every axis combination is valid. CMake validates combinations early:
+
+- `PLATFORM_KIND=hardware` requires `HOST_BACKEND=none`, `SIM_PROFILE=none`, and
+  a hardware display backend (`s6e63d6` or `st7789vi`).
+- `PLATFORM_KIND=simulator` requires a host backend, a simulator profile, and a
+  host display backend (`win32` or `sdl`).
 
 ## Presets
 
@@ -37,8 +54,9 @@ Examples:
 
 ## Adding a new target
 
-1. Add a new branch in `get_build_config()` in `Custom/Src/build_config.cpp`.
-2. Add a compile definition in `CMakeLists.txt` for that `BUILD_TARGET`.
-3. Add/adjust `CUSTOM_PLATFORM` + `UGFX_DRIVER` mapping in `CMakeLists.txt`.
-4. Add a matching configure/build preset in `CMakePresets.json`.
-5. Build at least one ARM target and x86 sim target before merging.
+1. Add a new `BUILD_TARGET` branch in `CMakeLists.txt` that sets the four axes.
+2. Add validation support if the new target needs a new axis value.
+3. Add/update display backend source selection in `CMakeLists.txt` if needed.
+4. Add compile definitions for target-specific code paths if needed.
+5. Add a matching configure/build preset in `CMakePresets.json`.
+6. Build at least one hardware target and one simulator target before merging.
