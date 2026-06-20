@@ -1,0 +1,39 @@
+#ifndef _GFXCONF_H
+#define _GFXCONF_H
+
+#if !defined(GAUGE_HOST_BACKEND_EMSCRIPTEN)
+#error "This gfxconf.h is only for the Emscripten host backend"
+#endif
+
+#if !defined(GAUGE_DISPLAY_SDL)
+#error "The Emscripten host backend currently requires DISPLAY_BACKEND=sdl"
+#endif
+
+void sdl_driver_init(void);
+
+#define GFX_USE_OS_RAW32 GFXON
+#define GFX_OS_INIT_NO_WARNING GFXON
+#define GFX_OS_PRE_INIT_FUNCTION sdl_driver_init
+
+#define GFX_USE_GDISP GFXON
+#define GDISP_NEED_VALIDATION GFXON
+#define GDISP_NEED_CLIP GFXON
+#define GDISP_NEED_TEXT GFXON
+#define GDISP_NEED_CIRCLE GFXON
+#define GDISP_NEED_DUALCIRCLE GFXON
+#define GDISP_NEED_CONVEX_POLYGON GFXON
+
+#define GDISP_INCLUDE_FONT_DEJAVUSANS10 GFXON
+#define GDISP_INCLUDE_FONT_DEJAVUSANS20 GFXON
+#define GDISP_INCLUDE_FONT_LCDDOT_TR30 GFXON
+#define GDISP_INCLUDE_FONT_BITSUMIS60_NUMBERS GFXON
+
+#define GFX_USE_GFILE GFXON
+#define GFILE_NEED_MEMFS GFXON
+#define GDISP_NEED_IMAGE GFXON
+#define GDISP_NEED_IMAGE_GIF GFXON
+#define GDISP_NEED_IMAGE_BMP GFXON
+
+#define GDISP_NEED_STARTUP_LOGO GFXOFF
+
+#endif /* _GFXCONF_H */

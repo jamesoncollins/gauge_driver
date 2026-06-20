@@ -10,7 +10,7 @@ constexpr uint8_t kOdoStepsPerTick = 6U;
 PlatformConfig make_platform_config()
 {
 #if defined(GAUGE_PLATFORM_SIMULATOR)
-  return {PlatformKind::x86_sim, "x86_sim"};
+  return {PlatformKind::host_simulator, "host_simulator"};
 #elif defined(GAUGE_PLATFORM_HARDWARE)
   return {PlatformKind::stm32wb55, "stm32wb55"};
 #else

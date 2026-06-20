@@ -13,8 +13,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---------------------------------------------------------------------------
 # Custom code layout selection
-# - Custom shared code lives under Custom
-# - Platform-specific code lives under ARM or x86 subfolders
+# - Custom shared code lives under Custom/Src and Custom/Inc
+# - Hardware code lives under Custom/ARM
+# - Simulator common code lives under Custom/Simulator
+# - Host backend code lives under Custom/Host/<backend>
 # ---------------------------------------------------------------------------
 set(CUSTOM_ROOT Custom)
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}")
@@ -112,8 +114,11 @@ elseif(PLATFORM_KIND STREQUAL "simulator")
   if(SIM_PROFILE STREQUAL "none")
     message(FATAL_ERROR "PLATFORM_KIND=simulator requires SIM_PROFILE to name the simulator data profile")
   endif()
-  if(NOT DISPLAY_BACKEND IN_LIST HOST_DISPLAY_BACKENDS)
-    message(FATAL_ERROR "PLATFORM_KIND=simulator requires a host DISPLAY_BACKEND (${HOST_DISPLAY_BACKENDS}; got ${DISPLAY_BACKEND})")
+  if(HOST_BACKEND STREQUAL "win32" AND NOT DISPLAY_BACKEND STREQUAL "win32")
+    message(FATAL_ERROR "HOST_BACKEND=win32 currently requires DISPLAY_BACKEND=win32 (got ${DISPLAY_BACKEND})")
+  endif()
+  if(HOST_BACKEND STREQUAL "emscripten" AND NOT DISPLAY_BACKEND STREQUAL "sdl")
+    message(FATAL_ERROR "HOST_BACKEND=emscripten currently requires DISPLAY_BACKEND=sdl (got ${DISPLAY_BACKEND})")
   endif()
   set(CUSTOM_PLATFORM x86 CACHE STRING "Compatibility platform code selector (arm or x86)" FORCE)
 endif()
@@ -168,10 +173,11 @@ if(CUSTOM_PLATFORM STREQUAL "arm")
   endif()
 elseif(CUSTOM_PLATFORM STREQUAL "x86")
   add_compile_definitions(CUSTOM_PLATFORM_X86)
-  if(EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}/x86/platform.cpp")
-    set(CUSTOM_PLATFORM_SRC ${CUSTOM_ROOT}/x86/platform.cpp)
+  set(HOST_BACKEND_ROOT ${CUSTOM_ROOT}/Host/${HOST_BACKEND})
+  if(EXISTS "${CMAKE_SOURCE_DIR}/${HOST_BACKEND_ROOT}/platform.cpp")
+    set(CUSTOM_PLATFORM_SRC ${HOST_BACKEND_ROOT}/platform.cpp)
   else()
-    message(FATAL_ERROR "Could not find x86 platform source in ${CUSTOM_ROOT}/x86")
+    message(FATAL_ERROR "Could not find host backend source in ${HOST_BACKEND_ROOT}")
   endif()
 else()
   message(FATAL_ERROR "Unknown CUSTOM_PLATFORM=${CUSTOM_PLATFORM} (valid values: arm, x86)")
@@ -303,11 +309,11 @@ file(GLOB_RECURSE CUSTOM_SOURCES
   ${CUSTOM_ROOT}/*.c ${CUSTOM_ROOT}/*.cpp
 )
 if(CUSTOM_PLATFORM STREQUAL "arm")
-  list(FILTER CUSTOM_SOURCES EXCLUDE REGEX ".*/${CUSTOM_ROOT}/(ARM|x86)/.*")
+  list(FILTER CUSTOM_SOURCES EXCLUDE REGEX ".*/${CUSTOM_ROOT}/(ARM|Simulator|Host)/.*")
   list(APPEND PROJECT_SOURCES ${CUSTOM_SOURCES} ${CUSTOM_PLATFORM_SRC})
 else()
-  # Simulator build: use host platform files plus the shared app entrypoint.
-  list(FILTER CUSTOM_SOURCES INCLUDE REGEX ".*/${CUSTOM_ROOT}/x86/.*")
+  # Simulator build: use simulator common files plus the selected host backend.
+  list(FILTER CUSTOM_SOURCES INCLUDE REGEX ".*/${CUSTOM_ROOT}/(Simulator|Host/${HOST_BACKEND})/.*")
   list(APPEND PROJECT_SOURCES ${CUSTOM_SOURCES})
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/main_shared.cpp)
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/build_config.cpp)
@@ -374,16 +380,17 @@ if(CUSTOM_PLATFORM STREQUAL "arm")
     Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc
   )
 else()
-  # Simulator platform headers (including gfxconf.h).
+  # Simulator platform headers (including backend-specific gfxconf.h).
   target_include_directories(${PROJECT_NAME} BEFORE PRIVATE
-    ${CUSTOM_ROOT}/x86/Inc
-    ${CUSTOM_ROOT}/x86
+    ${CUSTOM_ROOT}/Host/${HOST_BACKEND}/Inc
+    ${CUSTOM_ROOT}/Host/${HOST_BACKEND}
+    ${CUSTOM_ROOT}/Simulator
   )
 endif()
 
 if(CUSTOM_PLATFORM STREQUAL "arm")
   target_link_libraries(${PROJECT_NAME} c m stdc++ supc++)
-else()
+elseif(HOST_BACKEND STREQUAL "win32")
   target_link_libraries(${PROJECT_NAME} gdi32)
 endif()
 

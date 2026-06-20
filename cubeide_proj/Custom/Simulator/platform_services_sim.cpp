@@ -1,7 +1,3 @@
-#ifndef __x86_64__
-#error "THIS PLATFORM IS ONLY FOR X86"
-#endif
-
 #include <cstdint>
 #include <cstdio>
 #include <cmath>
@@ -51,7 +47,7 @@ static BoardWarningLight *g_warn_brake = nullptr;
 static BoardWarningLight *g_warn_4ws = nullptr;
 static BoardWarningLight *g_warn_high_beam = nullptr;
 
-static void x86_bringup_hardware()
+static void sim_bringup_hardware()
 {
   gfxInit();
   gdispClear(GFX_BLACK);
@@ -87,7 +83,7 @@ static void x86_bringup_hardware()
   };
 }
 
-static PlatformSample x86_collect_platform_sample()
+static PlatformSample sim_collect_platform_sample()
 {
   PlatformSample sample = {};
   sample.data_mask =
@@ -155,12 +151,12 @@ static PlatformSample x86_collect_platform_sample()
   return sample;
 }
 
-static void x86_publish_current_data()
+static void sim_publish_current_data()
 {
   if (g_board_data == nullptr)
     return;
 
-  PlatformSample sample = x86_collect_platform_sample();
+  PlatformSample sample = sim_collect_platform_sample();
   const uint32_t now = HAL_GetTick();
 
   g_board_data->rpm.publish(sample.rpm, now);
@@ -199,21 +195,21 @@ static void x86_publish_current_data()
 void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
 {
   g_board_data = &data;
-  x86_bringup_hardware();
+  sim_bringup_hardware();
   g_sim_ecu.connect();
   g_warn_batt = data.add_warning_image("batt", 140, 200, &g_host_ctx.batt_img);
   g_warn_brake = data.add_warning_light("brake", "BRAKE", 120, 233, GFX_RED);
   g_warn_4ws = data.add_warning_light("4ws", "4WS", 175, 205, GFX_YELLOW);
   g_warn_high_beam = data.add_warning_image("high_beam", 190, 223, &g_host_ctx.beam_img);
   ctx = g_host_render_ctx;
-  x86_publish_current_data();
+  sim_publish_current_data();
   draw_step = 0;
   timer_draw_ms = g_host_ctx.timer_draw_ms;
 }
 
 void board_update()
 {
-  x86_publish_current_data();
+  sim_publish_current_data();
   HAL_Delay(16);
 }
 

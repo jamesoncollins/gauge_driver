@@ -5,7 +5,7 @@
 
 enum class PlatformKind
 {
-  x86_sim,
+  host_simulator,
   stm32wb55
 };
 

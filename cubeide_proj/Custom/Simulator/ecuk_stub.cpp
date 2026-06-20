@@ -1,7 +1,3 @@
-#ifndef __x86_64__
-#error "THIS CODE IS ONLY FOR X86"
-#endif
-
 #include <cstdio>
 
 #include "platform_api.h"

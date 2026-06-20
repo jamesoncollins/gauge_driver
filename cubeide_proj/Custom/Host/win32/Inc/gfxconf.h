@@ -1,21 +1,15 @@
 #ifndef _GFXCONF_H
 #define _GFXCONF_H
 
-#if defined(GAUGE_HOST_BACKEND_WIN32)
-#define GFX_USE_OS_WIN32 GFXON
-#elif defined(GAUGE_HOST_BACKEND_EMSCRIPTEN)
-#define GFX_USE_OS_RAW32 GFXON
-#define GFX_OS_INIT_NO_WARNING GFXON
-#else
-#error "Unsupported host backend for simulator gfxconf"
+#if !defined(GAUGE_HOST_BACKEND_WIN32)
+#error "This gfxconf.h is only for the Win32 host backend"
 #endif
 
-#if defined(GAUGE_DISPLAY_SDL)
-void sdl_driver_init(void);
-#define GFX_OS_PRE_INIT_FUNCTION sdl_driver_init
-#elif !defined(GAUGE_DISPLAY_WIN32)
-#error "Unsupported simulator display backend for gfxconf"
+#if !defined(GAUGE_DISPLAY_WIN32)
+#error "The Win32 host backend currently requires DISPLAY_BACKEND=win32"
 #endif
+
+#define GFX_USE_OS_WIN32 GFXON
 
 #define GFX_USE_GDISP GFXON
 #define GDISP_NEED_VALIDATION GFXON

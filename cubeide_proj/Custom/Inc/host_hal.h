@@ -1,5 +1,5 @@
-#ifndef INC_X86_HAL_H_
-#define INC_X86_HAL_H_
+#ifndef INC_HOST_HAL_H_
+#define INC_HOST_HAL_H_
 
 #include <stdint.h>
 
@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 /*
- * Minimal STM-HAL compatibility surface for x86 builds.
+ * Minimal STM-HAL compatibility surface for host simulator builds.
  * Add to this as compile/link errors identify missing APIs.
  */
 typedef enum
@@ -49,4 +49,4 @@ GPIO_PinState HAL_GPIO_ReadPin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
 }
 #endif
 
-#endif /* INC_X86_HAL_H_ */
+#endif /* INC_HOST_HAL_H_ */

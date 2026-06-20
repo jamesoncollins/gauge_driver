@@ -10,8 +10,17 @@ friendly preset name, while the axes describe what that preset means internally.
 3. `SIM_PROFILE`: simulator data profile (`none`, `3000gt_soft`)
 4. `HOST_BACKEND`: host runtime wrapper (`none`, `win32`, `emscripten`)
 
-`CUSTOM_PLATFORM` still exists as a compatibility selector for the current source
-layout (`arm` or `x86`), but it is now derived from the axes for composed targets.
+`CUSTOM_PLATFORM` still exists as a compatibility selector for older configure commands (`arm` or `x86`), but source layout is now driven by `PLATFORM_KIND` and `HOST_BACKEND` rather than an `x86` folder.
+
+## Source layout
+
+- `Custom/ARM`: hardware-only platform code.
+- `Custom/Simulator`: simulator code shared by all host backends.
+- `Custom/Host/win32`: native Win32 host entrypoint and `gfxconf.h`.
+- `Custom/Host/emscripten`: Emscripten host entrypoint and `gfxconf.h`.
+
+Simulator builds compile `Custom/Simulator` plus `Custom/Host/${HOST_BACKEND}`.
+Hardware builds exclude both host and simulator directories.
 
 ## Current composed targets
 
@@ -27,10 +36,10 @@ These are selected by CMake cache variable `BUILD_TARGET`.
 
 Not every axis combination is valid. CMake validates combinations early:
 
-- `PLATFORM_KIND=hardware` requires `HOST_BACKEND=none`, `SIM_PROFILE=none`, and
-  a hardware display backend (`s6e63d6` or `st7789vi`).
-- `PLATFORM_KIND=simulator` requires a host backend, a simulator profile, and a
-  host display backend (`win32` or `sdl`).
+- `PLATFORM_KIND=hardware` requires `HOST_BACKEND=none`, `SIM_PROFILE=none`, and a hardware display backend (`s6e63d6` or `st7789vi`).
+- `PLATFORM_KIND=simulator` requires a host backend, a simulator profile, and a host display backend (`win32` or `sdl`).
+- `HOST_BACKEND=win32` currently requires `DISPLAY_BACKEND=win32`.
+- `HOST_BACKEND=emscripten` currently requires `DISPLAY_BACKEND=sdl`.
 
 ## Presets
 

@@ -1,5 +1,5 @@
-#ifndef CUSTOM_X86_SIM_ECUK_HPP_
-#define CUSTOM_X86_SIM_ECUK_HPP_
+#ifndef CUSTOM_SIMULATOR_SIM_ECUK_HPP_
+#define CUSTOM_SIMULATOR_SIM_ECUK_HPP_
 
 #include "platform_api.h"
 #include "../ECUK-lib/ECUK.hpp"
@@ -41,4 +41,4 @@ private:
   UART_HandleTypeDef uart_ = {};
 };
 
-#endif /* CUSTOM_X86_SIM_ECUK_HPP_ */
+#endif /* CUSTOM_SIMULATOR_SIM_ECUK_HPP_ */
