@@ -1,8 +1,21 @@
 #ifndef _GFXCONF_H
 #define _GFXCONF_H
 
-/* Host build uses the Win32 uGFX OS/driver path */
+#if defined(GAUGE_HOST_BACKEND_WIN32)
 #define GFX_USE_OS_WIN32 GFXON
+#elif defined(GAUGE_HOST_BACKEND_EMSCRIPTEN)
+#define GFX_USE_OS_RAW32 GFXON
+#define GFX_OS_INIT_NO_WARNING GFXON
+#else
+#error "Unsupported host backend for simulator gfxconf"
+#endif
+
+#if defined(GAUGE_DISPLAY_SDL)
+void sdl_driver_init(void);
+#define GFX_OS_PRE_INIT_FUNCTION sdl_driver_init
+#elif !defined(GAUGE_DISPLAY_WIN32)
+#error "Unsupported simulator display backend for gfxconf"
+#endif
 
 #define GFX_USE_GDISP GFXON
 #define GDISP_NEED_VALIDATION GFXON
