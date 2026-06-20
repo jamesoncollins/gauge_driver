@@ -23,7 +23,7 @@ if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}")
   message(FATAL_ERROR "Could not find custom code folder (expected ./Custom)")
 endif()
 
-set(BUILD_TARGET "" CACHE STRING "Composed target profile (sim_3000gt_soft, 3000gt_oled, 3000gt_lcd)")
+set(BUILD_TARGET "" CACHE STRING "Composed target profile (sim_3000gt_soft, web_3000gt_soft, 3000gt_oled, 3000gt_lcd)")
 
 # Build axes. BUILD_TARGET presets below fill these in for known-good builds,
 # while still making the underlying choices explicit and independently
@@ -48,6 +48,14 @@ if(BUILD_TARGET STREQUAL "sim_3000gt_soft")
   set(CUSTOM_PLATFORM x86 CACHE STRING "Compatibility platform code selector (arm or x86)" FORCE)
   set(UGFX_DRIVER win32 CACHE STRING "uGFX display backend token" FORCE)
   add_compile_definitions(TARGET_SIM_3000GT_SOFT)
+elseif(BUILD_TARGET STREQUAL "web_3000gt_soft")
+  set(PLATFORM_KIND simulator CACHE STRING "Runtime kind (hardware or simulator)" FORCE)
+  set(DISPLAY_BACKEND sdl CACHE STRING "Display backend (s6e63d6, st7789vi, win32, sdl)" FORCE)
+  set(SIM_PROFILE 3000gt_soft CACHE STRING "Simulator data profile (none or 3000gt_soft)" FORCE)
+  set(HOST_BACKEND emscripten CACHE STRING "Host runtime backend (none, win32, emscripten)" FORCE)
+  set(CUSTOM_PLATFORM x86 CACHE STRING "Compatibility platform code selector (arm or x86)" FORCE)
+  set(UGFX_DRIVER sdl CACHE STRING "uGFX display backend token" FORCE)
+  add_compile_definitions(TARGET_WEB_3000GT_SOFT)
 elseif(BUILD_TARGET STREQUAL "3000gt_oled")
   set(PLATFORM_KIND hardware CACHE STRING "Runtime kind (hardware or simulator)" FORCE)
   set(DISPLAY_BACKEND s6e63d6 CACHE STRING "Display backend (s6e63d6, st7789vi, win32, sdl)" FORCE)
@@ -65,7 +73,7 @@ elseif(BUILD_TARGET STREQUAL "3000gt_lcd")
   set(UGFX_DRIVER st7789vi CACHE STRING "uGFX display backend token" FORCE)
   add_compile_definitions(TARGET_3000GT_LCD)
 elseif(NOT BUILD_TARGET STREQUAL "")
-  message(FATAL_ERROR "Unknown BUILD_TARGET=${BUILD_TARGET} (valid values: sim_3000gt_soft, 3000gt_oled, 3000gt_lcd)")
+  message(FATAL_ERROR "Unknown BUILD_TARGET=${BUILD_TARGET} (valid values: sim_3000gt_soft, web_3000gt_soft, 3000gt_oled, 3000gt_lcd)")
 endif()
 
 # Backward compatibility for older ad-hoc configure commands that selected only

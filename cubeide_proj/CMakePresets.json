@@ -29,6 +29,16 @@
       }
     },
     {
+      "name": "base-web",
+      "displayName": "Base Emscripten web build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/toolchain-emcc.cmake",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
       "name": "st7789vi-debug",
       "displayName": "Debug - ST7789VI",
       "inherits": "base",
@@ -51,6 +61,14 @@
       "cacheVariables": {
         "BUILD_TARGET": "sim_3000gt_soft"
       }
+    },
+    {
+      "name": "web-debug",
+      "displayName": "Debug - Web",
+      "inherits": "base-web",
+      "cacheVariables": {
+        "BUILD_TARGET": "web_3000gt_soft"
+      }
     }
   ],
   "buildPresets": [
@@ -65,6 +83,11 @@
     {
       "name": "x86-debug",
       "configurePreset": "x86-debug",
+      "jobs": 8
+    },
+    {
+      "name": "web-debug",
+      "configurePreset": "web-debug",
       "jobs": 8
     }
   ]

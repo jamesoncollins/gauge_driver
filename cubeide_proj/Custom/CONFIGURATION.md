@@ -27,6 +27,7 @@ Hardware builds exclude both host and simulator directories.
 | `BUILD_TARGET` | `PLATFORM_KIND` | `DISPLAY_BACKEND` | `SIM_PROFILE` | `HOST_BACKEND` |
 | --- | --- | --- | --- | --- |
 | `sim_3000gt_soft` | `simulator` | `win32` | `3000gt_soft` | `win32` |
+| `web_3000gt_soft` | `simulator` | `sdl` | `3000gt_soft` | `emscripten` |
 | `3000gt_oled` | `hardware` | `s6e63d6` | `none` | `none` |
 | `3000gt_lcd` | `hardware` | `st7789vi` | `none` | `none` |
 
@@ -44,8 +45,9 @@ Not every axis combination is valid. CMake validates combinations early:
 ## Presets
 
 1. `x86-debug` -> `BUILD_TARGET=sim_3000gt_soft`
-2. `s6e63d6-debug` -> `BUILD_TARGET=3000gt_oled`
-3. `st7789vi-debug` -> `BUILD_TARGET=3000gt_lcd`
+2. `web-debug` -> `BUILD_TARGET=web_3000gt_soft`
+3. `s6e63d6-debug` -> `BUILD_TARGET=3000gt_oled`
+4. `st7789vi-debug` -> `BUILD_TARGET=3000gt_lcd`
 
 ## Where values live
 
@@ -67,5 +69,5 @@ Examples:
 2. Add validation support if the new target needs a new axis value.
 3. Add/update display backend source selection in `CMakeLists.txt` if needed.
 4. Add compile definitions for target-specific code paths if needed.
-5. Add a matching configure/build preset in `CMakePresets.json`.
+5. Add a matching configure/build preset in `CMakePresets.json`; Emscripten targets use `toolchain-emcc.cmake`.
 6. Build at least one hardware target and one simulator target before merging.
