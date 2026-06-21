@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <semaphore.h>
+#include <pthread.h>
 #include <SDL.h>
 
 #define GDISP_DRIVER_VMT				GDISPVMT_SDL
@@ -177,6 +178,41 @@ static sem_t *input_event;
 #define CTX_MUTEX_NAME 		"/ugfx_ctx_mutex"
 #define INPUT_EVENT_NAME 	"/ugfx_input_event"
 
+#ifdef __EMSCRIPTEN__
+static sem_t emscripten_ctx_mutex;
+static sem_t emscripten_input_event;
+static int emscripten_ctx_mutex_ready;
+static int emscripten_input_event_ready;
+
+int sem_unlink(const char *name) {
+	(void)name;
+	return 0;
+}
+
+int sem_close(sem_t *sem) {
+	(void)sem;
+	return 0;
+}
+
+sem_t *sem_open(const char *name, int oflag, ...) {
+	(void)oflag;
+	if (!strcmp(name, CTX_MUTEX_NAME)) {
+		if (!emscripten_ctx_mutex_ready) {
+			sem_init(&emscripten_ctx_mutex, 0, 1);
+			emscripten_ctx_mutex_ready = 1;
+		}
+		return &emscripten_ctx_mutex;
+	}
+	if (!strcmp(name, INPUT_EVENT_NAME)) {
+		if (!emscripten_input_event_ready) {
+			sem_init(&emscripten_input_event, 0, 0);
+			emscripten_input_event_ready = 1;
+		}
+		return &emscripten_input_event;
+	}
+	return SEM_FAILED;
+}
+#endif
 
 static int SDL_loop (void) {
 	SDL_Window   *window = SDL_CreateWindow("uGFX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, GDISP_SCREEN_WIDTH, GDISP_SCREEN_HEIGHT, 0);

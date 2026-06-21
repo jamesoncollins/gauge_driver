@@ -4,19 +4,19 @@ set(CMAKE_SYSTEM_PROCESSOR wasm32)
 set(_emscripten_root "$ENV{EMSDK}/upstream/emscripten")
 
 find_program(CMAKE_C_COMPILER
-  NAMES emcc emcc.bat
+  NAMES emcc.bat emcc
   HINTS "${_emscripten_root}"
 )
 find_program(CMAKE_CXX_COMPILER
-  NAMES em++ em++.bat emxx emxx.bat
+  NAMES em++.bat em++ emxx.bat emxx
   HINTS "${_emscripten_root}"
 )
 find_program(CMAKE_AR
-  NAMES emar emar.bat
+  NAMES emar.bat emar
   HINTS "${_emscripten_root}"
 )
 find_program(CMAKE_RANLIB
-  NAMES emranlib emranlib.bat
+  NAMES emranlib.bat emranlib
   HINTS "${_emscripten_root}"
 )
 
