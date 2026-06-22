@@ -7,6 +7,9 @@
 #include "gfx.h"
 #include "ugfx_widgets.h"
 #include "../ECUK-lib/ECUK.hpp"
+#if defined(GAUGE_HOST_BACKEND_EMSCRIPTEN)
+extern "C" void sdl_driver_poll(void);
+#endif
 
 void render_ctx_init_shared(SharedRenderCtx &ctx)
 {
@@ -304,35 +307,90 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
   }
 }
 
-extern "C" void main_cpp()
+namespace
+{
+struct SharedMainLoopState
 {
   BoardSharedData board_data = {};
   SharedRenderCtx render_ctx = {};
   RuntimeState state = {};
   int draw_step = 0;
-  uint32_t timer_draw_ms = HAL_GetTick();
+  uint32_t timer_draw_ms = 0;
+  bool initialized = false;
+  bool exit_requested = false;
+};
 
-  board_init(board_data, render_ctx, draw_step, timer_draw_ms);
-  state = runtime_state_from_board_data(board_data);
-  render_ctx_init_shared(render_ctx);
+SharedMainLoopState g_main_loop;
 
-  while (1)
+void main_loop_init(SharedMainLoopState &loop)
+{
+  if (loop.initialized)
+    return;
+
+  loop.timer_draw_ms = HAL_GetTick();
+  board_init(loop.board_data, loop.render_ctx, loop.draw_step, loop.timer_draw_ms);
+  loop.state = runtime_state_from_board_data(loop.board_data);
+  render_ctx_init_shared(loop.render_ctx);
+  loop.initialized = true;
+}
+
+void main_loop_step(SharedMainLoopState &loop)
+{
+  if (!loop.initialized || loop.exit_requested)
+    return;
+
+  board_update();
+
+  const int prev_rpm_mode = loop.state.rpm_mode;
+  loop.state = runtime_state_from_board_data(loop.board_data);
+  loop.state.rpm_mode = compute_rpm_mode_shared(loop.state.rpm, prev_rpm_mode);
+
+  if (board_check_exit())
   {
-    board_update();
-
-    const int prev_rpm_mode = state.rpm_mode;
-    state = runtime_state_from_board_data(board_data);
-    state.rpm_mode = compute_rpm_mode_shared(state.rpm, prev_rpm_mode);
-
-    if (board_check_exit())
-      break;
-
-    if (((HAL_GetTick() - timer_draw_ms) >= get_draw_interval_ms()) && board_display_ready())
-    {
-      render_step_shared(state, board_data, render_ctx, draw_step, timer_draw_ms);
-      board_data.mark_all_read();
-    }
+    loop.exit_requested = true;
+    return;
   }
 
+  if (((HAL_GetTick() - loop.timer_draw_ms) >= get_draw_interval_ms()) && board_display_ready())
+  {
+    render_step_shared(loop.state, loop.board_data, loop.render_ctx, loop.draw_step, loop.timer_draw_ms);
+    loop.board_data.mark_all_read();
+  }
+}
+
+void main_loop_shutdown(SharedMainLoopState &loop)
+{
+  if (!loop.initialized)
+    return;
+
   board_shutdown();
+  loop.initialized = false;
+}
+}
+
+extern "C" void main_cpp()
+{
+  main_loop_init(g_main_loop);
+
+#if !defined(GAUGE_HOST_BACKEND_EMSCRIPTEN)
+  while (!g_main_loop.exit_requested)
+  {
+    main_loop_step(g_main_loop);
+  }
+
+  main_loop_shutdown(g_main_loop);
+#endif
+}
+
+extern "C" void main_cpp_step()
+{
+  main_loop_step(g_main_loop);
+#if defined(GAUGE_HOST_BACKEND_EMSCRIPTEN)
+  sdl_driver_poll();
+#endif
+}
+
+extern "C" void main_cpp_shutdown()
+{
+  main_loop_shutdown(g_main_loop);
 }

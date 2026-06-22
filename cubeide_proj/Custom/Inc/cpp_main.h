@@ -18,9 +18,13 @@
 extern "C"
 {
 void main_cpp();
+void main_cpp_step();
+void main_cpp_shutdown();
 }
 #else
 void main_cpp(void);
+void main_cpp_step(void);
+void main_cpp_shutdown(void);
 #endif
 
 /*

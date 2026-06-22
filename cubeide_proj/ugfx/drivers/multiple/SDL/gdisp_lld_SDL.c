@@ -214,119 +214,148 @@ sem_t *sem_open(const char *name, int oflag, ...) {
 }
 #endif
 
-static int SDL_loop (void) {
-	SDL_Window   *window = SDL_CreateWindow("uGFX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, GDISP_SCREEN_WIDTH, GDISP_SCREEN_HEIGHT, 0);
-	SDL_Renderer *render = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-	SDL_Texture  *texture = SDL_CreateTexture(render, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, GDISP_SCREEN_WIDTH, GDISP_SCREEN_HEIGHT);
-	int done = 0;
+static SDL_Window   *sdl_window = 0;
+static SDL_Renderer *sdl_render = 0;
+static SDL_Texture  *sdl_texture = 0;
+static int sdl_done = 0;
 
-	while  (!done) {
-		
-		if (context->need_redraw) {
-			context->need_redraw = 0;
-			SDL_Rect r;
-			r.x = context->minx;
-			r.y = context->miny;
-			r.w = context->maxx - context->minx + 1;
-			r.h = context->maxy - context->miny + 1;
-			context->minx = GDISP_SCREEN_WIDTH;
-			context->miny = GDISP_SCREEN_HEIGHT;
-			context->maxx = 0;
-			context->maxy = 0;
-			
-			SDL_UpdateTexture(texture, &r, context->framebuf+r.y*GDISP_SCREEN_WIDTH+r.x, GDISP_SCREEN_WIDTH*sizeof(gU32));
-			SDL_RenderCopy(render, texture, 0, 0);
-			SDL_RenderPresent(render);
-		}
-		SDL_Event event;
-		for (; SDL_PollEvent(&event); ){
-			switch(event.type){
-#if GINPUT_NEED_MOUSE
-#if 0
-			// On osx event contains coordinates of touchpad. We can't use them, we screen coordinates. 
-			case SDL_FINGERMOTION: 
-			case SDL_FINGERDOWN:
-			case SDL_FINGERUP:
-				context->mousex = (event.tfinger.x<1.0)?event.tfinger.x*GDISP_SCREEN_WIDTH:event.tfinger.x;
-				context->mousey = (event.tfinger.y<1.0)?event.tfinger.y*GDISP_SCREEN_HEIGHT:event.tfinger.y;
-				context->buttons = (event.type != SDL_FINGERUP)?GINPUT_MOUSE_BTN_LEFT:0;
-				sem_post (input_event);
-				break;
-#endif
-			case SDL_MOUSEBUTTONUP:
-			case SDL_MOUSEBUTTONDOWN:
-				context->mousex = event.button.x;
-				context->mousey = event.button.y;
-				context->buttons = (event.type ==SDL_MOUSEBUTTONDOWN)?GINPUT_MOUSE_BTN_LEFT:0;
-				sem_post (input_event);
-				break;
-			case SDL_MOUSEMOTION:
-				if (event.motion.state & SDL_BUTTON_LMASK) {
-					context->mousex = event.motion.x;
-					context->mousey = event.motion.y;
-					context->buttons = GINPUT_MOUSE_BTN_LEFT;
-					sem_post (input_event);
-				}
-				break;
-#endif
-#if GINPUT_NEED_KEYBOARD
-			case SDL_TEXTINPUT: {
-				int i;
-				sem_wait (ctx_mutex);
-				for (i=0; context->keypos < sizeof  (context->keybuffer) && event.text.text[i]; ++i) {
-					context->keybuffer[context->keypos].key = event.text.text[i];
-					context->keybuffer[context->keypos++].keystate = 0;
-				}
-				sem_post (ctx_mutex);
-				sem_post (input_event);
-				break;
-			
-			}
-			case SDL_KEYDOWN: 
-			case SDL_KEYUP: {
-				SDL_Keycode k_sdl = event.key.keysym.sym;
-				gU8 k_ugfx = 0;
-				gU32 s_ugfx = (event.type==SDL_KEYDOWN)?0:GKEYSTATE_KEYUP;
-				int i;
-				if (!(k_sdl & ~0x7f) && (k_sdl <32 || k_sdl == 127)) {
-					k_ugfx = k_sdl;
-				}
-				else
-					for (i = 0; SDL_keymap[i].k_sdl; ++i)
-						if (SDL_keymap[i].k_sdl == k_sdl) {
-							k_ugfx = SDL_keymap[i].k_ugfx;
-							s_ugfx |= GKEYSTATE_SPECIAL;
-							break;
-						}
-				for (i = 0; SDL_modmap[i].s_sdl; ++i)
-					if (SDL_modmap[i].s_sdl & event.key.keysym.mod)
-						s_ugfx |= SDL_modmap[i].s_ugfx;
-				sem_wait (ctx_mutex);
-				if (k_ugfx && context->keypos+1 < (int)sizeof  (context->keybuffer)) {
-					context->keybuffer[context->keypos].key = k_ugfx;
-					context->keybuffer[context->keypos++].keystate = s_ugfx;
-				}
-				sem_post (ctx_mutex);
-				sem_post (input_event);
-				break;
-			}
-#endif
-			case SDL_QUIT:
-				done = 1;
-				break;
-			default:
-				break;
-			}
-		}
-		SDL_Delay(40);
-	}
-	
-	SDL_DestroyTexture (texture);
-	SDL_DestroyRenderer (render);
-	SDL_DestroyWindow (window);
-    return 0;
+static int SDL_loop_init(void) {
+	sdl_window = SDL_CreateWindow("uGFX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, GDISP_SCREEN_WIDTH, GDISP_SCREEN_HEIGHT, 0);
+	sdl_render = SDL_CreateRenderer(sdl_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+	sdl_texture = SDL_CreateTexture(sdl_render, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, GDISP_SCREEN_WIDTH, GDISP_SCREEN_HEIGHT);
+	sdl_done = 0;
+	return sdl_window && sdl_render && sdl_texture ? 0 : 1;
 }
 
+static void SDL_loop_shutdown(void) {
+	if (sdl_texture)
+		SDL_DestroyTexture(sdl_texture);
+	if (sdl_render)
+		SDL_DestroyRenderer(sdl_render);
+	if (sdl_window)
+		SDL_DestroyWindow(sdl_window);
+	sdl_texture = 0;
+	sdl_render = 0;
+	sdl_window = 0;
+}
+
+static void SDL_loop_step(void) {
+	if (sdl_done)
+		return;
+
+	if (context->need_redraw) {
+		context->need_redraw = 0;
+		SDL_Rect r;
+		r.x = context->minx;
+		r.y = context->miny;
+		r.w = context->maxx - context->minx + 1;
+		r.h = context->maxy - context->miny + 1;
+		context->minx = GDISP_SCREEN_WIDTH;
+		context->miny = GDISP_SCREEN_HEIGHT;
+		context->maxx = 0;
+		context->maxy = 0;
+
+		SDL_UpdateTexture(sdl_texture, &r, context->framebuf+r.y*GDISP_SCREEN_WIDTH+r.x, GDISP_SCREEN_WIDTH*sizeof(gU32));
+		SDL_RenderCopy(sdl_render, sdl_texture, 0, 0);
+		SDL_RenderPresent(sdl_render);
+	}
+	SDL_Event event;
+	for (; SDL_PollEvent(&event); ){
+		switch(event.type){
+#if GINPUT_NEED_MOUSE
+#if 0
+		// On osx event contains coordinates of touchpad. We can't use them, we screen coordinates.
+		case SDL_FINGERMOTION:
+		case SDL_FINGERDOWN:
+		case SDL_FINGERUP:
+			context->mousex = (event.tfinger.x<1.0)?event.tfinger.x*GDISP_SCREEN_WIDTH:event.tfinger.x;
+			context->mousey = (event.tfinger.y<1.0)?event.tfinger.y*GDISP_SCREEN_HEIGHT:event.tfinger.y;
+			context->buttons = (event.type != SDL_FINGERUP)?GINPUT_MOUSE_BTN_LEFT:0;
+			sem_post (input_event);
+			break;
+#endif
+		case SDL_MOUSEBUTTONUP:
+		case SDL_MOUSEBUTTONDOWN:
+			context->mousex = event.button.x;
+			context->mousey = event.button.y;
+			context->buttons = (event.type ==SDL_MOUSEBUTTONDOWN)?GINPUT_MOUSE_BTN_LEFT:0;
+			sem_post (input_event);
+			break;
+		case SDL_MOUSEMOTION:
+			if (event.motion.state & SDL_BUTTON_LMASK) {
+				context->mousex = event.motion.x;
+				context->mousey = event.motion.y;
+				context->buttons = GINPUT_MOUSE_BTN_LEFT;
+				sem_post (input_event);
+			}
+			break;
+#endif
+#if GINPUT_NEED_KEYBOARD
+		case SDL_TEXTINPUT: {
+			int i;
+			sem_wait (ctx_mutex);
+			for (i=0; context->keypos < sizeof  (context->keybuffer) && event.text.text[i]; ++i) {
+				context->keybuffer[context->keypos].key = event.text.text[i];
+				context->keybuffer[context->keypos++].keystate = 0;
+			}
+			sem_post (ctx_mutex);
+			sem_post (input_event);
+			break;
+		}
+		case SDL_KEYDOWN:
+		case SDL_KEYUP: {
+			SDL_Keycode k_sdl = event.key.keysym.sym;
+			gU8 k_ugfx = 0;
+			gU32 s_ugfx = (event.type==SDL_KEYDOWN)?0:GKEYSTATE_KEYUP;
+			int i;
+			if (!(k_sdl & ~0x7f) && (k_sdl <32 || k_sdl == 127)) {
+				k_ugfx = k_sdl;
+			}
+			else
+				for (i = 0; SDL_keymap[i].k_sdl; ++i)
+					if (SDL_keymap[i].k_sdl == k_sdl) {
+						k_ugfx = SDL_keymap[i].k_ugfx;
+						s_ugfx |= GKEYSTATE_SPECIAL;
+						break;
+					}
+			for (i = 0; SDL_modmap[i].s_sdl; ++i)
+				if (SDL_modmap[i].s_sdl & event.key.keysym.mod)
+					s_ugfx |= SDL_modmap[i].s_ugfx;
+			sem_wait (ctx_mutex);
+			if (k_ugfx && context->keypos+1 < (int)sizeof  (context->keybuffer)) {
+				context->keybuffer[context->keypos].key = k_ugfx;
+				context->keybuffer[context->keypos++].keystate = s_ugfx;
+			}
+			sem_post (ctx_mutex);
+			sem_post (input_event);
+			break;
+		}
+#endif
+		case SDL_QUIT:
+			sdl_done = 1;
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+static int SDL_loop (void) {
+	if (SDL_loop_init() != 0)
+		return 1;
+	while  (!sdl_done) {
+		SDL_loop_step();
+		SDL_Delay(40);
+	}
+	SDL_loop_shutdown();
+	return 0;
+}
+
+#ifdef __EMSCRIPTEN__
+void sdl_driver_poll(void) {
+	SDL_loop_step();
+}
+#endif
 static void *SDL_input_event_loop (void *arg) {
 	(void)arg;
 	for (;;) {
@@ -370,17 +399,24 @@ void sdl_driver_init (void) {
 		perror("Failed init semaphore");
 		exit(1);
 	}
+	memset (context,0,sizeof (*context));
+	context->need_redraw = 1;
+	context->maxx = GDISP_SCREEN_WIDTH-1;
+	context->maxy = GDISP_SCREEN_HEIGHT-1;
+	context->minx = 0;
+	context->miny = 0;
+
+#ifdef __EMSCRIPTEN__
+	if (SDL_loop_init() != 0) {
+		fprintf(stderr, "Unable to initialize SDL loop: %s\n", SDL_GetError());
+		exit(1);
+	}
+#else
 	pid_t gui_pid = fork ();
 
 	if (gui_pid) {
 		// Main proccess. It's for host UI and SDL
 		int status;
-		memset (context,0,sizeof (*context));
-		context->need_redraw = 1;
-		context->maxx = GDISP_SCREEN_WIDTH-1;
-		context->maxy = GDISP_SCREEN_HEIGHT-1;
-		context->minx = 0;
-		context->miny = 0;
 		SDL_loop ();
 		// cleanup
 		kill(gui_pid,SIGKILL);
@@ -399,6 +435,7 @@ void sdl_driver_init (void) {
 	pthread_create(&thread, NULL, SDL_input_event_loop, NULL);
 	pthread_detach (thread);
 	// Continue execution of ugfx UI in forked process
+#endif
 }
 
 
