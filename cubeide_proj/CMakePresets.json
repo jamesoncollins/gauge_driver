@@ -29,6 +29,18 @@
       }
     },
     {
+      "name": "base-ucrt64",
+      "displayName": "Base x86 MSYS2 UCRT64 build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CUSTOM_PLATFORM": "x86",
+        "CMAKE_C_COMPILER": "C:/msys64/ucrt64/bin/gcc.exe",
+        "CMAKE_CXX_COMPILER": "C:/msys64/ucrt64/bin/g++.exe"
+      }
+    },
+    {
       "name": "base-web",
       "displayName": "Base Emscripten web build",
       "generator": "Ninja",
@@ -63,6 +75,14 @@
       }
     },
     {
+      "name": "x86-ucrt-debug",
+      "displayName": "Debug - x86 MSYS2 UCRT64",
+      "inherits": "base-ucrt64",
+      "cacheVariables": {
+        "BUILD_TARGET": "sim_3000gt_soft"
+      }
+    },
+    {
       "name": "web-debug",
       "displayName": "Debug - Web",
       "inherits": "base-web",
@@ -83,6 +103,11 @@
     {
       "name": "x86-debug",
       "configurePreset": "x86-debug",
+      "jobs": 8
+    },
+    {
+      "name": "x86-ucrt-debug",
+      "configurePreset": "x86-ucrt-debug",
       "jobs": 8
     },
     {
