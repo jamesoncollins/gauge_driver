@@ -407,8 +407,8 @@ endif()
 if(HOST_BACKEND STREQUAL "emscripten")
   add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      ${CMAKE_SOURCE_DIR}/web/smoke.html
-      ${CMAKE_BINARY_DIR}/smoke.html
+      ${CMAKE_SOURCE_DIR}/web/index.html
+      ${CMAKE_BINARY_DIR}/index.html
   )
 endif()
 
