@@ -4,27 +4,39 @@
 
 List configured presets:
 
-```powershell
+```sh
 cmake --list-presets
+```
+
+Install or update the MSYS2 UCRT64 build tools from the package manifest:
+
+```sh
+./scripts/setup-msys2-ucrt.sh
+```
+
+Use the UCRT64 tool environment in the current shell:
+
+```sh
+. ./scripts/env-msys2-ucrt.sh
 ```
 
 Build the recommended native simulator:
 
-```powershell
-.\scripts\build-preset.ps1 -Preset x86-ucrt-debug
+```sh
+./scripts/build-preset.sh x86-ucrt-debug
 ```
 
 Build hardware display variants:
 
-```powershell
-.\scripts\build-preset.ps1 -Preset s6e63d6-debug
-.\scripts\build-preset.ps1 -Preset st7789vi-debug
+```sh
+./scripts/build-preset.sh s6e63d6-debug
+./scripts/build-preset.sh st7789vi-debug
 ```
 
 Build the web simulator:
 
-```powershell
-.\scripts\build-preset.ps1 -Preset web-debug
+```sh
+./scripts/build-preset.sh web-debug
 ```
 
 ## Working Rules
@@ -35,6 +47,7 @@ Build the web simulator:
 - Update `Custom/CONFIGURATION.md` when adding or changing build axes.
 - Update `architecture.md` when changing ownership boundaries or startup flow.
 - Update `build-environments.md` when adding build prerequisites or presets.
+- Update `env/msys2-ucrt-packages.txt` when MSYS2 package dependencies change.
 
 ## Adding a Target
 
@@ -47,7 +60,7 @@ Build the web simulator:
 
 ## Debugging Build Problems
 
-- If CMake cannot find `arm-none-eabi-gcc`, set `ARM_GCC_DIR` to the ARM GCC `bin` directory.
-- If CMake cannot find UCRT64 GCC, run `scripts/setup-msys2-ucrt.ps1` or check `C:\msys64\ucrt64\bin`.
-- If CMake cannot find Emscripten, activate emsdk in the same shell or set `EMSDK`.
+- If CMake cannot find UCRT64 GCC, run `scripts/setup-msys2-ucrt.sh`, then source `scripts/env-msys2-ucrt.sh` from MSYS2 UCRT64.
+- If CMake cannot find `arm-none-eabi-gcc`, install the MSYS2 UCRT64 package manifest and check `command -v arm-none-eabi-gcc`.
+- If CMake cannot find Emscripten, install the MSYS2 UCRT64 package manifest and check `command -v emcc`.
 - If a simulator build starts compiling STM32-generated trees, check `CUSTOM_PLATFORM`, `PLATFORM_KIND`, and `BUILD_TARGET`.
