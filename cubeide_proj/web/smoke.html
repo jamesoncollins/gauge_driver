@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gauge Driver Web Smoke</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --header-height: 40px;
+      --log-height: 88px;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: #111;
+      color: #ddd;
+      font-family: system-ui, sans-serif;
+    }
+
+    #wrap {
+      display: grid;
+      grid-template-rows: var(--header-height) minmax(0, 1fr) var(--log-height);
+      min-height: 100%;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      background: #202020;
+    }
+
+    #stage {
+      display: grid;
+      min-height: 0;
+      place-items: center;
+      padding: 12px;
+    }
+
+    canvas {
+      display: block;
+      width: min(100%, calc((100vh - var(--header-height) - var(--log-height) - 24px) * 4 / 3));
+      height: auto;
+      aspect-ratio: 4 / 3;
+      image-rendering: pixelated;
+      background: #000;
+    }
+
+    pre {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 8px;
+      overflow: auto;
+      background: #000;
+      color: #8f8;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <header>Gauge Driver Web Smoke</header>
+    <div id="stage">
+      <canvas id="canvas" width="640" height="480" tabindex="0"></canvas>
+    </div>
+    <pre id="log"></pre>
+  </div>
+  <script>
+    const log = document.getElementById('log');
+    const write = (text) => {
+      log.textContent += text + '\n';
+      log.scrollTop = log.scrollHeight;
+    };
+
+    window.Module = {
+      canvas: document.getElementById('canvas'),
+      print: write,
+      printErr: (text) => {
+        console.error(text);
+        write('ERR: ' + text);
+      },
+      onRuntimeInitialized: () => write('runtime initialized')
+    };
+  </script>
+  <script src="gauge_driver.js"></script>
+</body>
+</html>

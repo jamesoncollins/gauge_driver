@@ -404,6 +404,14 @@ elseif(HOST_BACKEND STREQUAL "win32")
   target_link_libraries(${PROJECT_NAME} gdi32)
 endif()
 
+if(HOST_BACKEND STREQUAL "emscripten")
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      ${CMAKE_SOURCE_DIR}/web/smoke.html
+      ${CMAKE_BINARY_DIR}/smoke.html
+  )
+endif()
+
 # Post-build artifacts to mirror CubeIDE: .list, .hex, .bin, and size
 if(CUSTOM_PLATFORM STREQUAL "arm")
   add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
