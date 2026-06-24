@@ -349,6 +349,10 @@ add_executable(${PROJECT_NAME}
   ${UGFX_DRIVER_SRCS}
 )
 
+if(CUSTOM_PLATFORM STREQUAL "arm")
+  set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".elf")
+endif()
+
 # ---------------------------------------------------------------------------
 # Includes (mirrors CubeIDE .cproject entries)
 # ---------------------------------------------------------------------------
