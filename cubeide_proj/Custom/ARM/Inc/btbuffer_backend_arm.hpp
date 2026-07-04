@@ -6,7 +6,7 @@
 #endif
 
 #include "platform_api.h"
-#include "../BTbuffer-lib/BTBufferBackend.hpp"
+#include "../BTBuffer-lib/BTBufferBackend.hpp"
 
 class ArmBTBufferBackend : public BTBufferBackend
 {

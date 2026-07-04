@@ -22,7 +22,7 @@ extern "C" {
 }
 #include "../PI4IOE5V6416/PI4IOE5V6416.hpp"
 #include "../SwitecX12-lib/SwitecX12.hpp"
-#include "../BTbuffer-lib/BTBuffer.hpp"
+#include "../BTBuffer-lib/BTBuffer.hpp"
 #include "btbuffer_backend_arm.hpp"
 extern "C" {
 #include "../MCP4725-lib/MCP4725.h"

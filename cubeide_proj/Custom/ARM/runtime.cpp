@@ -30,7 +30,7 @@ extern void setAutoClear(bool);
 #include "../../res/brake.c"
 #include "../PI4IOE5V6416/PI4IOE5V6416.hpp"
 #include "../ECUK-lib/MUTII.hpp"
-#include "../BTbuffer-lib/BTBuffer.hpp"
+#include "../BTBuffer-lib/BTBuffer.hpp"
 #ifdef SIM_GAUGE_SIGNALS
 #include "tachTest.hpp"
 #endif

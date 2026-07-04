@@ -1,7 +1,7 @@
 #ifndef ECUK_LIB_ECUK_HPP_
 #define ECUK_LIB_ECUK_HPP_
 
-#include "../BTbuffer-lib/BTBuffer.hpp"
+#include "../BTBuffer-lib/BTBuffer.hpp"
 
 
 class ECUK
