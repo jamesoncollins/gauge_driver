@@ -9,6 +9,11 @@ BTBuffer *BTBuffer::BTBuffer_ = nullptr;
 
 BTBuffer::BTBuffer(BTBufferBackend *backend) : backend_(backend) {}
 
+bool BTBuffer::IsCreated()
+{
+  return BTBuffer_ != nullptr;
+}
+
 BTBuffer* BTBuffer::GetInstance ()
 {
   if (BTBuffer_ == nullptr)

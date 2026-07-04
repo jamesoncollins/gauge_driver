@@ -4,6 +4,7 @@
 #include "main_shared.h"
 #include "build_config.hpp"
 #include "platform_services.hpp"
+#include "telemetry.hpp"
 #include "gfx.h"
 #include "ugfx_widgets.h"
 #include "../ECUK-lib/ECUK.hpp"
@@ -344,6 +345,7 @@ void main_loop_step(SharedMainLoopState &loop)
   const int prev_rpm_mode = loop.state.rpm_mode;
   loop.state = runtime_state_from_board_data(loop.board_data);
   loop.state.rpm_mode = compute_rpm_mode_shared(loop.state.rpm, prev_rpm_mode);
+  (void)telemetry_publish_board_data(loop.board_data, HAL_GetTick());
 
   if (board_check_exit())
   {

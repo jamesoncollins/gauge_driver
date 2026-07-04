@@ -410,20 +410,56 @@
   Reassembler.prototype.reset = function(){ this.buf=new Uint8Array(0); };
 
   // ===== Decoder =====
+  function tlvValue(dv, off, type, len){
+    if(type===1 && len===4) return dv.getUint32(off,true);
+    if(type===2 && len===4) return dv.getFloat32(off,true);
+    if(type===3 && len===1) return dv.getUint8(off)!==0;
+    if(type===4 && len===4) return dv.getInt32(off,true);
+    return null;
+  }
+  function applyDashboardField(obj, fieldId, value){
+    switch(fieldId){
+      case 1: obj.sequence=value; break;
+      case 2: obj.rpm=value; break;
+      case 3: obj.speed=value; obj.speed_mph=value; break;
+      case 4: obj.loopCnt=value; obj.loop_count=value; break;
+      case 5: obj.loopPeriod_ms=value; obj.loop_period_ms=value; break;
+      case 6: obj.worstLoop_ms=value; obj.worst_loop_period_ms=value; break;
+      default:
+        if(!obj.unknown_fields) obj.unknown_fields={};
+        obj.unknown_fields[fieldId]=value;
+        break;
+    }
+  }
+  function decodeDashboardTlv(dv, obj){
+    obj.packet='dashboard';
+    obj.fields={};
+    for(var off=8; off+3<=dv.byteLength; ){
+      var fieldId=dv.getUint8(off++);
+      var type=dv.getUint8(off++);
+      var len=dv.getUint8(off++);
+      if(fieldId===0 && type===0 && len===0) break;
+      if(off+len>dv.byteLength){ obj.truncated=true; break; }
+      var value=tlvValue(dv, off, type, len);
+      obj.fields[fieldId]={type:type,len:len,value:value};
+      if(value!==null) applyDashboardField(obj, fieldId, value);
+      off += len;
+    }
+  }
   function decodeFrame(payload){
     var dv=new DataView(payload.buffer,payload.byteOffset,payload.byteLength);
     if(payload.byteLength<8) return {len:payload.length};
     var id1=dv.getUint16(0,true); var id2=dv.getUint16(2,true); if(id2===0xFFFF) id2=-1; var tick=dv.getUint32(4,true);
     var words=[]; for(var off=8; off+4<=payload.byteLength; off+=4){ words.push(dv.getUint32(off,true)); }
     var obj={id1:id1,id2:id2,tick:tick,wordsCount:words.length};
-    if(id1===0 && id2===0 && words.length>=6){ obj.loopCnt=words[0]; obj.loopPeriod_ms=words[1]; obj.worstLoop_ms=words[2]; obj.speed=words[4]; obj.rpm=words[5]; }
-    if(id1===1 && id2===-1 && words.length>=1){ obj.ecu_req=words[0]; }
-    if(typeof obj.rpm==='number'){ var tr=$('#tileRpm'); if(tr) tr.textContent=String(obj.rpm); setNeedle('rpmNeedle', obj.rpm, 0, 8000); }
-    if(typeof obj.speed==='number'){ var ts=$('#tileSpeed'); if(ts) ts.textContent=String(obj.speed); setNeedle('speedNeedle', obj.speed, 0, 160); }
+    if(id1===1 && id2===1){ decodeDashboardTlv(dv,obj); }
+    else if(id1===0 && id2===0 && words.length>=6){ obj.packet='dashboard_legacy'; obj.loopCnt=words[0]; obj.loopPeriod_ms=words[1]; obj.worstLoop_ms=words[2]; obj.speed=words[4]; obj.rpm=words[5]; }
+    else if(id1===1 && id2===-1 && words.length>=1){ obj.ecu_req=words[0]; }
+    if(typeof obj.rpm==='number'){ var tr=$('#tileRpm'); if(tr) tr.textContent=String(Math.round(obj.rpm)); setNeedle('rpmNeedle', obj.rpm, 0, 8000); }
+    if(typeof obj.speed==='number'){ var ts=$('#tileSpeed'); if(ts) ts.textContent=String(Math.round(obj.speed)); setNeedle('speedNeedle', obj.speed, 0, 160); }
     if(typeof obj.loopPeriod_ms==='number'){ var tl=$('#tileLoop'); if(tl) tl.textContent=String(obj.loopPeriod_ms); var tw=$('#tileWorst'); if(tw && typeof obj.worstLoop_ms==='number') tw.textContent='Worst: '+obj.worstLoop_ms; }
     return obj;
   }
-
   // ===== OTA upload helpers =====
   function setOtaStatus(txt){
     var el=$('#otaStatusTxt'); if(el) el.textContent=txt;

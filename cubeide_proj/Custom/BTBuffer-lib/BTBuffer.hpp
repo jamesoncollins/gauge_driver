@@ -27,6 +27,7 @@ public:
 
   BTBuffer (BTBuffer &other) = delete;
   void operator= (const BTBuffer&) = delete;
+  static bool IsCreated();
   static BTBuffer* GetInstance ();
   static void CreateInstance(BTBufferBackend *backend);
   static bool pushBuffer( uint16_t id1, uint16_t id2, uint32_t timestamp, const uint8_t *data, int datalen );
