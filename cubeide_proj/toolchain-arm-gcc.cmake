@@ -42,3 +42,20 @@ set(CMAKE_AR           ${ARM_AR})
 set(CMAKE_OBJCOPY      ${ARM_OBJCOPY})
 set(CMAKE_OBJDUMP      ${ARM_OBJDUMP})
 set(CMAKE_SIZE         ${ARM_SIZE})
+
+# CMake's compiler-id probes build tiny hosted executables by default. Bare
+# metal arm-none-eabi GCC cannot link those without project-specific specs and
+# syscall stubs, so declare the known compiler family up front and keep later
+# try_compile checks in static-library mode.
+set(CMAKE_C_COMPILER_ID_RUN TRUE)
+set(CMAKE_C_COMPILER_ID GNU)
+set(CMAKE_CXX_COMPILER_ID_RUN TRUE)
+set(CMAKE_CXX_COMPILER_ID GNU)
+set(CMAKE_ASM_COMPILER_ID_RUN TRUE)
+set(CMAKE_ASM_COMPILER_ID GNU)
+set(CMAKE_C_COMPILER_FORCED TRUE)
+set(CMAKE_CXX_COMPILER_FORCED TRUE)
+set(CMAKE_ASM_COMPILER_FORCED TRUE)
+set(CMAKE_C_COMPILER_WORKS TRUE CACHE INTERNAL "")
+set(CMAKE_CXX_COMPILER_WORKS TRUE CACHE INTERNAL "")
+set(CMAKE_ASM_COMPILER_WORKS TRUE CACHE INTERNAL "")
