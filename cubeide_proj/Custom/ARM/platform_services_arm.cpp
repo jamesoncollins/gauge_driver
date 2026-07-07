@@ -255,18 +255,26 @@ void platform_drain_bt_budget()
 
 void platform_update_inertial()
 {
-  if (acc_int_rdy)
-  {
-    acc_int_rdy = false;
-    if (BMI088_ReadAccelerometer(&imu) == 0)
-      return;
+  static uint32_t last_accel_poll_ms = 0;
+  const uint32_t now = HAL_GetTick();
+  const bool poll_due = ((now - last_accel_poll_ms) >= 20U);
 
-    const float x = imu.acc_mps2[0];
-    const float y = imu.acc_mps2[1];
-    const float z = imu.acc_mps2[2];
+  if (!acc_int_rdy && !poll_due)
+    return;
 
-    g_acceleration_mps2 = {x, y, z};
-  }
+  if (i2cPendingIrq[1] || HAL_I2C_GetState(&hi2c1) != HAL_I2C_STATE_READY)
+    return;
+
+  acc_int_rdy = false;
+  last_accel_poll_ms = now;
+  if (BMI088_ReadAccelerometer(&imu) != 0)
+    return;
+
+  const float x = imu.acc_mps2[0];
+  const float y = imu.acc_mps2[1];
+  const float z = imu.acc_mps2[2];
+
+  g_acceleration_mps2 = {x, y, z};
 }
 
 void platform_maybe_usb_print(uint32_t &timerPrint, int &logBufInd, char *logBuf, int bufLen)
