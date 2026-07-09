@@ -8,9 +8,29 @@
 #include "gfx.h"
 #include "ugfx_widgets.h"
 #include "../ECUK-lib/ECUK.hpp"
+#include "../Quaternion/Quaternion.hpp"
 #if defined(GAUGE_HOST_BACKEND_EMSCRIPTEN)
 extern "C" void sdl_driver_poll(void);
 #endif
+
+namespace
+{
+constexpr float kBoardMountPitchRad = 75.0f * 3.14159265358979323846f / 180.0f;
+constexpr float kGimbalScale = 5.0f;
+
+void compute_gimbal_from_board_acceleration(const BoardAccelerationVector &accel, int &gimbal_x, int &gimbal_y)
+{
+  const float cos_pitch = std::cos(kBoardMountPitchRad);
+  const float sin_pitch = std::sin(kBoardMountPitchRad);
+  float rotated_accel[3] = {accel.x_mps2, accel.y_mps2, accel.z_mps2};
+
+  // Restore the original gimbal path: rotate the mounted board frame by the
+  // known pitch, then map rotated Y/X into widget X/Y.
+  rotateVectorKnownPitch(rotated_accel, cos_pitch, sin_pitch);
+  gimbal_x = (int)(-rotated_accel[1] * kGimbalScale);
+  gimbal_y = (int)(-rotated_accel[0] * kGimbalScale);
+}
+}
 
 void render_ctx_init_shared(SharedRenderCtx &ctx)
 {
@@ -76,14 +96,7 @@ RuntimeState runtime_state_from_board_data(const BoardSharedData &data)
     state.data_mask |= PLATFORM_DATA_GIMBAL;
     if (data.acceleration_mps2.good)
     {
-      constexpr float pitch_rad = 75.0f * 3.14159265358979323846f / 180.0f;
-      constexpr float gimbal_scale = 5.0f;
-      const float cos_pitch = std::cos(pitch_rad);
-      const float sin_pitch = std::sin(pitch_rad);
-      const BoardAccelerationVector &accel = data.acceleration_mps2.value;
-      const float pitch_corrected_y = (accel.y_mps2 * cos_pitch) - (accel.z_mps2 * sin_pitch);
-      state.gimbal_x = (int)(accel.x_mps2 * gimbal_scale);
-      state.gimbal_y = (int)(pitch_corrected_y * gimbal_scale);
+      compute_gimbal_from_board_acceleration(data.acceleration_mps2.value, state.gimbal_x, state.gimbal_y);
     }
   }
   if (data.startup_init_error.supported)

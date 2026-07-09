@@ -330,6 +330,7 @@ else()
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/ugfx_widgets.cpp)
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/telemetry.cpp)
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/BTBuffer-lib/BTBuffer.cpp)
+  list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Quaternion/Quaternion.cpp)
 endif()
 
 # Drop anything under ugfx from the generic glob
