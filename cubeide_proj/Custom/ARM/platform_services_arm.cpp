@@ -62,6 +62,13 @@ static const EcuSignalMap g_ecu_signal_map = {
 
 static BoardAccelerationVector g_acceleration_mps2 = {};
 
+static void arm_reset_motor_driver()
+{
+  HAL_GPIO_WritePin(RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET);
+  HAL_Delay(10);
+  HAL_GPIO_WritePin(RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_SET);
+}
+
 void platform_poll_bulb_inputs(PI4IOE5V6416 &ioexp_screen, uint16_t &bulbVals)
 {
   if (!bulbReadWaiting && !i2cPendingIrq[3])
@@ -190,12 +197,35 @@ static void arm_bringup_hardware(
     g_tach.init(tach_cfg, get_us_32);
   }
 
+  arm_reset_motor_driver();
+  {
+    int step_down = 100;
+    if (!cleanPwr)
+    {
+      gdispClear(GFX_BLACK);
+      gdispFillString((screenWidth >> 1) - 77, (screenHeight >> 1), "RESET", fontLCD, GFX_AMBER, GFX_BLACK);
+      gdispFlush();
+      step_down = x27_steps;
+    }
+
+    for (int i = 0; i < step_down; ++i)
+    {
+      tachX12.stepNow(-1);
+      speedX12.stepNow(-1);
+      DWT_Delay(2000);
+    }
+    tachX12.reset();
+    speedX12.reset();
+    HAL_Delay(200);
+  }
+  arm_reset_motor_driver();
+
   x12[0] = &tachX12;
   x12[1] = &speedX12;
   x12[2] = &odoX12;
-  tachX12.setPosition(0);
-  speedX12.setPosition(0);
-  odoX12.setPosition(0);
+  tachX12.reset();
+  speedX12.reset();
+  odoX12.reset();
   needles_ready = true;
   measure_freq = true;
 
