@@ -248,7 +248,7 @@
 <script>
 (function(){
   'use strict';
-  var UI_VERSION = 'v0.6.4';
+  var UI_VERSION = 'v0.6.6';
 
   // ===== Defaults & Known Services =====
   var Defaults = {
@@ -300,6 +300,31 @@
   function le16(b0,b1){ return (b0 | (b1<<8)); }
   function clamp(v,min,max){ return v<min?min:(v>max?max:v); }
   function setNeedle(id,value,min,max){ var el=document.getElementById(id); if(!el) return; var span=max-min; if(span<=0) return; var v=clamp(value,min,max); var pct=(v-min)/span; var angle=-90 + pct*180; el.setAttribute('transform','rotate('+angle+' 50 50)'); }
+  function firstNumber(){
+    for(var i=0;i<arguments.length;i++){
+      var v=arguments[i];
+      if(typeof v==='number' && isFinite(v)) return v;
+    }
+    return null;
+  }
+  function applyDashboardValues(obj){
+    var rpmVal = firstNumber(obj.rpm, obj.rpm_value);
+    var speedVal = firstNumber(obj.speed, obj.speed_mph, obj.vehicle_speed_mph);
+    if(rpmVal!==null){
+      var tr=$('#tileRpm'); if(tr) tr.textContent=String(Math.round(rpmVal));
+      setNeedle('rpmNeedle', rpmVal, 0, 8000);
+    }
+    if(speedVal!==null){
+      var ts=$('#tileSpeed'); if(ts) ts.textContent=String(Math.round(speedVal));
+      setNeedle('speedNeedle', speedVal, 0, 160);
+      obj.speed = speedVal;
+      obj.speed_mph = speedVal;
+    }
+    if(typeof obj.loopPeriod_ms==='number'){
+      var tl=$('#tileLoop'); if(tl) tl.textContent=String(obj.loopPeriod_ms);
+      var tw=$('#tileWorst'); if(tw && typeof obj.worstLoop_ms==='number') tw.textContent='Worst: '+obj.worstLoop_ms;
+    }
+  }
   function propsStr(ch){ if(!ch||!ch.properties) return 'none'; var p=ch.properties,a=[]; if(p.read)a.push('read'); if(p.write)a.push('write'); if(p.writeWithoutResponse)a.push('wwr'); if(p.notify)a.push('notify'); if(p.indicate)a.push('indicate'); return a.join('|')||'none'; }
   async function ensureNotifications(ch,label){
     if(!ch) return false;
@@ -445,6 +470,7 @@
       if(value!==null) applyDashboardField(obj, fieldId, value);
       off += len;
     }
+    if(!obj.fields[3]) obj.dashboard_missing_speed = true;
   }
   function decodeFrame(payload){
     var dv=new DataView(payload.buffer,payload.byteOffset,payload.byteLength);
@@ -455,9 +481,7 @@
     if(id1===1 && id2===1){ decodeDashboardTlv(dv,obj); }
     else if(id1===0 && id2===0 && words.length>=6){ obj.packet='dashboard_legacy'; obj.loopCnt=words[0]; obj.loopPeriod_ms=words[1]; obj.worstLoop_ms=words[2]; obj.speed=words[4]; obj.rpm=words[5]; }
     else if(id1===1 && id2===-1 && words.length>=1){ obj.ecu_req=words[0]; }
-    if(typeof obj.rpm==='number'){ var tr=$('#tileRpm'); if(tr) tr.textContent=String(Math.round(obj.rpm)); setNeedle('rpmNeedle', obj.rpm, 0, 8000); }
-    if(typeof obj.speed==='number'){ var ts=$('#tileSpeed'); if(ts) ts.textContent=String(Math.round(obj.speed)); setNeedle('speedNeedle', obj.speed, 0, 160); }
-    if(typeof obj.loopPeriod_ms==='number'){ var tl=$('#tileLoop'); if(tl) tl.textContent=String(obj.loopPeriod_ms); var tw=$('#tileWorst'); if(tw && typeof obj.worstLoop_ms==='number') tw.textContent='Worst: '+obj.worstLoop_ms; }
+    applyDashboardValues(obj);
     return obj;
   }
   // ===== OTA upload helpers =====
