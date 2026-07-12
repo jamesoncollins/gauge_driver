@@ -4,6 +4,7 @@ namespace
 {
 constexpr float kMphPerHz = (0.8425872f * 1.015625f);
 constexpr float kRpmPerHz = 20.0f;
+constexpr float kBoardMountPitchDeg = 75.0f;
 constexpr uint8_t kSpeedTicksPerOdoTick = 3U;
 constexpr uint8_t kOdoStepsPerTick = 6U;
 
@@ -47,7 +48,7 @@ DisplayConfig make_display_config()
 VehicleConfig make_vehicle_config()
 {
 #if defined(GAUGE_SIM_PROFILE_3000GT_SOFT) || defined(GAUGE_SIM_PROFILE_NONE)
-  return {VehicleKind::vehicle_3000gt, "3000gt", 5500, 5700, 6500, kMphPerHz, kRpmPerHz, kSpeedTicksPerOdoTick, kOdoStepsPerTick};
+  return {VehicleKind::vehicle_3000gt, "3000gt", 5500, 5700, 6500, kMphPerHz, kRpmPerHz, kBoardMountPitchDeg, kSpeedTicksPerOdoTick, kOdoStepsPerTick};
 #else
 #error "No GAUGE_SIM_PROFILE_* macro defined"
 #endif

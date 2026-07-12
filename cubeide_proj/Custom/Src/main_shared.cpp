@@ -15,13 +15,13 @@ extern "C" void sdl_driver_poll(void);
 
 namespace
 {
-constexpr float kBoardMountPitchRad = 75.0f * 3.14159265358979323846f / 180.0f;
 constexpr float kGimbalScale = 5.0f;
 
 void compute_gimbal_from_board_acceleration(const BoardAccelerationVector &accel, int &gimbal_x, int &gimbal_y)
 {
-  const float cos_pitch = std::cos(kBoardMountPitchRad);
-  const float sin_pitch = std::sin(kBoardMountPitchRad);
+  const float pitch_rad = get_build_config().vehicle.board_mount_pitch_deg * 3.14159265358979323846f / 180.0f;
+  const float cos_pitch = std::cos(pitch_rad);
+  const float sin_pitch = std::sin(pitch_rad);
   float rotated_accel[3] = {accel.x_mps2, accel.y_mps2, accel.z_mps2};
 
   // Restore the original gimbal path: rotate the mounted board frame by the

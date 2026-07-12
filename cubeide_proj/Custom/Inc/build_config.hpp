@@ -59,6 +59,7 @@ struct VehicleConfig
   int rpm_alert_final;
   float mph_per_hz;
   float rpm_per_hz;
+  float board_mount_pitch_deg;
   uint8_t speed_ticks_per_odo_tick;
   uint8_t odo_steps_per_tick;
 };
