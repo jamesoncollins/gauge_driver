@@ -3,6 +3,18 @@
 
 #include "platform_api.h"
 #include "../ECUK-lib/ECUK.hpp"
+struct SimVehicleSnapshot
+{
+  float rpm = 0.0f;
+  float speed_mph = 0.0f;
+  float throttle_pct = 0.0f;
+  float wideband_afr = 14.7f;
+  float map_psi = 0.0f;
+  float knock_count = 0.0f;
+  float battery_v = 13.8f;
+  float acceleration_mps2 = 0.0f;
+  int gear = 0;
+};
 
 class SimECUK : public ECUK
 {
@@ -19,7 +31,7 @@ public:
 
   SimECUK();
   void connect();
-  void simulate(uint32_t now_ms);
+  void simulate(uint32_t now_ms, const SimVehicleSnapshot &vehicle);
 
   ecuParam_t *getParam(int ind) override;
 

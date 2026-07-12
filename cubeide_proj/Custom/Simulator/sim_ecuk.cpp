@@ -1,5 +1,3 @@
-#include <cmath>
-
 #include "sim_ecuk.hpp"
 
 SimECUK::SimECUK() : ECUK(&uart_, &tx_done_, &rx_done_)
@@ -11,15 +9,13 @@ void SimECUK::connect()
   initSuccess = true;
 }
 
-void SimECUK::simulate(uint32_t now_ms)
+void SimECUK::simulate(uint32_t now_ms, const SimVehicleSnapshot &vehicle)
 {
-  const float t = now_ms / 1000.0f;
-
-  params_[PARAM_MAP].val = 8.0f + 14.0f * (0.5f + 0.5f * std::sinf(t * 0.8f));
-  params_[PARAM_WB].val = 11.8f + 2.5f * (0.5f + 0.5f * std::sinf(t * 0.55f));
-  params_[PARAM_TPS].val = 100.0f * (0.5f + 0.5f * std::sinf(t * 1.8f));
-  params_[PARAM_KNOCK].val = 10.0f * (0.5f + 0.5f * std::sinf(t * 2.7f));
-  params_[PARAM_VBAT].val = 13.8f + 0.3f * std::sinf(t * 0.25f);
+  params_[PARAM_MAP].val = vehicle.map_psi;
+  params_[PARAM_WB].val = vehicle.wideband_afr;
+  params_[PARAM_TPS].val = vehicle.throttle_pct;
+  params_[PARAM_KNOCK].val = vehicle.knock_count;
+  params_[PARAM_VBAT].val = vehicle.battery_v;
 
   for (int i = 0; i < PARAM_COUNT; ++i)
   {

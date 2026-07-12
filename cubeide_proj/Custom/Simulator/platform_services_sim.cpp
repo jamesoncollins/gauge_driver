@@ -47,6 +47,111 @@ static BoardWarningLight *g_warn_brake = nullptr;
 static BoardWarningLight *g_warn_4ws = nullptr;
 static BoardWarningLight *g_warn_high_beam = nullptr;
 
+
+static float sim_clampf(float value, float low, float high)
+{
+  if (value < low)
+    return low;
+  if (value > high)
+    return high;
+  return value;
+}
+
+static float sim_lerpf(float from, float to, float amount)
+{
+  return from + (to - from) * sim_clampf(amount, 0.0f, 1.0f);
+}
+
+static float sim_smoothstep(float edge0, float edge1, float value)
+{
+  const float x = sim_clampf((value - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+  return x * x * (3.0f - 2.0f * x);
+}
+
+static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
+{
+  const float t = elapsed_ms / 1000.0f;
+  const float cycle_s = 28.0f;
+  float cycle_t = std::fmod(t, cycle_s);
+  if (cycle_t < 0.0f)
+    cycle_t += cycle_s;
+
+  SimVehicleSnapshot out = {};
+  out.rpm = 900.0f;
+  out.speed_mph = 0.0f;
+  out.throttle_pct = 2.0f;
+  out.wideband_afr = 14.7f;
+  out.map_psi = -8.5f;
+  out.knock_count = 0.0f;
+  out.battery_v = 13.8f + 0.15f * std::sinf(t * 0.37f);
+  out.acceleration_mps2 = 0.0f;
+  out.gear = 0;
+
+  if (cycle_t < 1.2f)
+  {
+    out.rpm = 900.0f + 80.0f * std::sinf(cycle_t * 5.0f);
+    return out;
+  }
+
+  cycle_t -= 1.2f;
+
+  static const float gear_time_s[] = {1.85f, 2.10f, 2.65f, 3.35f, 4.45f, 5.65f};
+  static const float gear_start_rpm[] = {3200.0f, 4050.0f, 4250.0f, 4450.0f, 4650.0f, 4850.0f};
+  static const float mph_per_1000_rpm[] = {5.55f, 8.55f, 12.15f, 16.65f, 21.55f, 27.25f};
+  static const float boost_target_psi[] = {11.0f, 14.0f, 15.5f, 16.2f, 16.5f, 16.5f};
+  const float shift_s = 0.28f;
+  static const float shift_rpm_drop[] = {4050.0f, 4250.0f, 4450.0f, 4650.0f, 4850.0f};
+
+  for (int gear = 0; gear < 6; ++gear)
+  {
+    const float pull_s = gear_time_s[gear];
+    if (cycle_t <= pull_s)
+    {
+      const float pull = sim_clampf(cycle_t / pull_s, 0.0f, 1.0f);
+      const float rpm_curve = sim_smoothstep(0.0f, 1.0f, pull);
+      const float shift_rpm = 6520.0f;
+      out.gear = gear + 1;
+      out.rpm = sim_lerpf(gear_start_rpm[gear], shift_rpm, rpm_curve);
+      out.speed_mph = out.rpm * mph_per_1000_rpm[gear] / 1000.0f;
+      out.throttle_pct = 100.0f;
+
+      const float spool = sim_smoothstep(3300.0f, 5200.0f, out.rpm) * sim_smoothstep(0.05f, 0.45f, pull);
+      out.map_psi = sim_lerpf(-1.0f, boost_target_psi[gear], spool);
+      out.wideband_afr = sim_lerpf(12.6f, 11.2f, spool);
+      out.knock_count = (out.rpm > 5850.0f) ? (0.8f + 1.5f * std::pow((out.rpm - 5850.0f) / 700.0f, 2.0f)) : 0.0f;
+      out.knock_count += 0.35f * (0.5f + 0.5f * std::sinf(t * 18.0f + (float)gear));
+      out.acceleration_mps2 = sim_lerpf(8.8f - (float)gear * 0.95f, 4.4f - (float)gear * 0.35f, pull);
+      return out;
+    }
+
+    cycle_t -= pull_s;
+    if (gear < 5 && cycle_t <= shift_s)
+    {
+      const float shift = sim_clampf(cycle_t / shift_s, 0.0f, 1.0f);
+      out.gear = gear + 1;
+      out.rpm = sim_lerpf(6520.0f, shift_rpm_drop[gear], shift);
+      out.speed_mph = out.rpm * mph_per_1000_rpm[gear] / 1000.0f;
+      out.throttle_pct = sim_lerpf(100.0f, 22.0f, sim_smoothstep(0.0f, 0.45f, shift));
+      out.map_psi = sim_lerpf(boost_target_psi[gear], -2.5f, sim_smoothstep(0.0f, 0.7f, shift));
+      out.wideband_afr = sim_lerpf(11.4f, 13.3f, shift);
+      out.knock_count = 1.0f + 0.8f * (0.5f + 0.5f * std::sinf(t * 28.0f));
+      out.acceleration_mps2 = -2.0f;
+      return out;
+    }
+    cycle_t -= shift_s;
+  }
+
+  const float coast = sim_clampf(cycle_t / 3.0f, 0.0f, 1.0f);
+  out.gear = 6;
+  out.rpm = sim_lerpf(4850.0f, 2500.0f, coast);
+  out.speed_mph = sim_lerpf(132.0f, 70.0f, coast);
+  out.throttle_pct = sim_lerpf(18.0f, 4.0f, coast);
+  out.map_psi = sim_lerpf(-2.0f, -9.0f, coast);
+  out.wideband_afr = sim_lerpf(13.5f, 15.2f, coast);
+  out.knock_count = 0.0f;
+  out.acceleration_mps2 = -3.0f;
+  return out;
+}
 static void sim_bringup_hardware()
 {
   gfxInit();
@@ -109,23 +214,24 @@ static PlatformSample sim_collect_platform_sample()
   sample.loop_period_ms = g_loop_period_ms;
   sample.worst_loop_period_ms = g_worst_loop_period_ms;
   const float t = sample.elapsed_ms / 1000.0f;
+  const SimVehicleSnapshot vehicle = sim_make_wot_pull(sample.elapsed_ms);
 
-  g_signals.rpm.value = 900.0f + 3000.0f * (0.5f + 0.5f * std::sinf(t * 1.2f));
+  g_signals.rpm.value = vehicle.rpm;
   g_signals.rpm.fresh = true;
   g_signals.rpm.valid = true;
   g_signals.rpm.timestamp_ms = now;
 
-  g_signals.speed_mph.value = g_signals.rpm.value / (9000.0f / 180.0f);
+  g_signals.speed_mph.value = vehicle.speed_mph;
   g_signals.speed_mph.fresh = true;
   g_signals.speed_mph.valid = true;
   g_signals.speed_mph.timestamp_ms = now;
 
-  g_signals.board_batt_v.value = 13.5f + 0.2f * std::sinf(t * 0.2f);
+  g_signals.board_batt_v.value = vehicle.battery_v;
   g_signals.board_batt_v.fresh = true;
   g_signals.board_batt_v.valid = true;
   g_signals.board_batt_v.timestamp_ms = now;
 
-  g_sim_ecu.simulate(now);
+  g_sim_ecu.simulate(now, vehicle);
 
   sample.rpm = g_signals.rpm.value;
   sample.speed_mph = g_signals.speed_mph.value;
@@ -165,9 +271,14 @@ static void sim_publish_current_data()
   g_board_data->loop_count.publish(sample.loop_count, now);
   g_board_data->loop_period_ms.publish(sample.loop_period_ms, now);
   g_board_data->worst_loop_period_ms.publish(sample.worst_loop_period_ms, now);
+  const SimVehicleSnapshot vehicle = sim_make_wot_pull(sample.elapsed_ms);
   BoardAccelerationVector accel = {};
-  accel.x_mps2 = 6.3f * std::sinf((sample.elapsed_ms / 1000.0f) * 0.95f);
-  accel.y_mps2 = 24.3f * std::cosf((sample.elapsed_ms / 1000.0f) * 1.15f);
+  const float pitch_rad = get_build_config().vehicle.board_mount_pitch_deg * 3.14159265358979323846f / 180.0f;
+  float pitch_cos = std::cos(pitch_rad);
+  if (std::fabs(pitch_cos) < 0.001f)
+    pitch_cos = 1.0f;
+  accel.x_mps2 = -vehicle.acceleration_mps2 / pitch_cos;
+  accel.y_mps2 = 0.0f;
   accel.z_mps2 = 0.0f;
   g_board_data->acceleration_mps2.publish(accel, now);
   g_board_data->startup_init_error.publish(sample.startup_init_error, now);
