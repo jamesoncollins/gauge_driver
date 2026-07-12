@@ -16,6 +16,8 @@ void sdl_driver_init(void);
 #define GFX_OS_PRE_INIT_FUNCTION sdl_driver_init
 
 #define GFX_USE_GDISP GFXON
+#define GDISP_SCREEN_WIDTH 240
+#define GDISP_SCREEN_HEIGHT 255
 #define GDISP_NEED_VALIDATION GFXON
 #define GDISP_NEED_CLIP GFXON
 #define GDISP_NEED_TEXT GFXON

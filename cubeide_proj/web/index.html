@@ -8,7 +8,6 @@
     :root {
       color-scheme: dark;
       --header-height: 40px;
-      --log-height: 88px;
     }
 
     html,
@@ -22,7 +21,7 @@
 
     #wrap {
       display: grid;
-      grid-template-rows: var(--header-height) minmax(0, 1fr) var(--log-height);
+      grid-template-rows: var(--header-height) minmax(0, 1fr);
       min-height: 100%;
     }
 
@@ -42,22 +41,11 @@
 
     canvas {
       display: block;
-      width: min(100%, calc((100vh - var(--header-height) - var(--log-height) - 24px) * 4 / 3));
+      width: min(100%, 480px, calc((100vh - var(--header-height) - 24px) * 240 / 255));
       height: auto;
-      aspect-ratio: 4 / 3;
+      aspect-ratio: 240 / 255;
       image-rendering: pixelated;
       background: #000;
-    }
-
-    pre {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 8px;
-      overflow: auto;
-      background: #000;
-      color: #8f8;
-      font-size: 12px;
-      line-height: 1.35;
     }
   </style>
 </head>
@@ -65,25 +53,15 @@
   <div id="wrap">
     <header>Gauge Driver Web Smoke</header>
     <div id="stage">
-      <canvas id="canvas" width="640" height="480" tabindex="0"></canvas>
+      <canvas id="canvas" width="240" height="255" tabindex="0"></canvas>
     </div>
-    <pre id="log"></pre>
   </div>
   <script>
-    const log = document.getElementById('log');
-    const write = (text) => {
-      log.textContent += text + '\n';
-      log.scrollTop = log.scrollHeight;
-    };
-
     window.Module = {
       canvas: document.getElementById('canvas'),
-      print: write,
-      printErr: (text) => {
-        console.error(text);
-        write('ERR: ' + text);
-      },
-      onRuntimeInitialized: () => write('runtime initialized')
+      print: console.log,
+      printErr: console.error,
+      onRuntimeInitialized: () => console.log('runtime initialized')
     };
   </script>
   <script src="gauge_driver.js"></script>
