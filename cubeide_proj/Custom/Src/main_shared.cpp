@@ -31,10 +31,10 @@ void compute_gimbal_from_board_acceleration(const BoardAccelerationVector &accel
 void render_ctx_init_shared(SharedRenderCtx &ctx)
 {
   if (ctx.line_plot_tps != nullptr && ctx.line_plot_tps->isInit == false)
-    linePlotInit(ctx.line_plot_tps, ctx.line_plot_tps_data, 20, 200, 50, 100, 0);
+    linePlotInit(ctx.line_plot_tps, ctx.line_plot_tps_data, 20, 200, 30, 100, 0);
 
   if (ctx.line_plot_knock != nullptr && ctx.line_plot_knock->isInit == false)
-    linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 200, 50, 15, GFX_RED);
+    linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 200, 30, 15, GFX_RED);
 }
 
 RuntimeState runtime_state_from_board_data(const BoardSharedData &data)
@@ -114,6 +114,11 @@ int compute_rpm_mode_shared(float rpm, int prev_mode)
   return 0;
 }
 
+static bool ecu_param_is_fresh(const ECUK::ecuParam_t *param, uint32_t now_ms)
+{
+  return param != nullptr && (now_ms - param->lastTime_ms) <= 1000U;
+}
+
 static void render_ecu_section(const RuntimeState &state, font_t fontValue, font_t font20, color_t amber)
 {
   if (!platform_state_has(state.data_mask, PLATFORM_DATA_ECU) || state.ecu == nullptr)
@@ -124,20 +129,47 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
   if (map_p == nullptr || wb_p == nullptr)
     return;
 
-  char map_text[16];
-  char wb_text[16];
-  (void)std::snprintf(map_text, sizeof(map_text), "%2.1f", map_p->val);
-  (void)std::snprintf(wb_text, sizeof(wb_text), "%2.1f", wb_p->val);
-  gdispFillString(20, 20, "WB", font20, amber, GFX_BLACK);
-  gdispFillString(74, 7, wb_text, fontValue, amber, GFX_BLACK);
-  gdispFillString(20, 65, "MAP", font20, amber, GFX_BLACK);
-  gdispFillString(74, 52, map_text, fontValue, amber, GFX_BLACK);
+  static const UgfxMeterBand wb_bands[] = {
+      {10.0f, 12.0f, GFX_GREEN},
+      {12.0f, 15.0f, GFX_AMBER_YEL},
+      {15.0f, 20.0f, GFX_RED},
+  };
+  static const UgfxMeterBand map_bands[] = {
+      {-20.0f, 0.0f, GFX_AMBER_YEL},
+      {0.0f, 15.0f, GFX_GREEN},
+      {15.0f, 20.0f, GFX_RED},
+  };
+  static UgfxTextBarMeter wb_meter;
+  static UgfxTextBarMeter map_meter;
 
-  bool show_error = !state.ecu->isConnected();
+  wb_meter.setBounds(14, 0, 190, 78);
+  wb_meter.setColors(amber, GFX_RED, GFX_BLACK);
+  wb_meter.configure("WB", "AFR", 10.0f, 16.0f, 1, font20, fontValue);
+  wb_meter.setBands(wb_bands, sizeof(wb_bands) / sizeof(wb_bands[0]));
+  wb_meter.setMode(UGFX_TEXT_BAR_METER_SEGMENT);
+  wb_meter.setBarHeight(14);
+  wb_meter.setSegmentSize(12);
+
+  map_meter.setBounds(14, 80, 190, 78);
+  map_meter.setColors(amber, GFX_RED, GFX_BLACK);
+  map_meter.configure("MAP", "PSI", -20.0f, 20.0f, 1, font20, fontValue);
+  map_meter.setBands(map_bands, sizeof(map_bands) / sizeof(map_bands[0]));
+  map_meter.setMode(UGFX_TEXT_BAR_METER_BIPOLAR);
+  map_meter.setReferenceValue(0.0f);
+  map_meter.setBarHeight(12);
+
+  const uint32_t now_ms = HAL_GetTick();
+  const bool ecu_connected = state.ecu->isConnected();
+  wb_meter.setValue(wb_p->val, ecu_connected && ecu_param_is_fresh(wb_p, now_ms));
+  map_meter.setValue(map_p->val, ecu_connected && ecu_param_is_fresh(map_p, now_ms));
+  wb_meter.draw();
+  map_meter.draw();
+
+  bool show_error = !ecu_connected;
   if (state.ecu_flasher != nullptr)
     show_error = flasher_fun(state.ecu_flasher);
-  if (!state.ecu->isConnected() && show_error)
-    gdispFillString(20, 80, "ECU ERR      ", font20, GFX_RED, GFX_BLACK);
+  if (!ecu_connected && show_error)
+    gdispFillString(20, 162, "ECU ERR      ", font20, GFX_RED, GFX_BLACK);
 }
 
 void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
@@ -199,7 +231,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         tps_p->isNew = false;
       }
       if (ctx.line_plot_tps != nullptr)
-        linePlot(10, 149, ctx.line_plot_tps);
+        linePlot(10, 196, ctx.line_plot_tps);
 
       if (ctx.line_plot_knock != nullptr && knock_p != nullptr && knock_p->isNew)
       {
@@ -207,7 +239,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         knock_p->isNew = false;
       }
       if (ctx.line_plot_knock != nullptr)
-        linePlot(10, 149, ctx.line_plot_knock);
+        linePlot(10, 196, ctx.line_plot_knock);
       break;
     }
 
