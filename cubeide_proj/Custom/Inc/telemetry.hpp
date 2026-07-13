@@ -1,7 +1,7 @@
 #ifndef INC_TELEMETRY_HPP_
 #define INC_TELEMETRY_HPP_
 
-#include "cpp_main.h"
+#include "board_model.hpp"
 
 enum TelemetryPacketType : uint16_t
 {

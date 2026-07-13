@@ -12,6 +12,32 @@
 #include "app_model.hpp"
 #include "sim_ecuk.hpp"
 
+struct PlatformSample
+{
+  uint64_t data_mask;
+  float rpm;
+  float speed_mph;
+  uint32_t elapsed_ms;
+  uint32_t loop_count;
+  uint32_t loop_period_ms;
+  uint32_t worst_loop_period_ms;
+  int gimbal_x;
+  int gimbal_y;
+  bool startup_init_error;
+  bool warn_batt;
+  bool warn_brake;
+  bool warn_4ws;
+  bool warn_lamp_on;
+  bool warn_high_beam;
+  ECUK *ecu;
+  int ecu_param_tps_index;
+  int ecu_param_wb_index;
+  int ecu_param_map_index;
+  int ecu_param_knock_index;
+  flasher_t *ecu_flasher;
+  button_e btn;
+};
+
 struct HostPlatformCtx
 {
   color_t amber;

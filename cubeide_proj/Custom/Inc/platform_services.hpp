@@ -1,7 +1,7 @@
 #ifndef INC_PLATFORM_SERVICES_HPP_
 #define INC_PLATFORM_SERVICES_HPP_
 
-#include "cpp_main.h"
+#include "board_model.hpp"
 
 /*
  * Platform lifecycle and data flow.

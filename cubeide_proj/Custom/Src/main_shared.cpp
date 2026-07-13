@@ -9,10 +9,6 @@
 #include "ugfx_widgets.h"
 #include "../ECUK-lib/ECUK.hpp"
 #include "../Quaternion/Quaternion.hpp"
-#if defined(GAUGE_HOST_BACKEND_EMSCRIPTEN)
-extern "C" void sdl_driver_poll(void);
-#endif
-
 namespace
 {
 constexpr float kGimbalScale = 5.0f;
@@ -39,34 +35,6 @@ void render_ctx_init_shared(SharedRenderCtx &ctx)
 
   if (ctx.line_plot_knock != nullptr && ctx.line_plot_knock->isInit == false)
     linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 200, 50, 15, GFX_RED);
-}
-
-RuntimeState runtime_state_from_sample(const PlatformSample &sample)
-{
-  RuntimeState state = {};
-  state.data_mask = sample.data_mask;
-  state.rpm = sample.rpm;
-  state.speed_mph = sample.speed_mph;
-  state.elapsed_ms = sample.elapsed_ms;
-  state.loop_count = sample.loop_count;
-  state.loop_period_ms = sample.loop_period_ms;
-  state.worst_loop_period_ms = sample.worst_loop_period_ms;
-  state.gimbal_x = sample.gimbal_x;
-  state.gimbal_y = sample.gimbal_y;
-  state.startup_init_error = sample.startup_init_error;
-  state.warn_batt = sample.warn_batt;
-  state.warn_brake = sample.warn_brake;
-  state.warn_4ws = sample.warn_4ws;
-  state.warn_lamp_on = sample.warn_lamp_on;
-  state.warn_high_beam = sample.warn_high_beam;
-  state.ecu = sample.ecu;
-  state.ecu_param_tps_index = sample.ecu_param_tps_index;
-  state.ecu_param_wb_index = sample.ecu_param_wb_index;
-  state.ecu_param_map_index = sample.ecu_param_map_index;
-  state.ecu_param_knock_index = sample.ecu_param_knock_index;
-  state.ecu_flasher = sample.ecu_flasher;
-  state.btn = sample.btn;
-  return state;
 }
 
 RuntimeState runtime_state_from_board_data(const BoardSharedData &data)
@@ -400,9 +368,6 @@ extern "C" void main_cpp()
 extern "C" void main_cpp_step()
 {
   main_loop_step(g_main_loop);
-#if defined(GAUGE_HOST_BACKEND_EMSCRIPTEN)
-  sdl_driver_poll();
-#endif
 }
 
 extern "C" void main_cpp_shutdown()
