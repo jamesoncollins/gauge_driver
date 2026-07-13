@@ -12,6 +12,7 @@
 #include "cpp_main.h"
 #include "build_config.hpp"
 #include "runtime_context.hpp"
+#include "arm_runtime.hpp"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 extern "C" {
