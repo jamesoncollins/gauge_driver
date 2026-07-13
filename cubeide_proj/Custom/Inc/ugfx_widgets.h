@@ -10,6 +10,90 @@
 
 
 #include "gfx.h"
+#ifdef __cplusplus
+#include <cstddef>
+#include <cstdint>
+
+class UgfxWidget
+{
+public:
+  virtual ~UgfxWidget() = default;
+
+  void setBounds(coord_t x, coord_t y, coord_t width, coord_t height);
+  void setVisible(bool visible);
+  void setColors(color_t primary, color_t secondary, color_t background);
+
+  virtual void clear();
+  virtual void draw() = 0;
+
+protected:
+  coord_t x_ = 0;
+  coord_t y_ = 0;
+  coord_t width_ = 0;
+  coord_t height_ = 0;
+  bool visible_ = true;
+  color_t primary_ = GFX_AMBER_YEL;
+  color_t secondary_ = GFX_RED;
+  color_t background_ = GFX_BLACK;
+};
+
+struct UgfxMeterBand
+{
+  float min_value;
+  float max_value;
+  color_t color;
+};
+
+typedef enum
+{
+  UGFX_TEXT_BAR_METER_FILLED = 0,
+  UGFX_TEXT_BAR_METER_MARKER,
+  UGFX_TEXT_BAR_METER_BIPOLAR,
+  UGFX_TEXT_BAR_METER_SEGMENT
+} UgfxTextBarMeterMode;
+
+class UgfxTextBarMeter : public UgfxWidget
+{
+public:
+  void configure(const char *label, const char *units,
+                 float min_value, float max_value,
+                 uint8_t decimals,
+                 font_t label_font, font_t value_font);
+  void setBands(const UgfxMeterBand *bands, std::size_t band_count);
+  void setMode(UgfxTextBarMeterMode mode);
+  void setReferenceValue(float reference_value);
+  void setBarHeight(coord_t bar_height);
+  void setSegmentSize(coord_t segment_size);
+  void setValue(float value, bool valid = true);
+  void draw() override;
+
+private:
+  color_t valueColor() const;
+  float clampedValue() const;
+  coord_t valueToBarX(float value, coord_t bar_x, coord_t inner_w) const;
+  void drawBandRail(coord_t bar_x, coord_t bar_y, coord_t inner_w, coord_t inner_h, bool enabled);
+  void drawFilledBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t bar_color);
+  void drawMarkerBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t marker_color);
+  void drawBipolarBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t bar_color);
+  void drawSegmentBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t segment_color);
+
+  const char *label_ = "";
+  const char *units_ = "";
+  float min_value_ = 0.0f;
+  float max_value_ = 1.0f;
+  float value_ = 0.0f;
+  uint8_t decimals_ = 1;
+  font_t label_font_ = nullptr;
+  font_t value_font_ = nullptr;
+  const UgfxMeterBand *bands_ = nullptr;
+  std::size_t band_count_ = 0;
+  UgfxTextBarMeterMode mode_ = UGFX_TEXT_BAR_METER_FILLED;
+  float reference_value_ = 0.0f;
+  coord_t bar_height_ = 7;
+  coord_t segment_size_ = 0;
+  bool valid_ = false;
+};
+#endif
 
 void setColors(uint32_t,uint32_t,uint32_t);
 

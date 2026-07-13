@@ -1,9 +1,9 @@
-
 #include "platform_api.h"
 
 #include "ugfx_widgets.h"
 #include "gfx.h"
 #include "math.h"
+#include <cstdio>
 
 uint32_t COLOR_PRIMARY = GFX_AMBER_YEL;
 uint32_t COLOR_SECONDARY = GFX_RED;
@@ -16,6 +16,267 @@ void setColors(uint32_t primary, uint32_t secondary, uint32_t background)
   COLOR_BG = background;
 }
 
+namespace
+{
+float clamp_float(float value, float min_value, float max_value)
+{
+  if (value < min_value)
+    return min_value;
+  if (value > max_value)
+    return max_value;
+  return value;
+}
+
+coord_t clamp_coord(coord_t value, coord_t min_value, coord_t max_value)
+{
+  if (value < min_value)
+    return min_value;
+  if (value > max_value)
+    return max_value;
+  return value;
+}
+}
+
+void UgfxWidget::setBounds(coord_t x, coord_t y, coord_t width, coord_t height)
+{
+  x_ = x;
+  y_ = y;
+  width_ = width;
+  height_ = height;
+}
+
+void UgfxWidget::setVisible(bool visible)
+{
+  visible_ = visible;
+}
+
+void UgfxWidget::setColors(color_t primary, color_t secondary, color_t background)
+{
+  primary_ = primary;
+  secondary_ = secondary;
+  background_ = background;
+}
+
+void UgfxWidget::clear()
+{
+  if (width_ <= 0 || height_ <= 0)
+    return;
+
+  gdispFillArea(x_, y_, width_, height_, background_);
+}
+
+void UgfxTextBarMeter::configure(const char *label, const char *units,
+                                 float min_value, float max_value,
+                                 uint8_t decimals,
+                                 font_t label_font, font_t value_font)
+{
+  label_ = label != nullptr ? label : "";
+  units_ = units != nullptr ? units : "";
+  min_value_ = min_value;
+  max_value_ = max_value;
+  decimals_ = decimals;
+  label_font_ = label_font;
+  value_font_ = value_font;
+}
+
+void UgfxTextBarMeter::setBands(const UgfxMeterBand *bands, std::size_t band_count)
+{
+  bands_ = bands;
+  band_count_ = band_count;
+}
+
+void UgfxTextBarMeter::setMode(UgfxTextBarMeterMode mode)
+{
+  mode_ = mode;
+}
+
+void UgfxTextBarMeter::setReferenceValue(float reference_value)
+{
+  reference_value_ = reference_value;
+}
+
+void UgfxTextBarMeter::setBarHeight(coord_t bar_height)
+{
+  bar_height_ = bar_height > 2 ? bar_height : 3;
+}
+
+void UgfxTextBarMeter::setSegmentSize(coord_t segment_size)
+{
+  segment_size_ = segment_size > 1 ? segment_size : 0;
+}
+
+void UgfxTextBarMeter::setValue(float value, bool valid)
+{
+  value_ = value;
+  valid_ = valid;
+}
+
+color_t UgfxTextBarMeter::valueColor() const
+{
+  for (std::size_t i = 0; i < band_count_; ++i)
+  {
+    const UgfxMeterBand &band = bands_[i];
+    if (value_ >= band.min_value && value_ <= band.max_value)
+      return band.color;
+  }
+
+  return primary_;
+}
+
+float UgfxTextBarMeter::clampedValue() const
+{
+  if (max_value_ <= min_value_)
+    return min_value_;
+
+  return clamp_float(value_, min_value_, max_value_);
+}
+
+coord_t UgfxTextBarMeter::valueToBarX(float value, coord_t bar_x, coord_t inner_w) const
+{
+  const float range = max_value_ - min_value_;
+  if (range <= 0.0f || inner_w <= 0)
+    return bar_x;
+
+  const float clamped = clamp_float(value, min_value_, max_value_);
+  const float percent = (clamped - min_value_) / range;
+  return bar_x + 1 + clamp_coord((coord_t)round((float)inner_w * percent), 0, inner_w);
+}
+
+void UgfxTextBarMeter::drawBandRail(coord_t bar_x, coord_t bar_y, coord_t inner_w, coord_t inner_h, bool enabled)
+{
+  if (!enabled || bands_ == nullptr || band_count_ == 0)
+  {
+    gdispFillArea(bar_x + 1, bar_y + 1, inner_w, inner_h, GFX_GRAY);
+    return;
+  }
+
+  for (std::size_t i = 0; i < band_count_; ++i)
+  {
+    const coord_t start_x = valueToBarX(bands_[i].min_value, bar_x, inner_w);
+    const coord_t end_x = valueToBarX(bands_[i].max_value, bar_x, inner_w);
+    const coord_t segment_w = end_x > start_x ? end_x - start_x : 1;
+    gdispFillArea(start_x, bar_y + 1, segment_w, inner_h, bands_[i].color);
+  }
+}
+
+void UgfxTextBarMeter::drawFilledBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t bar_color)
+{
+  const coord_t inner_w = bar_w - 2;
+  const coord_t inner_h = bar_h - 2;
+  const coord_t fill_x = valueToBarX(clampedValue(), bar_x, inner_w);
+  const coord_t fill_w = fill_x - (bar_x + 1);
+  if (fill_w > 0)
+    gdispFillArea(bar_x + 1, bar_y + 1, fill_w, inner_h, bar_color);
+}
+
+void UgfxTextBarMeter::drawMarkerBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t marker_color)
+{
+  const coord_t inner_w = bar_w - 2;
+  const coord_t inner_h = bar_h - 2;
+  drawBandRail(bar_x, bar_y, inner_w, inner_h, valid_);
+
+  const coord_t marker_x = valueToBarX(clampedValue(), bar_x, inner_w);
+  const coord_t tick_x = clamp_coord(marker_x - 1, bar_x + 1, bar_x + bar_w - 3);
+  gdispFillArea(tick_x, bar_y - 2, 3, bar_h + 4, marker_color);
+}
+
+void UgfxTextBarMeter::drawBipolarBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t bar_color)
+{
+  const coord_t inner_w = bar_w - 2;
+  const coord_t inner_h = bar_h - 2;
+  const coord_t zero_x = valueToBarX(reference_value_, bar_x, inner_w);
+  const coord_t value_x = valueToBarX(clampedValue(), bar_x, inner_w);
+  const coord_t start_x = value_x < zero_x ? value_x : zero_x;
+  const coord_t end_x = value_x < zero_x ? zero_x : value_x;
+  const coord_t fill_w = end_x - start_x;
+
+  if (fill_w > 0)
+    gdispFillArea(start_x, bar_y + 1, fill_w, inner_h, bar_color);
+
+  gdispFillArea(clamp_coord(zero_x - 1, bar_x + 1, bar_x + bar_w - 2), bar_y - 1, 2, bar_h + 2, GFX_SILVER);
+}
+
+void UgfxTextBarMeter::drawSegmentBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t segment_color)
+{
+  const coord_t inner_w = bar_w - 2;
+  const coord_t inner_h = bar_h - 2;
+  const coord_t segment_size = segment_size_ > 0 ? segment_size_ : inner_h;
+  const coord_t segment_gap = 2;
+  const color_t inactive_color = valid_ ? HTML2COLOR(0x202020) : GFX_GRAY;
+
+  gdispFillArea(bar_x + 1, bar_y + 1, inner_w, inner_h, background_);
+
+  const coord_t segment_y = bar_y + 1 + ((inner_h - segment_size) >> 1);
+  const coord_t draw_y = segment_y < bar_y + 1 ? bar_y + 1 : segment_y;
+  const coord_t max_x = bar_x + bar_w - 1 - segment_size;
+  for (coord_t x = bar_x + 1; x <= max_x; x += segment_size + segment_gap)
+    gdispFillArea(x, draw_y, segment_size, segment_size, inactive_color);
+
+  const coord_t segment_pitch = segment_size + segment_gap;
+  const coord_t segment_count = ((max_x - (bar_x + 1)) / segment_pitch) + 1;
+  if (segment_count <= 0)
+    return;
+
+  const float range = max_value_ - min_value_;
+  const float percent = range > 0.0f ? (clampedValue() - min_value_) / range : 0.0f;
+  const coord_t active_index = clamp_coord((coord_t)round(percent * (float)(segment_count - 1)), 0, segment_count - 1);
+  const coord_t draw_x = (bar_x + 1) + active_index * segment_pitch;
+  gdispFillArea(draw_x, draw_y, segment_size, segment_size, segment_color);
+}
+
+void UgfxTextBarMeter::draw()
+{
+  if (!visible_)
+    return;
+
+  clear();
+
+  if (width_ <= 0 || height_ <= 0)
+    return;
+
+  const color_t text_color = valid_ ? primary_ : GFX_GRAY;
+  const color_t bar_color = valid_ ? valueColor() : GFX_GRAY;
+  const color_t frame_color = valid_ ? primary_ : GFX_GRAY;
+
+  char value_text[16];
+  (void)std::snprintf(value_text, sizeof(value_text), "%.*f", (int)decimals_, value_);
+
+  if (width_ < 6 || height_ < 12)
+    return;
+
+  const coord_t bar_x = x_ + 2;
+  const coord_t bar_w = width_ - 4;
+  const coord_t requested_bar_h = bar_height_ > 2 ? bar_height_ : 3;
+  const coord_t bar_h = requested_bar_h < (height_ - 4) ? requested_bar_h : (height_ - 4);
+  const coord_t bar_y = y_ + 2;
+
+  if (label_font_ != nullptr)
+  {
+    gdispFillString(x_ + 2, bar_y + bar_h + 2, label_, label_font_, text_color, background_);
+    gdispFillString(x_ + 2, bar_y + bar_h + 22, units_, label_font_, text_color, background_);
+  }
+
+  if (value_font_ != nullptr)
+    gdispFillString(x_ + 64, bar_y + bar_h + 4, value_text, value_font_, text_color, background_);
+  gdispDrawBox(bar_x, bar_y, bar_w, bar_h, frame_color);
+
+  switch (mode_)
+  {
+    case UGFX_TEXT_BAR_METER_MARKER:
+      drawMarkerBar(bar_x, bar_y, bar_w, bar_h, bar_color);
+      break;
+    case UGFX_TEXT_BAR_METER_BIPOLAR:
+      drawBipolarBar(bar_x, bar_y, bar_w, bar_h, bar_color);
+      break;
+    case UGFX_TEXT_BAR_METER_SEGMENT:
+      drawSegmentBar(bar_x, bar_y, bar_w, bar_h, bar_color);
+      break;
+    case UGFX_TEXT_BAR_METER_FILLED:
+    default:
+      drawFilledBar(bar_x, bar_y, bar_w, bar_h, bar_color);
+      break;
+  }
+}
 /*
  *
  * TODO: detect GDISP_HARDWARE_FILLS and fill boxes isntead of drawing lines
