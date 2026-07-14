@@ -71,3 +71,9 @@ Examples:
 4. Add compile definitions for target-specific code paths if needed.
 5. Add a matching configure/build preset in `CMakePresets.json`; Emscripten targets use `toolchain-emcc.cmake`.
 6. Build at least one hardware target and one simulator target before merging.
+
+## Simulator render verification
+
+When comparing simulator output to a still reference image, first make sure the reference image is available as an actual local file path. Images pasted into chat are useful for visual discussion, but the agent may not have a stable filesystem path for automated pixel comparison. If a precise comparison is needed, save the reference under a repo-local path such as `docs/reference/` or provide the path explicitly.
+
+For web renders, build `web-debug` and serve `build/web-debug` over HTTP; opening `index.html` directly is not reliable for Emscripten artifacts. In this environment the in-app browser automation can fail before startup with a sandbox metadata error, and Chrome/Edge headless may terminate the Emscripten renderer before writing a screenshot. If that happens, use the visible browser/web page for manual confirmation, or install/use an MSYS2 browser automation package that can capture the canvas reliably.
