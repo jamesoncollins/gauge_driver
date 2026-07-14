@@ -37,6 +37,26 @@ void render_ctx_init_shared(SharedRenderCtx &ctx)
     linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 200, 30, 15, GFX_RED);
 }
 
+#if defined(__GNUC__)
+#define GAUGE_WEAK __attribute__((weak))
+#else
+#define GAUGE_WEAK
+#endif
+
+GAUGE_WEAK void board_render_before(const RuntimeState &state, const BoardSharedData &data, SharedRenderCtx &ctx)
+{
+  (void)state;
+  (void)data;
+  (void)ctx;
+}
+
+GAUGE_WEAK void board_render_after(const RuntimeState &state, const BoardSharedData &data, SharedRenderCtx &ctx)
+{
+  (void)state;
+  (void)data;
+  (void)ctx;
+}
+
 RuntimeState runtime_state_from_board_data(const BoardSharedData &data)
 {
   RuntimeState state = {};
@@ -181,6 +201,9 @@ void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &dr
 void render_step_shared(const RuntimeState &state, const BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
 {
   color_t amber = (ctx.amber_ptr != nullptr) ? *ctx.amber_ptr : GFX_AMBER_YEL;
+  bool flush_after_hooks = false;
+
+  board_render_before(state, data, ctx);
 
   switch (draw_step++)
   {
@@ -314,11 +337,16 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
     }
 
     default:
-      gdispFlush();
+      flush_after_hooks = true;
       draw_step = 0;
       timer_draw_ms = HAL_GetTick();
       break;
   }
+
+  board_render_after(state, data, ctx);
+
+  if (flush_after_hooks)
+    gdispFlush();
 }
 
 namespace

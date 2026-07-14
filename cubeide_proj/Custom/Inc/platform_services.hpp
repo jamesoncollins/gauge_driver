@@ -11,6 +11,8 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
 void board_update();
 bool board_check_exit();
 bool board_display_ready();
+void board_render_before(const RuntimeState &state, const BoardSharedData &data, SharedRenderCtx &ctx);
+void board_render_after(const RuntimeState &state, const BoardSharedData &data, SharedRenderCtx &ctx);
 void board_shutdown();
 
 #endif /* INC_PLATFORM_SERVICES_HPP_ */
