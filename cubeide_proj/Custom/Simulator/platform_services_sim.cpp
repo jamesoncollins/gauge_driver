@@ -94,6 +94,140 @@ static float sim_smoothstep(float edge0, float edge1, float value)
   return x * x * (3.0f - 2.0f * x);
 }
 
+static int sim_clampi(int value, int low, int high)
+{
+  if (value < low)
+    return low;
+  if (value > high)
+    return high;
+  return value;
+}
+
+static int sim_lerpi(int from, int to, int num, int den)
+{
+  if (den <= 0)
+    return to;
+  num = sim_clampi(num, 0, den);
+  return from + ((to - from) * num) / den;
+}
+
+static const int kPlasticVisibleTopY = 0;
+static const int kPlasticVisibleBottomY = 247;
+static const int kPlasticReferenceFontHeightPx = 46;
+
+struct SimApertureEdgePoint
+{
+  int y;
+  int left;
+  int right;
+};
+
+static const SimApertureEdgePoint kPlasticAperture[] = {
+  // Red-outline reference in 240x320 portrait screen coordinates.
+  {0, 55, 194},
+  {3, 37, 210},
+  {8, 24, 220},
+  {16, 15, 227},
+  {28, 10, 230},
+  {55, 10, 230},
+  {90, 14, 227},
+  {124, 19, 223},
+  {155, 21, 221},
+  {184, 17, 224},
+  {211, 14, 227},
+  {230, 22, 220},
+  {242, 36, 204},
+  {247, 55, 184},
+};
+
+static void sim_visible_aperture_edges(int y, int &left, int &right)
+{
+  if (y <= kPlasticAperture[0].y)
+  {
+    left = kPlasticAperture[0].left;
+    right = kPlasticAperture[0].right;
+    return;
+  }
+
+  const int point_count = (int)(sizeof(kPlasticAperture) / sizeof(kPlasticAperture[0]));
+  for (int i = 1; i < point_count; ++i)
+  {
+    const SimApertureEdgePoint &prev = kPlasticAperture[i - 1];
+    const SimApertureEdgePoint &next = kPlasticAperture[i];
+    if (y <= next.y)
+    {
+      left = sim_lerpi(prev.left, next.left, y - prev.y, next.y - prev.y);
+      right = sim_lerpi(prev.right, next.right, y - prev.y, next.y - prev.y);
+      return;
+    }
+  }
+
+  left = kPlasticAperture[point_count - 1].left;
+  right = kPlasticAperture[point_count - 1].right;
+}
+
+static void sim_visible_aperture_edges_smoothed(int y, int &left, int &right)
+{
+  static const int offsets[] = {-6, -3, 0, 3, 6};
+  static const int weights[] = {1, 2, 4, 2, 1};
+  int left_sum = 0;
+  int right_sum = 0;
+  int weight_sum = 0;
+
+  for (int i = 0; i < (int)(sizeof(offsets) / sizeof(offsets[0])); ++i)
+  {
+    int sample_left = 0;
+    int sample_right = 0;
+    const int sample_y = sim_clampi(y + offsets[i], kPlasticVisibleTopY, kPlasticVisibleBottomY);
+    sim_visible_aperture_edges(sample_y, sample_left, sample_right);
+    left_sum += sample_left * weights[i];
+    right_sum += sample_right * weights[i];
+    weight_sum += weights[i];
+  }
+
+  left = (left_sum + weight_sum / 2) / weight_sum;
+  right = (right_sum + weight_sum / 2) / weight_sum;
+}
+
+static void sim_draw_plastic_overlay(const SharedRenderCtx &ctx)
+{
+  (void)kPlasticReferenceFontHeightPx;
+
+  const int screen_w = ctx.screen_width > 0 ? ctx.screen_width : (int)gdispGetWidth();
+  const int screen_h = ctx.screen_height > 0 ? ctx.screen_height : (int)gdispGetHeight();
+  const color_t plastic_color = HTML2COLOR(0x3F4442);
+  const color_t rim_highlight = HTML2COLOR(0x68716E);
+  const color_t rim_shadow = HTML2COLOR(0x111514);
+
+  for (int y = 0; y < screen_h; ++y)
+  {
+    if (y < kPlasticVisibleTopY || y > kPlasticVisibleBottomY)
+    {
+      gdispFillArea(0, y, screen_w, 1, plastic_color);
+      continue;
+    }
+
+    int left = 0;
+    int right = screen_w - 1;
+    const int aperture_y = kPlasticVisibleBottomY - (y - kPlasticVisibleTopY);
+    sim_visible_aperture_edges_smoothed(aperture_y, left, right);
+    left = sim_clampi(left, 0, screen_w);
+    right = sim_clampi(right, -1, screen_w - 1);
+
+    if (left > 0)
+      gdispFillArea(0, y, left, 1, plastic_color);
+    if (right + 1 < screen_w)
+      gdispFillArea(right + 1, y, screen_w - right - 1, 1, plastic_color);
+
+    if (left >= 0 && left < screen_w)
+      gdispFillArea(left, y, 1, 1, rim_highlight);
+    if (right >= 0 && right < screen_w)
+      gdispFillArea(right, y, 1, 1, rim_shadow);
+    if (left + 1 < right && (y == kPlasticVisibleTopY || y == kPlasticVisibleBottomY))
+      gdispFillArea(left + 1, y, right - left - 1, 1, y == kPlasticVisibleTopY ? rim_highlight : rim_shadow);
+  }
+}
+
 static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
 {
   const float t = elapsed_ms / 1000.0f;
@@ -358,6 +492,13 @@ bool board_check_exit()
 bool board_display_ready()
 {
   return true;
+}
+
+void board_render_after(const RuntimeState &state, const BoardSharedData &data, SharedRenderCtx &ctx)
+{
+  (void)state;
+  (void)data;
+  sim_draw_plastic_overlay(ctx);
 }
 
 void board_shutdown()
