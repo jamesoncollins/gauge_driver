@@ -477,10 +477,10 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
 
   arm_bringup_hardware(ctx);
 
-  g_arm_main.warn_batt = data.add_warning_image("batt", 140, 200, &g_arm_main.battImg);
-  g_arm_main.warn_brake = data.add_warning_light("brake", "BRAKE", 120, 233, GFX_RED);
-  g_arm_main.warn_4ws = data.add_warning_light("4ws", "4WS", 175, 205, GFX_YELLOW);
-  g_arm_main.warn_high_beam = data.add_warning_image("high_beam", 190, 223, &g_arm_main.beamImg);
+  g_arm_main.warn_batt = data.add_warning_image("batt", 140, 38, &g_arm_main.battImg);
+  g_arm_main.warn_brake = data.add_warning_light("brake", "BRAKE", 110, 70, GFX_RED);
+  g_arm_main.warn_4ws = data.add_warning_light("4ws", "4WS", 175, 45, GFX_YELLOW);
+  g_arm_main.warn_high_beam = data.add_warning_image("high_beam", 190, 68, &g_arm_main.beamImg);
 
   const uint32_t now = HAL_GetTick();
   g_arm_main.timerLoop = now;

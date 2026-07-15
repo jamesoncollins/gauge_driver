@@ -468,10 +468,10 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
   g_board_data = &data;
   sim_bringup_hardware();
   g_sim_ecu.connect();
-  g_warn_batt = data.add_warning_image("batt", 140, 200, &g_host_ctx.batt_img);
-  g_warn_brake = data.add_warning_light("brake", "BRAKE", 120, 233, GFX_RED);
-  g_warn_4ws = data.add_warning_light("4ws", "4WS", 175, 205, GFX_YELLOW);
-  g_warn_high_beam = data.add_warning_image("high_beam", 190, 223, &g_host_ctx.beam_img);
+  g_warn_batt = data.add_warning_image("batt", 140, 38, &g_host_ctx.batt_img);
+  g_warn_brake = data.add_warning_light("brake", "BRAKE", 110, 70, GFX_RED);
+  g_warn_4ws = data.add_warning_light("4ws", "4WS", 175, 45, GFX_YELLOW);
+  g_warn_high_beam = data.add_warning_image("high_beam", 190, 68, &g_host_ctx.beam_img);
   ctx = g_host_render_ctx;
   sim_publish_current_data();
   draw_step = 0;

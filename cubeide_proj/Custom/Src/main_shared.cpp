@@ -162,15 +162,15 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
   static UgfxTextBarMeter wb_meter;
   static UgfxTextBarMeter map_meter;
 
-  wb_meter.setBounds(14, 0, 190, 78);
+  wb_meter.setBounds(18, 116, 204, 66);
   wb_meter.setColors(amber, GFX_RED, GFX_BLACK);
-  wb_meter.configure("WB", "AFR", 10.0f, 16.0f, 1, font20, fontValue);
+  wb_meter.configure("O2", "AFR", 10.0f, 16.0f, 1, font20, fontValue);
   wb_meter.setBands(wb_bands, sizeof(wb_bands) / sizeof(wb_bands[0]));
   wb_meter.setMode(UGFX_TEXT_BAR_METER_SEGMENT);
   wb_meter.setBarHeight(14);
   wb_meter.setSegmentSize(12);
 
-  map_meter.setBounds(14, 80, 190, 78);
+  map_meter.setBounds(18, 188, 204, 66);
   map_meter.setColors(amber, GFX_RED, GFX_BLACK);
   map_meter.configure("MAP", "PSI", -20.0f, 20.0f, 1, font20, fontValue);
   map_meter.setBands(map_bands, sizeof(map_bands) / sizeof(map_bands[0]));
@@ -213,7 +213,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
 
     case 1:
       if (ctx.gimball != nullptr && platform_state_has(state.data_mask, PLATFORM_DATA_GIMBAL))
-        drawGimball(ctx.gimball, 78, 205, 45, state.gimbal_x, state.gimbal_y);
+        drawGimball(ctx.gimball, 78, 62, 38, state.gimbal_x, state.gimbal_y);
       break;
 
     case 2:
@@ -254,7 +254,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         tps_p->isNew = false;
       }
       if (ctx.line_plot_tps != nullptr)
-        linePlot(10, 196, ctx.line_plot_tps);
+        linePlot(10, 86, ctx.line_plot_tps);
 
       if (ctx.line_plot_knock != nullptr && knock_p != nullptr && knock_p->isNew)
       {
@@ -262,7 +262,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         knock_p->isNew = false;
       }
       if (ctx.line_plot_knock != nullptr)
-        linePlot(10, 196, ctx.line_plot_knock);
+        linePlot(10, 86, ctx.line_plot_knock);
       break;
     }
 
