@@ -31,10 +31,10 @@ void compute_gimbal_from_board_acceleration(const BoardAccelerationVector &accel
 void render_ctx_init_shared(SharedRenderCtx &ctx)
 {
   if (ctx.line_plot_tps != nullptr && ctx.line_plot_tps->isInit == false)
-    linePlotInit(ctx.line_plot_tps, ctx.line_plot_tps_data, 20, 200, 30, 100, 0);
+    linePlotInit(ctx.line_plot_tps, ctx.line_plot_tps_data, 20, 104, 42, 100, 0);
 
   if (ctx.line_plot_knock != nullptr && ctx.line_plot_knock->isInit == false)
-    linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 200, 30, 15, GFX_RED);
+    linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 104, 42, 15, GFX_RED);
 }
 
 #if defined(__GNUC__)
@@ -139,6 +139,59 @@ static bool ecu_param_is_fresh(const ECUK::ecuParam_t *param, uint32_t now_ms)
   return param != nullptr && (now_ms - param->lastTime_ms) <= 1000U;
 }
 
+static bool warning_light_is_active(const BoardWarningLight &warning)
+{
+  return warning.supported && warning.good && warning.active;
+}
+
+static void render_warning_lights(const BoardSharedData &data, SharedRenderCtx &ctx)
+{
+  std::size_t active_count = 0;
+  for (std::size_t i = 0; i < data.warning_light_count; ++i)
+  {
+    if (warning_light_is_active(data.warning_lights[i]))
+      ++active_count;
+  }
+
+  if (active_count == 0)
+    return;
+
+  const coord_t panel_x = 14;
+  const coord_t panel_y = 184;
+  const coord_t panel_w = 212;
+  const coord_t panel_h = 62;
+  gdispFillArea(panel_x, panel_y, panel_w, panel_h, GFX_BLACK);
+  gdispDrawBox(panel_x, panel_y, panel_w, panel_h, GFX_AMBER_YEL);
+
+  const coord_t slot_w = panel_w / (coord_t)active_count;
+  std::size_t active_index = 0;
+  for (std::size_t i = 0; i < data.warning_light_count; ++i)
+  {
+    const BoardWarningLight &warning = data.warning_lights[i];
+    if (!warning_light_is_active(warning))
+      continue;
+
+    const coord_t slot_x = panel_x + (coord_t)active_index * slot_w;
+    const coord_t slot_center_x = slot_x + slot_w / 2;
+    const coord_t slot_center_y = panel_y + panel_h / 2;
+
+    if (warning.style == BOARD_WARNING_STYLE_IMAGE && warning.image != nullptr)
+    {
+      const coord_t image_x = slot_center_x - warning.image->width / 2;
+      const coord_t image_y = slot_center_y - warning.image->height / 2;
+      gdispImageDraw(warning.image, image_x, image_y, warning.image->width, warning.image->height, 0, 0);
+    }
+    else if (warning.label != nullptr)
+    {
+      const coord_t text_x = slot_center_x - 24;
+      const coord_t text_y = slot_center_y - 10;
+      gdispFillString(text_x, text_y, warning.label, ctx.font20, warning.color, GFX_BLACK);
+    }
+
+    ++active_index;
+  }
+}
+
 static void render_ecu_section(const RuntimeState &state, font_t fontValue, font_t font20, color_t amber)
 {
   if (!platform_state_has(state.data_mask, PLATFORM_DATA_ECU) || state.ecu == nullptr)
@@ -162,7 +215,7 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
   static UgfxTextBarMeter wb_meter;
   static UgfxTextBarMeter map_meter;
 
-  wb_meter.setBounds(24, 175, 192, 72);
+  wb_meter.setBounds(24, 85, 192, 62);
   wb_meter.setColors(amber, GFX_RED, GFX_BLACK);
   wb_meter.configure("O2", "AFR", 10.0f, 16.0f, 1, font20, fontValue);
   wb_meter.setBands(wb_bands, sizeof(wb_bands) / sizeof(wb_bands[0]));
@@ -170,7 +223,7 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
   wb_meter.setBarHeight(18);
   wb_meter.setSegmentSize(16);
 
-  map_meter.setBounds(24, 98, 192, 72);
+  map_meter.setBounds(24, 8, 192, 62);
   map_meter.setColors(amber, GFX_RED, GFX_BLACK);
   map_meter.configure("MAP", "PSI", -15.0f, 20.0f, 1, font20, fontValue);
   map_meter.setBands(map_bands, sizeof(map_bands) / sizeof(map_bands[0]));
@@ -189,7 +242,7 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
   if (state.ecu_flasher != nullptr)
     show_error = flasher_fun(state.ecu_flasher);
   if (!ecu_connected && show_error)
-    gdispFillString(20, 162, "ECU ERR      ", font20, GFX_RED, GFX_BLACK);
+    gdispFillString(20, 144, "ECU ERR      ", font20, GFX_RED, GFX_BLACK);
 }
 
 void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
@@ -213,7 +266,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
 
     case 1:
       if (ctx.gimball != nullptr && platform_state_has(state.data_mask, PLATFORM_DATA_GIMBAL))
-        drawGimball(ctx.gimball, 78, 62, 38, state.gimbal_x, state.gimbal_y);
+        drawGimball(ctx.gimball, 56, 203, 34, state.gimbal_x, state.gimbal_y);
       break;
 
     case 2:
@@ -234,7 +287,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         case BTN_R:  tmpString[0] = 'R'; break;
         default: break;
       }
-      gdispFillString(210, 74, tmpString, ctx.font20, amber, GFX_BLACK);
+      gdispFillString(220, 144, tmpString, ctx.font20, amber, GFX_BLACK);
       break;
     }
 
@@ -254,7 +307,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         tps_p->isNew = false;
       }
       if (ctx.line_plot_tps != nullptr)
-        linePlot(10, 86, ctx.line_plot_tps);
+        linePlot(112, 236, ctx.line_plot_tps);
 
       if (ctx.line_plot_knock != nullptr && knock_p != nullptr && knock_p->isNew)
       {
@@ -262,7 +315,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         knock_p->isNew = false;
       }
       if (ctx.line_plot_knock != nullptr)
-        linePlot(10, 86, ctx.line_plot_knock);
+        linePlot(112, 236, ctx.line_plot_knock);
       break;
     }
 
@@ -286,17 +339,6 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
       }
 #endif
 
-      for (std::size_t i = 0; i < data.warning_light_count; ++i)
-      {
-        const BoardWarningLight &warning = data.warning_lights[i];
-        if (!warning.supported || !warning.good || !warning.active)
-          continue;
-
-        if (warning.style == BOARD_WARNING_STYLE_IMAGE && warning.image != nullptr)
-          gdispImageDraw(warning.image, warning.x, warning.y, warning.image->width, warning.image->height, 0, 0);
-        else if (warning.label != nullptr)
-          gdispFillString(warning.x, warning.y, warning.label, ctx.font20, warning.color, GFX_BLACK);
-      }
 
       if (platform_state_has(state.data_mask, PLATFORM_DATA_WARN_LAMP) && state.warn_lamp_on)
       {
@@ -333,6 +375,8 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         gdispFillDualCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), WARN_FINAL_SIZE, GFX_BLACK, WARN_FINAL_SIZE, GFX_GREEN);
         gdispFillCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), current_warn_size, GFX_YELLOW);
       }
+
+      render_warning_lights(data, ctx);
       break;
     }
 
