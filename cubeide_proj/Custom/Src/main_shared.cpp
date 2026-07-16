@@ -172,7 +172,7 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
 
   map_meter.setBounds(24, 98, 192, 72);
   map_meter.setColors(amber, GFX_RED, GFX_BLACK);
-  map_meter.configure("MAP", "PSI", -20.0f, 20.0f, 1, font20, fontValue);
+  map_meter.configure("MAP", "PSI", -15.0f, 20.0f, 1, font20, fontValue);
   map_meter.setBands(map_bands, sizeof(map_bands) / sizeof(map_bands[0]));
   map_meter.setMode(UGFX_TEXT_BAR_METER_BIPOLAR);
   map_meter.setReferenceValue(0.0f);
