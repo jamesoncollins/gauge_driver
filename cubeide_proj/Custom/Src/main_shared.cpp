@@ -162,21 +162,21 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
   static UgfxTextBarMeter wb_meter;
   static UgfxTextBarMeter map_meter;
 
-  wb_meter.setBounds(18, 116, 204, 66);
+  wb_meter.setBounds(24, 175, 192, 72);
   wb_meter.setColors(amber, GFX_RED, GFX_BLACK);
   wb_meter.configure("O2", "AFR", 10.0f, 16.0f, 1, font20, fontValue);
   wb_meter.setBands(wb_bands, sizeof(wb_bands) / sizeof(wb_bands[0]));
   wb_meter.setMode(UGFX_TEXT_BAR_METER_SEGMENT);
-  wb_meter.setBarHeight(14);
-  wb_meter.setSegmentSize(12);
+  wb_meter.setBarHeight(18);
+  wb_meter.setSegmentSize(16);
 
-  map_meter.setBounds(18, 188, 204, 66);
+  map_meter.setBounds(24, 98, 192, 72);
   map_meter.setColors(amber, GFX_RED, GFX_BLACK);
   map_meter.configure("MAP", "PSI", -20.0f, 20.0f, 1, font20, fontValue);
   map_meter.setBands(map_bands, sizeof(map_bands) / sizeof(map_bands[0]));
   map_meter.setMode(UGFX_TEXT_BAR_METER_BIPOLAR);
   map_meter.setReferenceValue(0.0f);
-  map_meter.setBarHeight(12);
+  map_meter.setBarHeight(16);
 
   const uint32_t now_ms = HAL_GetTick();
   const bool ecu_connected = state.ecu->isConnected();
