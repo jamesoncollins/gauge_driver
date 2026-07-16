@@ -25,6 +25,11 @@
 #include "BITSUMIS60_Numbers.c"
 #endif
 
+#if defined(GDISP_INCLUDE_FONT_BITSUMIS72_NUMBERS) && GDISP_INCLUDE_FONT_BITSUMIS72_NUMBERS
+#define GDISP_FONT_FOUND
+#include "BITSUMIS72_Numbers.c"
+#endif
+
 #if defined(GDISP_INCLUDE_FONT_LCDDOT_TR30) && GDISP_INCLUDE_FONT_LCDDOT_TR30
 #define GDISP_FONT_FOUND
 #include "lcddot_tr80.c"

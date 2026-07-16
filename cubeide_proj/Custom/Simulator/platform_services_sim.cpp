@@ -321,7 +321,7 @@ static void sim_bringup_hardware()
   g_host_ctx.font20 = gdispOpenFont("DejaVuSans20");
   g_host_ctx.font10 = gdispOpenFont("DejaVuSans10");
   g_host_ctx.fontLCD = gdispOpenFont("lcddot_tr80");
-  g_host_ctx.fontValue = gdispOpenFont("BITSUMIS60_Numbers");
+  g_host_ctx.fontValue = gdispOpenFont("BITSUMIS72_Numbers");
   g_host_ctx.cx = gdispGetWidth() / 2;
   g_host_ctx.cy = gdispGetHeight() / 2;
   g_host_ctx.t0_ms = HAL_GetTick();

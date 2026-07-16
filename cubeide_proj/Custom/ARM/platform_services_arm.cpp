@@ -226,7 +226,7 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
   g_arm_main.font10 = gdispOpenFont("DejaVuSans10");
   g_arm_main.font20 = gdispOpenFont("DejaVuSans20");
   g_arm_main.fontLCD = gdispOpenFont("lcddot_tr80");
-  g_arm_main.fontValue = gdispOpenFont("BITSUMIS60_Numbers");
+  g_arm_main.fontValue = gdispOpenFont("BITSUMIS72_Numbers");
   g_arm_main.amber = GFX_AMBER_YEL;
 
   gdispImageOpenMemory(&g_arm_main.battImg, batt);
