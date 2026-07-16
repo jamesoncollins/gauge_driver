@@ -200,28 +200,43 @@ void UgfxTextBarMeter::drawSegmentBar(coord_t bar_x, coord_t bar_y, coord_t bar_
 {
   const coord_t inner_w = bar_w - 2;
   const coord_t inner_h = bar_h - 2;
-  const coord_t segment_size = segment_size_ > 0 ? segment_size_ : inner_h;
-  const coord_t segment_gap = 2;
+  if (inner_w <= 0 || inner_h <= 0)
+    return;
+
+  const coord_t requested_segment_w = segment_size_ > 0 ? segment_size_ : inner_h;
+  const coord_t segment_w = clamp_coord(requested_segment_w, 1, inner_w);
+  const coord_t vertical_margin = inner_h > 2 ? 1 : 0;
+  const coord_t max_segment_h = inner_h - (vertical_margin * 2);
+  const coord_t segment_h = clamp_coord(segment_w, 1, max_segment_h);
+  const coord_t min_segment_gap = 2;
   const color_t inactive_color = valid_ ? HTML2COLOR(0x202020) : GFX_GRAY;
 
   gdispFillArea(bar_x + 1, bar_y + 1, inner_w, inner_h, background_);
 
-  const coord_t segment_y = bar_y + 1 + ((inner_h - segment_size) >> 1);
-  const coord_t draw_y = segment_y < bar_y + 1 ? bar_y + 1 : segment_y;
-  const coord_t max_x = bar_x + bar_w - 1 - segment_size;
-  for (coord_t x = bar_x + 1; x <= max_x; x += segment_size + segment_gap)
-    gdispFillArea(x, draw_y, segment_size, segment_size, inactive_color);
-
-  const coord_t segment_pitch = segment_size + segment_gap;
-  const coord_t segment_count = ((max_x - (bar_x + 1)) / segment_pitch) + 1;
+  const coord_t segment_count = clamp_coord((inner_w + min_segment_gap) / (segment_w + min_segment_gap), 1, inner_w);
   if (segment_count <= 0)
     return;
+
+  const coord_t used_w = segment_count * segment_w;
+  const coord_t free_w = inner_w > used_w ? inner_w - used_w : 0;
+  const coord_t gap_slots = segment_count + 1;
+  const coord_t base_gap = free_w / gap_slots;
+  const coord_t extra_gap = free_w % gap_slots;
+  const coord_t draw_y = bar_y + 1 + ((inner_h - segment_h) >> 1);
+
+  auto segment_x = [&](coord_t index) -> coord_t {
+    const coord_t leading_gap = base_gap + (extra_gap > 0 ? 1 : 0);
+    const coord_t prior_extra_gaps = clamp_coord(extra_gap - 1, 0, index);
+    return bar_x + 1 + leading_gap + index * (segment_w + base_gap) + prior_extra_gaps;
+  };
+
+  for (coord_t i = 0; i < segment_count; ++i)
+    gdispFillArea(segment_x(i), draw_y, segment_w, segment_h, inactive_color);
 
   const float range = max_value_ - min_value_;
   const float percent = range > 0.0f ? (clampedValue() - min_value_) / range : 0.0f;
   const coord_t active_index = clamp_coord((coord_t)round(percent * (float)(segment_count - 1)), 0, segment_count - 1);
-  const coord_t draw_x = (bar_x + 1) + active_index * segment_pitch;
-  gdispFillArea(draw_x, draw_y, segment_size, segment_size, segment_color);
+  gdispFillArea(segment_x(active_index), draw_y, segment_w, segment_h, segment_color);
 }
 
 void UgfxTextBarMeter::draw()
