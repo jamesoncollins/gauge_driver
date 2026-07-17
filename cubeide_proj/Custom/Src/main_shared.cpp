@@ -31,10 +31,10 @@ void compute_gimbal_from_board_acceleration(const BoardAccelerationVector &accel
 void render_ctx_init_shared(SharedRenderCtx &ctx)
 {
   if (ctx.line_plot_tps != nullptr && ctx.line_plot_tps->isInit == false)
-    linePlotInit(ctx.line_plot_tps, ctx.line_plot_tps_data, 20, 104, 42, 100, 0);
+    linePlotInit(ctx.line_plot_tps, ctx.line_plot_tps_data, 20, 130, 42, 100, 0);
 
   if (ctx.line_plot_knock != nullptr && ctx.line_plot_knock->isInit == false)
-    linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 104, 42, 15, GFX_RED);
+    linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 130, 42, 15, GFX_RED);
 }
 
 #if defined(__GNUC__)
@@ -139,59 +139,6 @@ static bool ecu_param_is_fresh(const ECUK::ecuParam_t *param, uint32_t now_ms)
   return param != nullptr && (now_ms - param->lastTime_ms) <= 1000U;
 }
 
-static bool warning_light_is_active(const BoardWarningLight &warning)
-{
-  return warning.supported && warning.good && warning.active;
-}
-
-static void render_warning_lights(const BoardSharedData &data, SharedRenderCtx &ctx)
-{
-  std::size_t active_count = 0;
-  for (std::size_t i = 0; i < data.warning_light_count; ++i)
-  {
-    if (warning_light_is_active(data.warning_lights[i]))
-      ++active_count;
-  }
-
-  if (active_count == 0)
-    return;
-
-  const coord_t panel_x = 14;
-  const coord_t panel_y = 184;
-  const coord_t panel_w = 212;
-  const coord_t panel_h = 62;
-  gdispFillArea(panel_x, panel_y, panel_w, panel_h, GFX_BLACK);
-  gdispDrawBox(panel_x, panel_y, panel_w, panel_h, GFX_AMBER_YEL);
-
-  const coord_t slot_w = panel_w / (coord_t)active_count;
-  std::size_t active_index = 0;
-  for (std::size_t i = 0; i < data.warning_light_count; ++i)
-  {
-    const BoardWarningLight &warning = data.warning_lights[i];
-    if (!warning_light_is_active(warning))
-      continue;
-
-    const coord_t slot_x = panel_x + (coord_t)active_index * slot_w;
-    const coord_t slot_center_x = slot_x + slot_w / 2;
-    const coord_t slot_center_y = panel_y + panel_h / 2;
-
-    if (warning.style == BOARD_WARNING_STYLE_IMAGE && warning.image != nullptr)
-    {
-      const coord_t image_x = slot_center_x - warning.image->width / 2;
-      const coord_t image_y = slot_center_y - warning.image->height / 2;
-      gdispImageDraw(warning.image, image_x, image_y, warning.image->width, warning.image->height, 0, 0);
-    }
-    else if (warning.label != nullptr)
-    {
-      const coord_t text_x = slot_center_x - 24;
-      const coord_t text_y = slot_center_y - 10;
-      gdispFillString(text_x, text_y, warning.label, ctx.font20, warning.color, GFX_BLACK);
-    }
-
-    ++active_index;
-  }
-}
-
 static void render_ecu_section(const RuntimeState &state, font_t fontValue, font_t font20, color_t amber)
 {
   if (!platform_state_has(state.data_mask, PLATFORM_DATA_ECU) || state.ecu == nullptr)
@@ -287,7 +234,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         case BTN_R:  tmpString[0] = 'R'; break;
         default: break;
       }
-      gdispFillString(220, 144, tmpString, ctx.font20, amber, GFX_BLACK);
+      gdispFillString(205, 120, tmpString, ctx.font20, amber, GFX_BLACK);
       break;
     }
 
@@ -307,7 +254,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         tps_p->isNew = false;
       }
       if (ctx.line_plot_tps != nullptr)
-        linePlot(112, 236, ctx.line_plot_tps);
+        linePlot(80, 236, ctx.line_plot_tps);
 
       if (ctx.line_plot_knock != nullptr && knock_p != nullptr && knock_p->isNew)
       {
@@ -315,7 +262,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         knock_p->isNew = false;
       }
       if (ctx.line_plot_knock != nullptr)
-        linePlot(112, 236, ctx.line_plot_knock);
+        linePlot(80, 236, ctx.line_plot_knock);
       break;
     }
 
@@ -376,7 +323,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         gdispFillCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), current_warn_size, GFX_YELLOW);
       }
 
-      render_warning_lights(data, ctx);
+      data.warning_panel.render(ctx);
       break;
     }
 

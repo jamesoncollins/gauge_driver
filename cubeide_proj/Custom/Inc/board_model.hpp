@@ -23,6 +23,7 @@ button_e;
 
 #ifdef __cplusplus
 class ECUK;
+struct SharedRenderCtx;
 
 enum PlatformDataKey : uint64_t
 {
@@ -75,15 +76,20 @@ struct BoardValue
 
 typedef enum
 {
-  BOARD_WARNING_STYLE_TEXT = 0,
-  BOARD_WARNING_STYLE_IMAGE = 1
-} BoardWarningStyle;
+  BOARD_PANEL_OBJECT_STYLE_TEXT = 0,
+  BOARD_PANEL_OBJECT_STYLE_IMAGE = 1
+} BoardPanelObjectStyle;
 
-struct BoardWarningLight
+static constexpr BoardPanelObjectStyle BOARD_WARNING_STYLE_TEXT = BOARD_PANEL_OBJECT_STYLE_TEXT;
+static constexpr BoardPanelObjectStyle BOARD_WARNING_STYLE_IMAGE = BOARD_PANEL_OBJECT_STYLE_IMAGE;
+
+typedef BoardPanelObjectStyle BoardWarningStyle;
+
+struct BoardPanelObject
 {
   const char *key = nullptr;
   const char *label = nullptr;
-  BoardWarningStyle style = BOARD_WARNING_STYLE_TEXT;
+  BoardPanelObjectStyle style = BOARD_PANEL_OBJECT_STYLE_TEXT;
   bool supported = false;
   bool active = false;
   bool good = false;
@@ -94,11 +100,11 @@ struct BoardWarningLight
   int y = 0;
   gImage *image = nullptr;
 
-  void configure(const char *warning_key, const char *warning_label, int draw_x, int draw_y, color_t draw_color)
+  void configure_text(const char *object_key, const char *object_label, int draw_x, int draw_y, color_t draw_color)
   {
-    key = warning_key;
-    label = warning_label;
-    style = BOARD_WARNING_STYLE_TEXT;
+    key = object_key;
+    label = object_label;
+    style = BOARD_PANEL_OBJECT_STYLE_TEXT;
     x = draw_x;
     y = draw_y;
     color = draw_color;
@@ -106,11 +112,11 @@ struct BoardWarningLight
     good = true;
   }
 
-  void configure_image(const char *warning_key, int draw_x, int draw_y, gImage *draw_image)
+  void configure_image(const char *object_key, int draw_x, int draw_y, gImage *draw_image)
   {
-    key = warning_key;
+    key = object_key;
     label = nullptr;
-    style = BOARD_WARNING_STYLE_IMAGE;
+    style = BOARD_PANEL_OBJECT_STYLE_IMAGE;
     x = draw_x;
     y = draw_y;
     image = draw_image;
@@ -130,6 +136,48 @@ struct BoardWarningLight
     fresh = false;
     ack = true;
   }
+};
+
+using BoardWarningLight = BoardPanelObject;
+
+struct BoardObjectPanel
+{
+  static constexpr std::size_t MAX_OBJECTS = 12;
+
+  BoardPanelObject *add_text(const char *key, const char *label, int x, int y, color_t color)
+  {
+    if (object_count >= MAX_OBJECTS)
+      return nullptr;
+    BoardPanelObject &object = objects[object_count++];
+    object.configure_text(key, label, x, y, color);
+    return &object;
+  }
+
+  BoardPanelObject *add_image(const char *key, int x, int y, gImage *image)
+  {
+    if (object_count >= MAX_OBJECTS)
+      return nullptr;
+    BoardPanelObject &object = objects[object_count++];
+    object.configure_image(key, x, y, image);
+    return &object;
+  }
+
+  void mark_all_read()
+  {
+    for (std::size_t i = 0; i < object_count; ++i)
+      objects[i].mark_read();
+  }
+
+  void render(SharedRenderCtx &ctx) const;
+
+private:
+  static bool is_active(const BoardPanelObject &object)
+  {
+    return object.supported && object.good && object.active;
+  }
+
+  BoardPanelObject objects[MAX_OBJECTS];
+  std::size_t object_count = 0;
 };
 
 struct BoardStringValue
@@ -174,7 +222,6 @@ struct BoardAccelerationVector
 
 struct BoardSharedData
 {
-  static constexpr std::size_t MAX_WARNING_LIGHTS = 12;
   static constexpr std::size_t MAX_STRING_VALUES = 8;
 
   BoardValue<float> rpm;
@@ -196,27 +243,18 @@ struct BoardSharedData
   int ecu_param_knock_index = 0;
   flasher_t *ecu_flasher = nullptr;
 
-  BoardWarningLight warning_lights[MAX_WARNING_LIGHTS];
-  std::size_t warning_light_count = 0;
+  BoardObjectPanel warning_panel;
   BoardStringValue string_values[MAX_STRING_VALUES];
   std::size_t string_value_count = 0;
 
   BoardWarningLight *add_warning_light(const char *key, const char *label, int x, int y, color_t color)
   {
-    if (warning_light_count >= MAX_WARNING_LIGHTS)
-      return nullptr;
-    BoardWarningLight &warning = warning_lights[warning_light_count++];
-    warning.configure(key, label, x, y, color);
-    return &warning;
+    return warning_panel.add_text(key, label, x, y, color);
   }
 
   BoardWarningLight *add_warning_image(const char *key, int x, int y, gImage *image)
   {
-    if (warning_light_count >= MAX_WARNING_LIGHTS)
-      return nullptr;
-    BoardWarningLight &warning = warning_lights[warning_light_count++];
-    warning.configure_image(key, x, y, image);
-    return &warning;
+    return warning_panel.add_image(key, x, y, image);
   }
 
   BoardStringValue *add_string_value(const char *key)
@@ -240,8 +278,7 @@ struct BoardSharedData
     startup_init_error.mark_read();
     lamp_on.mark_read();
     btn.mark_read();
-    for (std::size_t i = 0; i < warning_light_count; ++i)
-      warning_lights[i].mark_read();
+    warning_panel.mark_all_read();
     for (std::size_t i = 0; i < string_value_count; ++i)
       string_values[i].mark_read();
   }
@@ -274,7 +311,7 @@ typedef struct
   button_e btn;
 } RuntimeState;
 
-typedef struct
+struct SharedRenderCtx
 {
   color_t *amber_ptr;
   font_t font10;
@@ -290,7 +327,66 @@ typedef struct
   int *line_plot_tps_data;
   LinePlot_t *line_plot_knock;
   int *line_plot_knock_data;
-} SharedRenderCtx;
+};
+inline void BoardObjectPanel::render(SharedRenderCtx &ctx) const
+{
+  std::size_t active_count = 0;
+  for (std::size_t i = 0; i < object_count; ++i)
+  {
+    if (is_active(objects[i]))
+      ++active_count;
+  }
+
+  if (active_count == 0)
+    return;
+
+  const coord_t panel_w = 150;
+  const coord_t panel_h = 96;
+  const coord_t panel_center_y = 164;
+  const coord_t panel_x = (ctx.screen_width - panel_w) / 2;
+  const coord_t panel_y = panel_center_y - panel_h / 2;
+  gdispFillArea(panel_x, panel_y, panel_w, panel_h, GFX_BLACK);
+  gdispDrawBox(panel_x, panel_y, panel_w, panel_h, GFX_AMBER_YEL);
+
+  const coord_t columns = active_count > 2 ? 2 : (coord_t)active_count;
+  const coord_t rows = (active_count + columns - 1) / columns;
+  const coord_t slot_w = panel_w / columns;
+  const coord_t slot_h = panel_h / rows;
+  std::size_t active_index = 0;
+  for (std::size_t i = 0; i < object_count; ++i)
+  {
+    const BoardPanelObject &object = objects[i];
+    if (!is_active(object))
+      continue;
+
+    const coord_t slot_x = panel_x + (coord_t)(active_index % columns) * slot_w;
+    const coord_t slot_y = panel_y + (coord_t)(active_index / columns) * slot_h;
+    const coord_t slot_center_x = slot_x + slot_w / 2;
+    const coord_t slot_center_y = slot_y + slot_h / 2;
+
+    if (object.style == BOARD_PANEL_OBJECT_STYLE_IMAGE && object.image != nullptr)
+    {
+      const coord_t image_x = slot_center_x - object.image->width / 2;
+      const coord_t image_y = slot_center_y - object.image->height / 2;
+      gdispImageDraw(object.image, image_x, image_y, object.image->width, object.image->height, 0, 0);
+    }
+    else if (object.label != nullptr)
+    {
+      const coord_t text_pad_y = 4;
+      gdispFillStringBox(slot_x + 2,
+                         slot_y + text_pad_y,
+                         slot_w - 4,
+                         slot_h - 2 * text_pad_y,
+                         object.label,
+                         ctx.font20,
+                         object.color,
+                         GFX_BLACK,
+                         (gJustify)(gJustifyCenter | gJustifyNoWordWrap));
+    }
+
+    ++active_index;
+  }
+}
 #endif
 
 #endif /* INC_BOARD_MODEL_HPP_ */
