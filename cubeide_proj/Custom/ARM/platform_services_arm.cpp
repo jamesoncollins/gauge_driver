@@ -89,6 +89,17 @@ static const EcuSignalMap g_ecu_signal_map = {
 
 static BoardAccelerationVector g_acceleration_mps2 = {};
 static constexpr int X27_STEPS = 240 * 12;
+static constexpr uint16_t bulb_mask(unsigned bit)
+{
+  return (uint16_t)(1U << bit);
+}
+static constexpr uint16_t BULB_4WS_MASK = bulb_mask(0);
+static constexpr uint16_t BULB_BRAKE_MASK = bulb_mask(1);
+static constexpr uint16_t BULB_LAMP_MASK = bulb_mask(2);
+static constexpr uint16_t BULB_HIGH_BEAM_MASK = bulb_mask(3);
+static constexpr uint16_t BULB_BATT_MASK = bulb_mask(7);
+static constexpr uint16_t BULB_INPUT_MASK = 0x00FF;
+static constexpr uint16_t BULB_PULLUP_MASK = BULB_BRAKE_MASK | BULB_BATT_MASK;
 
 typedef enum
 {
@@ -192,11 +203,11 @@ static PlatformSample arm_collect_platform_sample()
   sample.elapsed_ms = HAL_GetTick();
   sample.btn = btnCmd;
   sample.startup_init_error = (startupInitError != 0);
-  sample.warn_batt = ((g_arm_main.bulbVals & (uint16_t)(1U << 7)) == 0U);
-  sample.warn_brake = ((g_arm_main.bulbVals & (uint16_t)(1U << 1)) == 0U);
-  sample.warn_4ws = ((g_arm_main.bulbVals & (uint16_t)(1U << 0)) != 0U);
-  sample.warn_lamp_on = ((g_arm_main.bulbVals & (uint16_t)(1U << 2)) != 0U);
-  sample.warn_high_beam = ((g_arm_main.bulbVals & (uint16_t)(1U << 3)) == 0U);
+  sample.warn_batt = ((g_arm_main.bulbVals & BULB_BATT_MASK) == 0U);
+  sample.warn_brake = ((g_arm_main.bulbVals & BULB_BRAKE_MASK) == 0U);
+  sample.warn_4ws = ((g_arm_main.bulbVals & BULB_4WS_MASK) != 0U);
+  sample.warn_lamp_on = ((g_arm_main.bulbVals & BULB_LAMP_MASK) != 0U);
+  sample.warn_high_beam = ((g_arm_main.bulbVals & BULB_HIGH_BEAM_MASK) == 0U);
   sample.ecu = g_ecu;
   sample.ecu_param_tps_index = g_ecu_signal_map.tps_index;
   sample.ecu_param_wb_index = g_ecu_signal_map.wb_index;
@@ -231,7 +242,7 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
 
   gdispImageOpenMemory(&g_arm_main.battImg, batt);
   gdispImageOpenMemory(&g_arm_main.beamImg, beam);
-  startupInitError |= g_arm_main.ioexp_screen->init(0x00FF, 0x00FF);
+  startupInitError |= g_arm_main.ioexp_screen->init(BULB_PULLUP_MASK, BULB_INPUT_MASK);
   startupInitError |= g_arm_main.ioexp_speedo->init(0x0000, 0x0000);
   g_arm_main.bulbVals = g_arm_main.ioexp_screen->get();
 
