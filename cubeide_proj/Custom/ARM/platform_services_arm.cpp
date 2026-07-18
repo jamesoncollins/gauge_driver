@@ -207,7 +207,7 @@ static PlatformSample arm_collect_platform_sample()
   sample.warn_brake = ((g_arm_main.bulbVals & BULB_BRAKE_MASK) == 0U);
   sample.warn_4ws = ((g_arm_main.bulbVals & BULB_4WS_MASK) != 0U);
   sample.warn_lamp_on = ((g_arm_main.bulbVals & BULB_LAMP_MASK) != 0U);
-  sample.warn_high_beam = ((g_arm_main.bulbVals & BULB_HIGH_BEAM_MASK) == 0U);
+  sample.warn_high_beam = sample.warn_lamp_on && ((g_arm_main.bulbVals & BULB_HIGH_BEAM_MASK) == 0U);
   sample.ecu = g_ecu;
   sample.ecu_param_tps_index = g_ecu_signal_map.tps_index;
   sample.ecu_param_wb_index = g_ecu_signal_map.wb_index;
