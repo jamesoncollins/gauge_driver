@@ -1,0 +1,45 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug ST7789VI LCD",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/st7789vi-debug/gauge_driver.elf",
+            "preLaunchTask": "CMake: build st7789vi-debug",
+            "servertype": "stlink",
+            "device": "STM32WB55RGVX",
+            "interface": "swd",
+            "runToEntryPoint": "main",
+            "showDevDebugOutput": "none",
+            "serverArgs": [
+                "--swd",
+                "--initialize-reset",
+                "--verify",
+                "--apid",
+                "0"
+            ]
+        },
+        {
+            "name": "Debug S6E63D6 OLED",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/s6e63d6-debug/gauge_driver.elf",
+            "preLaunchTask": "CMake: build s6e63d6-debug",
+            "servertype": "stlink",
+            "device": "STM32WB55RGVX",
+            "interface": "swd",
+            "runToEntryPoint": "main",
+            "showDevDebugOutput": "none",
+            "serverArgs": [
+                "--swd",
+                "--initialize-reset",
+                "--verify",
+                "--apid",
+                "0"
+            ]
+        }
+    ]
+}

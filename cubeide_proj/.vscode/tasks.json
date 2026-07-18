@@ -1,0 +1,95 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake: build st7789vi-debug",
+            "type": "shell",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "CMake: configure st7789vi-debug",
+                "CMake: compile st7789vi-debug"
+            ],
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "CMake: build s6e63d6-debug",
+            "type": "shell",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "CMake: configure s6e63d6-debug",
+                "CMake: compile s6e63d6-debug"
+            ],
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "CMake: configure st7789vi-debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--preset",
+                "st7789vi-debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "CMake: compile st7789vi-debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "--preset",
+                "st7789vi-debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "CMake: configure s6e63d6-debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--preset",
+                "s6e63d6-debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "CMake: compile s6e63d6-debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "--preset",
+                "s6e63d6-debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        }
+    ]
+}
