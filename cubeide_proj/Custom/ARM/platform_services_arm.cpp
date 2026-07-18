@@ -31,6 +31,7 @@ extern "C" {
 extern bool bus_busy();
 extern void setAutoClear(bool);
 }
+#include "../../res/mitslogoanim_128.c"
 #include "../../res/batt.c"
 #include "../../res/beam.c"
 
@@ -164,6 +165,90 @@ static void arm_reset_motor_driver()
   HAL_GPIO_WritePin(RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_SET);
 }
 
+static void arm_run_startup_animation_and_needle_dance()
+{
+  gImage startup_anim;
+  if (gdispImageOpenMemory(&startup_anim, mitslogoanim_128) != GDISP_IMAGE_ERR_OK)
+  {
+    g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(9000));
+    g_arm_main.speedX12->setPosition(get_x12_ticks_speed(180));
+    while (!g_arm_main.tachX12->atTarget() || !g_arm_main.speedX12->atTarget())
+      HAL_Delay(1);
+
+    g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(0));
+    g_arm_main.speedX12->setPosition(get_x12_ticks_speed(0));
+    while (!g_arm_main.tachX12->atTarget() || !g_arm_main.speedX12->atTarget())
+      HAL_Delay(1);
+    return;
+  }
+
+  gDelay delay = 0;
+  int display_count = 42;
+  gdispClear(GFX_BLACK);
+  gdispImageDraw(&startup_anim,
+                 (screenWidth >> 1) - (startup_anim.width >> 1),
+                 75,
+                 startup_anim.width, startup_anim.height,
+                 0, 0);
+  for (int i = 0; i < 17; ++i)
+  {
+    gdispImageNext(&startup_anim);
+    --display_count;
+  }
+
+  int startup_state = 0;
+  uint32_t timer_anim = HAL_GetTick();
+  bool startup_done = false;
+  while (!startup_done)
+  {
+    switch (startup_state)
+    {
+      case 0:
+        g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(9000));
+        g_arm_main.speedX12->setPosition(get_x12_ticks_speed(180));
+        ++startup_state;
+        break;
+      case 1:
+        if (g_arm_main.tachX12->atTarget() && g_arm_main.speedX12->atTarget())
+          ++startup_state;
+        break;
+      case 2:
+        g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(0));
+        g_arm_main.speedX12->setPosition(get_x12_ticks_speed(0));
+        ++startup_state;
+        break;
+      case 3:
+        if (g_arm_main.tachX12->atTarget() && g_arm_main.speedX12->atTarget())
+          ++startup_state;
+        break;
+      default:
+        if (display_count < 0)
+          startup_done = true;
+        break;
+    }
+
+    if ((HAL_GetTick() - timer_anim) > delay && display_count >= 0)
+    {
+      gdispImageDraw(&startup_anim,
+                     (screenWidth >> 1) - (startup_anim.width >> 1),
+                     75,
+                     startup_anim.width, startup_anim.height,
+                     0, 0);
+      delay = gdispImageNext(&startup_anim);
+      timer_anim = HAL_GetTick();
+      gdispFlush();
+      --display_count;
+    }
+  }
+
+  gdispImageClose(&startup_anim);
+  gdispClear(GFX_BLACK);
+  setAutoClear(true);
+  gdispClear(GFX_BLACK);
+  gdispFlush();
+  gdispFlush();
+}
+
 static void platform_poll_bulb_inputs()
 {
   if (g_arm_main.ioexp_screen == nullptr)
@@ -288,6 +373,11 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
   }
   arm_reset_motor_driver();
 
+  // Initialize BTBuffer before enabling timer/IRQ paths that may push into it.
+  IRQn_Type bt_irqs[] = {TIM1_UP_TIM16_IRQn, TIM1_TRG_COM_TIM17_IRQn, USART1_IRQn};
+  static ArmBTBufferBackend bt_backend(bt_irqs, (int)(sizeof(bt_irqs) / sizeof(bt_irqs[0])));
+  BTBuffer::CreateInstance(&bt_backend);
+
   x12[0] = g_arm_main.tachX12;
   x12[1] = g_arm_main.speedX12;
   x12[2] = g_arm_main.odoX12;
@@ -295,17 +385,13 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
   g_arm_main.speedX12->reset();
   g_arm_main.odoX12->reset();
   needles_ready = true;
+  startupInitError |= HAL_TIM_Base_Start_IT(&htim17);
+  arm_run_startup_animation_and_needle_dance();
   measure_freq = true;
-
-  // Initialize BTBuffer before enabling timer/IRQ paths that may push into it.
-  IRQn_Type bt_irqs[] = {TIM1_UP_TIM16_IRQn, TIM1_TRG_COM_TIM17_IRQn, USART1_IRQn};
-  static ArmBTBufferBackend bt_backend(bt_irqs, (int)(sizeof(bt_irqs) / sizeof(bt_irqs[0])));
-  BTBuffer::CreateInstance(&bt_backend);
 
   startupInitError |= HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
   startupInitError |= HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
   startupInitError |= HAL_TIM_Base_Start_IT(&htim16);
-  startupInitError |= HAL_TIM_Base_Start_IT(&htim17);
 
   arm_render_ctx = {
       .amber_ptr = (color_t *)&g_arm_main.amber,

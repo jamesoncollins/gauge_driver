@@ -26,7 +26,6 @@ extern void setAutoClear(bool);
 #include "gfx.h"
 #include "ugfx_widgets.h"
 #include "../Quaternion/Quaternion.hpp"
-#include "../../res/mitslogoanim_128.c"
 #include "../../res/brake.c"
 #include "../PI4IOE5V6416/PI4IOE5V6416.hpp"
 #include "../ECUK-lib/MUTII.hpp"
