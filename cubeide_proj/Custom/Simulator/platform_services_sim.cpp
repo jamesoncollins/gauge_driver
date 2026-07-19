@@ -306,6 +306,8 @@ static PlatformSample sim_collect_platform_sample()
   sample.loop_period_ms = g_loop_period_ms;
   sample.worst_loop_period_ms = g_worst_loop_period_ms;
   const float t = sample.elapsed_ms / 1000.0f;
+  if (sample.elapsed_ms >= 5000U && !g_sim_ecu.isConnected())
+    g_sim_ecu.connect();
   const SimVehicleSnapshot vehicle = sim_make_wot_pull(sample.elapsed_ms);
 
   g_signals.rpm.value = vehicle.rpm;
@@ -400,7 +402,6 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
 {
   g_board_data = &data;
   sim_bringup_hardware();
-  g_sim_ecu.connect();
   g_warn_batt = data.add_warning_image("batt", 140, 38, &g_host_ctx.batt_img);
   g_warn_brake = data.add_warning_light("brake", "BRAKE", 110, 70, GFX_RED);
   g_warn_4ws = data.add_warning_light("4ws", "4WS", 175, 45, GFX_YELLOW);

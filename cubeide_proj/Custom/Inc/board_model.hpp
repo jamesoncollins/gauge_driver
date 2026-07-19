@@ -343,18 +343,27 @@ inline void BoardObjectPanel::render(SharedRenderCtx &ctx) const
   if (active_count == 0)
     return;
 
-  const coord_t panel_w = 180;
-  const coord_t panel_h = 96;
+  const coord_t columns = active_count > 2 ? 2 : (coord_t)active_count;
+  const coord_t rows = (active_count + columns - 1) / columns;
+  const coord_t slot_w = 86;
+  const coord_t slot_h = 42;
+  const coord_t panel_pad_x = 6;
+  const coord_t panel_pad_y = 6;
+  coord_t panel_w = columns * slot_w + 2 * panel_pad_x;
+  coord_t panel_h = rows * slot_h + 2 * panel_pad_y;
+  const coord_t max_panel_w = ctx.screen_width > 12 ? ctx.screen_width - 12 : ctx.screen_width;
+  if (panel_w > max_panel_w)
+    panel_w = max_panel_w;
   const coord_t panel_center_y = 164 + (panel_h * 30) / 100;
   const coord_t panel_x = (ctx.screen_width - panel_w) / 2;
   const coord_t panel_y = panel_center_y - panel_h / 2;
   gdispFillArea(panel_x, panel_y, panel_w, panel_h, GFX_BLACK);
   gdispDrawBox(panel_x, panel_y, panel_w, panel_h, GFX_AMBER_YEL);
 
-  const coord_t columns = active_count > 2 ? 2 : (coord_t)active_count;
-  const coord_t rows = (active_count + columns - 1) / columns;
-  const coord_t slot_w = panel_w / columns;
-  const coord_t slot_h = panel_h / rows;
+  const coord_t content_x = panel_x + panel_pad_x;
+  const coord_t content_y = panel_y + panel_pad_y;
+  const coord_t actual_slot_w = (panel_w - 2 * panel_pad_x) / columns;
+  const coord_t actual_slot_h = (panel_h - 2 * panel_pad_y) / rows;
   std::size_t active_index = 0;
   for (std::size_t i = 0; i < object_count; ++i)
   {
@@ -362,10 +371,10 @@ inline void BoardObjectPanel::render(SharedRenderCtx &ctx) const
     if (!is_active(object))
       continue;
 
-    const coord_t slot_x = panel_x + (coord_t)(active_index % columns) * slot_w;
-    const coord_t slot_y = panel_y + (coord_t)(active_index / columns) * slot_h;
-    const coord_t slot_center_x = slot_x + slot_w / 2;
-    const coord_t slot_center_y = slot_y + slot_h / 2;
+    const coord_t slot_x = content_x + (coord_t)(active_index % columns) * actual_slot_w;
+    const coord_t slot_y = content_y + (coord_t)(active_index / columns) * actual_slot_h;
+    const coord_t slot_center_x = slot_x + actual_slot_w / 2;
+    const coord_t slot_center_y = slot_y + actual_slot_h / 2;
 
     if (object.style == BOARD_PANEL_OBJECT_STYLE_IMAGE && object.image != nullptr)
     {
@@ -378,8 +387,8 @@ inline void BoardObjectPanel::render(SharedRenderCtx &ctx) const
       const coord_t text_pad_y = 4;
       gdispFillStringBox(slot_x + 2,
                          slot_y + text_pad_y,
-                         slot_w - 4,
-                         slot_h - 2 * text_pad_y,
+                         actual_slot_w - 4,
+                         actual_slot_h - 2 * text_pad_y,
                          object.label,
                          ctx.font20,
                          object.color,

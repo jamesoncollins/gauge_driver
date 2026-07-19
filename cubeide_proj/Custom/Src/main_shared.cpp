@@ -31,10 +31,10 @@ void compute_gimbal_from_board_acceleration(const BoardAccelerationVector &accel
 void render_ctx_init_shared(SharedRenderCtx &ctx)
 {
   if (ctx.line_plot_tps != nullptr && ctx.line_plot_tps->isInit == false)
-    linePlotInit(ctx.line_plot_tps, ctx.line_plot_tps_data, 20, 130, 42, 100, 0);
+    linePlotInit(ctx.line_plot_tps, ctx.line_plot_tps_data, 20, 135, 42, 100, 0);
 
   if (ctx.line_plot_knock != nullptr && ctx.line_plot_knock->isInit == false)
-    linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 130, 42, 15, GFX_RED);
+    linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 135, 42, 15, GFX_RED);
 }
 
 #if defined(__GNUC__)
@@ -144,8 +144,8 @@ static void render_high_beam_telltale(const RuntimeState &state, SharedRenderCtx
   if (!platform_state_has(state.data_mask, PLATFORM_DATA_WARN_HIGH_BEAM) || !state.warn_high_beam || ctx.beam_img == nullptr)
     return;
 
-  const coord_t image_x = (coord_t)((ctx.screen_width * 3) / 5);
-  const coord_t image_y = (coord_t)((ctx.screen_height * 2) / 3);
+  const coord_t image_x = (coord_t)(190);
+  const coord_t image_y = (coord_t)(160);
   gdispImageDraw(ctx.beam_img, image_x, image_y, ctx.beam_img->width, ctx.beam_img->height, 0, 0);
 }
 
@@ -204,7 +204,23 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
   if (state.ecu_flasher != nullptr)
     show_error = flasher_fun(state.ecu_flasher);
   if (!ecu_connected && show_error)
-    gdispFillString(20, 144, "ECU ERR      ", font20, GFX_RED, GFX_BLACK);
+  {
+    const coord_t error_x = 44;
+    const coord_t error_y = 52;
+    const coord_t error_w = 152;
+    const coord_t error_h = 62;
+    gdispFillArea(error_x, error_y, error_w, error_h, GFX_BLACK);
+    gdispDrawBox(error_x, error_y, error_w, error_h, GFX_AMBER_YEL);
+    gdispFillStringBox(error_x + 4,
+                       error_y + 4,
+                       error_w - 8,
+                       error_h - 8,
+                       "ECU ERR",
+                       font20,
+                       GFX_RED,
+                       GFX_BLACK,
+                       (gJustify)(gJustifyCenter | gJustifyNoWordWrap));
+  }
 }
 
 void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
@@ -228,7 +244,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
 
     case 1:
       if (ctx.gimball != nullptr && platform_state_has(state.data_mask, PLATFORM_DATA_GIMBAL))
-        drawGimball(ctx.gimball, 56, 203, 34, state.gimbal_x, state.gimbal_y);
+        drawGimball(ctx.gimball, 50, 210, 34, state.gimbal_x, state.gimbal_y);
       break;
 
     case 2:
@@ -269,7 +285,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         tps_p->isNew = false;
       }
       if (ctx.line_plot_tps != nullptr)
-        linePlot(80, 236, ctx.line_plot_tps);
+        linePlot(77, 240, ctx.line_plot_tps);
 
       if (ctx.line_plot_knock != nullptr && knock_p != nullptr && knock_p->isNew)
       {
@@ -277,7 +293,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         knock_p->isNew = false;
       }
       if (ctx.line_plot_knock != nullptr)
-        linePlot(80, 236, ctx.line_plot_knock);
+        linePlot(77, 240, ctx.line_plot_knock);
       break;
     }
 
@@ -319,6 +335,8 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
 
     case 6:
     {
+      render_high_beam_telltale(state, ctx);
+
       const int WARN_SIZE = 20;
       const int WARN_FINAL_SIZE = 70;
       const int SHIFT_SIZE = 100;
@@ -337,8 +355,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         gdispFillDualCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), WARN_FINAL_SIZE, GFX_BLACK, WARN_FINAL_SIZE, GFX_GREEN);
         gdispFillCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), current_warn_size, GFX_YELLOW);
       }
-
-      render_high_beam_telltale(state, ctx);
+      
       data.warning_panel.render(ctx);
       break;
     }
