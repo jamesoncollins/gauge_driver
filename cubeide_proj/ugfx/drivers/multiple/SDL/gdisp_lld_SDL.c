@@ -468,12 +468,18 @@ static void SDL_extendUpdateRect (int x,int y) {
 		context->maxy = y;
 }
 
+#if GDISP_HARDWARE_FLUSH
+	LLDSPEC void gdisp_lld_flush(GDisplay *g) {
+		(void)g;
+		if (context && context->minx <= context->maxx && context->miny <= context->maxy)
+			context->need_redraw = 1;
+	}
+#endif
 LLDSPEC void gdisp_lld_draw_pixel(GDisplay *g)
 {
 	if (context) {
 		context->framebuf[(g->p.y*GDISP_SCREEN_WIDTH)+g->p.x] = gdispColor2Native(g->p.color);
 		SDL_extendUpdateRect (g->p.x,g->p.y);
-		context->need_redraw = 1;
 	}
 }
 
@@ -491,7 +497,6 @@ LLDSPEC void gdisp_lld_draw_pixel(GDisplay *g)
 			}
 			SDL_extendUpdateRect (g->p.x,g->p.y);
 			SDL_extendUpdateRect (g->p.x+g->p.cx-1,g->p.y+g->p.cy-1);
-			context->need_redraw = 1;
 		}
 	}
 

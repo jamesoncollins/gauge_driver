@@ -39,6 +39,9 @@
 	 */
 	#define GDISP_WIN32_USE_INDIRECT_UPDATE		GFXON
 #endif
+#ifndef GDISP_WIN32_PRESENT_ON_FLUSH
+	#define GDISP_WIN32_PRESENT_ON_FLUSH		GFXOFF
+#endif
 #ifndef GKEYBOARD_WIN32_NO_LAYOUT
 	/**
 	 * Setting this to GFXON turns off the layout engine.
@@ -426,6 +429,7 @@
 static DWORD			winThreadId;
 static volatile gBool	QReady;
 static HANDLE			drawMutex;
+static volatile gBool	win32FlushPaintPending;
 static HWND				hWndParent = 0;
 
 /*===========================================================================*/
@@ -716,6 +720,14 @@ static LRESULT myWindowProc(HWND hWnd,	UINT Msg, WPARAM wParam, LPARAM lParam)
 		// Paint the main window area
 		WaitForSingleObject(drawMutex, INFINITE);
 		dc = BeginPaint(hWnd, &ps);
+		#if GDISP_WIN32_PRESENT_ON_FLUSH
+			if (!win32FlushPaintPending) {
+				EndPaint(hWnd, &ps);
+				ReleaseMutex(drawMutex);
+				break;
+			}
+			win32FlushPaintPending = gFalse;
+		#endif
 		BitBlt(dc, ps.rcPaint.left, ps.rcPaint.top,
 			ps.rcPaint.right - ps.rcPaint.left,
 			(ps.rcPaint.bottom > GDISP_SCREEN_HEIGHT ? GDISP_SCREEN_HEIGHT : ps.rcPaint.bottom) - ps.rcPaint.top,
@@ -921,8 +933,17 @@ LLDSPEC gBool gdisp_lld_init(GDisplay *g) {
 #if GDISP_HARDWARE_FLUSH
 	LLDSPEC void gdisp_lld_flush(GDisplay *g) {
 		winPriv	*	priv;
+		RECT		rect;
 
 		priv = g->priv;
+		#if GDISP_WIN32_PRESENT_ON_FLUSH
+			rect.left = 0;
+			rect.top = 0;
+			rect.right = g->g.Width;
+			rect.bottom = g->g.Height;
+			win32FlushPaintPending = gTrue;
+			InvalidateRect(priv->hwnd, &rect, FALSE);
+		#endif
 		UpdateWindow(priv->hwnd);
 	}
 #endif
