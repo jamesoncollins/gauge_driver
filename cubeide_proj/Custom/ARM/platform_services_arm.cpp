@@ -90,6 +90,8 @@ static const EcuSignalMap g_ecu_signal_map = {
 
 static BoardAccelerationVector g_acceleration_mps2 = {};
 static constexpr int X27_STEPS = 240 * 12;
+static constexpr float TACH_MAX_RPM = 10000.0f;
+static constexpr float SPEED_MAX_MPH = 180.0f;
 static constexpr uint16_t bulb_mask(unsigned bit)
 {
   return (uint16_t)(1U << bit);
@@ -149,6 +151,12 @@ struct ArmMainCtx
   bool audio_started = false;
   int toggle_mode = 0;
   uint32_t toggleTime_last = 0;
+  float last_rpm = 0.0f;
+  uint32_t last_rpm_time = 0;
+  float rpm_rate_per_ms = 0.0f;
+  float last_speed = 0.0f;
+  uint32_t last_speed_time = 0;
+  float speed_rate_per_ms = 0.0f;
 
   const int bufLen = 256;
   int logBufInd = 0;
@@ -157,6 +165,48 @@ struct ArmMainCtx
 
 static ArmMainCtx g_arm_main;
 
+static float clamp_needle_value(float value, float min_value, float max_value)
+{
+  if (value < min_value)
+    return min_value;
+  if (value > max_value)
+    return max_value;
+  return value;
+}
+
+static float extrapolate_needle_value(float measurement,
+                                      bool updated,
+                                      bool stale,
+                                      float &last_value,
+                                      uint32_t &last_update_time,
+                                      float &rate_per_ms,
+                                      float max_value)
+{
+  const uint32_t now = HAL_GetTick();
+  if (stale)
+  {
+    last_value = 0.0f;
+    last_update_time = now;
+    rate_per_ms = 0.0f;
+    return 0.0f;
+  }
+
+  if (updated || last_update_time == 0)
+  {
+    const uint32_t dt_ms = now - last_update_time;
+    if (last_update_time != 0 && dt_ms > 0)
+      rate_per_ms = (measurement - last_value) / (float)dt_ms;
+    else
+      rate_per_ms = 0.0f;
+
+    last_value = measurement;
+    last_update_time = now;
+  }
+
+  const uint32_t extrapolate_ms = now - last_update_time;
+  const float extrapolated = last_value + (rate_per_ms * (float)extrapolate_ms);
+  return clamp_needle_value(extrapolated, 0.0f, max_value);
+}
 static void arm_reset_motor_driver()
 {
   HAL_GPIO_WritePin(RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET);
@@ -342,12 +392,28 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
     const VehicleConfig &vehicle = get_build_config().vehicle;
     HzSensorKalmanFilter<16>::Config speed_cfg = {};
     speed_cfg.units_per_hz = vehicle.mph_per_hz;
+    speed_cfg.units_bias = 0.0f;
     speed_cfg.clock_hz = 1000000U; // TIM2 capture runs at 1 MHz
+    speed_cfg.q_jerk = 5.0f;
+    speed_cfg.meas_var = 1.0f * 1.0f;
+    speed_cfg.gate_sigma = 5.0f;
+    speed_cfg.zero_speed_thresh_units = 5.0f;
+    speed_cfg.zero_periods_without_tick = 3.0f;
+    speed_cfg.max_accel_units_per_s = 60.0f;
+    speed_cfg.max_units = SPEED_MAX_MPH;
     g_speed.init(speed_cfg, get_us_32);
 
     HzSensorKalmanFilter<16>::Config tach_cfg = {};
     tach_cfg.units_per_hz = vehicle.rpm_per_hz;
+    tach_cfg.units_bias = 0.0f;
     tach_cfg.clock_hz = 1000000U; // TIM2 capture runs at 1 MHz
+    tach_cfg.q_jerk = 10000.0f;
+    tach_cfg.meas_var = 3.0f * 3.0f;
+    tach_cfg.gate_sigma = 5.0f;
+    tach_cfg.zero_speed_thresh_units = 400.0f;
+    tach_cfg.zero_periods_without_tick = 3.0f;
+    tach_cfg.max_accel_units_per_s = 4000.0f;
+    tach_cfg.max_units = TACH_MAX_RPM;
     g_tach.init(tach_cfg, get_us_32);
   }
 
@@ -374,9 +440,7 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
   }
   arm_reset_motor_driver();
 
-  // Initialize BTBuffer before enabling timer/IRQ paths that may push into it.
-  IRQn_Type bt_irqs[] = {TIM1_UP_TIM16_IRQn, TIM1_TRG_COM_TIM17_IRQn, USART1_IRQn};
-  static ArmBTBufferBackend bt_backend(bt_irqs, (int)(sizeof(bt_irqs) / sizeof(bt_irqs[0])));
+  static ArmBTBufferBackend bt_backend(nullptr, 0);
   BTBuffer::CreateInstance(&bt_backend);
 
   x12[0] = g_arm_main.tachX12;
@@ -592,6 +656,12 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
   g_arm_main.audio_started = false;
   g_arm_main.toggle_mode = 0;
   g_arm_main.toggleTime_last = now;
+  g_arm_main.last_rpm = 0.0f;
+  g_arm_main.last_rpm_time = 0;
+  g_arm_main.rpm_rate_per_ms = 0.0f;
+  g_arm_main.last_speed = 0.0f;
+  g_arm_main.last_speed_time = 0;
+  g_arm_main.speed_rate_per_ms = 0.0f;
   draw_step = 0;
   timer_draw_ms = now;
   arm_publish_current_data();
@@ -641,9 +711,23 @@ void board_update()
     auto spd = g_speed.retrieveValue();
     rpm = tach.stale ? 0.0f : tach.units;
     speed = spd.stale ? 0.0f : spd.units;
+    const float extrapolated_rpm = extrapolate_needle_value(rpm,
+                                                            tach.updated,
+                                                            tach.stale,
+                                                            g_arm_main.last_rpm,
+                                                            g_arm_main.last_rpm_time,
+                                                            g_arm_main.rpm_rate_per_ms,
+                                                            TACH_MAX_RPM);
+    const float extrapolated_speed = extrapolate_needle_value(speed,
+                                                              spd.updated,
+                                                              spd.stale,
+                                                              g_arm_main.last_speed,
+                                                              g_arm_main.last_speed_time,
+                                                              g_arm_main.speed_rate_per_ms,
+                                                              SPEED_MAX_MPH);
+    g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(extrapolated_rpm));
+    g_arm_main.speedX12->setPosition(get_x12_ticks_speed(extrapolated_speed));
   }
-  g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(rpm));
-  g_arm_main.speedX12->setPosition(get_x12_ticks_speed(speed));
 #endif
   g_arm_main.odoX12->setPosition(odo_ticks);
 

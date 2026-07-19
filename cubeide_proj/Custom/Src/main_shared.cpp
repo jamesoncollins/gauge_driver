@@ -384,6 +384,7 @@ struct SharedMainLoopState
   RuntimeState state = {};
   int draw_step = 0;
   uint32_t timer_draw_ms = 0;
+  uint32_t timer_telemetry_ms = 0;
   bool initialized = false;
   bool exit_requested = false;
 };
@@ -396,6 +397,7 @@ void main_loop_init(SharedMainLoopState &loop)
     return;
 
   loop.timer_draw_ms = HAL_GetTick();
+  loop.timer_telemetry_ms = loop.timer_draw_ms;
   board_init(loop.board_data, loop.render_ctx, loop.draw_step, loop.timer_draw_ms);
   loop.state = runtime_state_from_board_data(loop.board_data);
   render_ctx_init_shared(loop.render_ctx);
@@ -412,7 +414,13 @@ void main_loop_step(SharedMainLoopState &loop)
   const int prev_rpm_mode = loop.state.rpm_mode;
   loop.state = runtime_state_from_board_data(loop.board_data);
   loop.state.rpm_mode = compute_rpm_mode_shared(loop.state.rpm, prev_rpm_mode);
-  (void)telemetry_publish_board_data(loop.board_data, HAL_GetTick());
+
+  const uint32_t now_ms = HAL_GetTick();
+  if ((now_ms - loop.timer_telemetry_ms) >= get_print_interval_ms())
+  {
+    loop.timer_telemetry_ms = now_ms;
+    (void)telemetry_publish_board_data(loop.board_data, now_ms);
+  }
 
   if (board_check_exit())
   {
