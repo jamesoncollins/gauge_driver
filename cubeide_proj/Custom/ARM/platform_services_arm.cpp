@@ -408,6 +408,7 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
       .line_plot_tps_data = g_arm_main.tpsPlotData,
       .line_plot_knock = &g_arm_main.linePlotKnock,
       .line_plot_knock_data = g_arm_main.knockPlotData,
+      .render_cycle_complete = false,
   };
 }
 

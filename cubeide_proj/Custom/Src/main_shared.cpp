@@ -334,7 +334,9 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
       break;
   }
 
+  ctx.render_cycle_complete = flush_after_hooks;
   board_render_after(state, data, ctx);
+  ctx.render_cycle_complete = false;
 
   if (flush_after_hooks)
     gdispFlush();

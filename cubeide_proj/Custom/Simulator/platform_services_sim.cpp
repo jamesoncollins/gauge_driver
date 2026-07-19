@@ -277,6 +277,7 @@ static void sim_bringup_hardware()
     .line_plot_tps_data = g_host_ctx.tps_plot_data,
     .line_plot_knock = &g_host_ctx.line_plot_knock,
     .line_plot_knock_data = g_host_ctx.knock_plot_data,
+    .render_cycle_complete = false,
   };
 }
 
@@ -430,6 +431,10 @@ void board_render_after(const RuntimeState &state, const BoardSharedData &data, 
 {
   (void)state;
   (void)data;
+#if defined(GAUGE_HOST_BACKEND_WIN32)
+  if (!ctx.render_cycle_complete)
+    return;
+#endif
   sim_draw_plastic_overlay(ctx);
 }
 

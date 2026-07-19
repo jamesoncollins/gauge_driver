@@ -327,6 +327,7 @@ struct SharedRenderCtx
   int *line_plot_tps_data;
   LinePlot_t *line_plot_knock;
   int *line_plot_knock_data;
+  bool render_cycle_complete;
 };
 inline void BoardObjectPanel::render(SharedRenderCtx &ctx) const
 {
