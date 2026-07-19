@@ -97,6 +97,11 @@ RuntimeState runtime_state_from_board_data(const BoardSharedData &data)
     state.data_mask |= PLATFORM_DATA_WARN_LAMP;
     state.warn_lamp_on = data.lamp_on.good && data.lamp_on.value;
   }
+  if (data.high_beam.supported)
+  {
+    state.data_mask |= PLATFORM_DATA_WARN_HIGH_BEAM;
+    state.warn_high_beam = data.high_beam.good && data.high_beam.value;
+  }
   if (data.ecu_supported)
   {
     state.data_mask |= PLATFORM_DATA_ECU;
@@ -132,6 +137,16 @@ int compute_rpm_mode_shared(float rpm, int prev_mode)
     return 1;
 
   return 0;
+}
+
+static void render_high_beam_telltale(const RuntimeState &state, SharedRenderCtx &ctx)
+{
+  if (!platform_state_has(state.data_mask, PLATFORM_DATA_WARN_HIGH_BEAM) || !state.warn_high_beam || ctx.beam_img == nullptr)
+    return;
+
+  const coord_t image_x = (coord_t)((ctx.screen_width * 3) / 5);
+  const coord_t image_y = (coord_t)((ctx.screen_height * 2) / 3);
+  gdispImageDraw(ctx.beam_img, image_x, image_y, ctx.beam_img->width, ctx.beam_img->height, 0, 0);
 }
 
 static bool ecu_param_is_fresh(const ECUK::ecuParam_t *param, uint32_t now_ms)
@@ -323,6 +338,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         gdispFillCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), current_warn_size, GFX_YELLOW);
       }
 
+      render_high_beam_telltale(state, ctx);
       data.warning_panel.render(ctx);
       break;
     }

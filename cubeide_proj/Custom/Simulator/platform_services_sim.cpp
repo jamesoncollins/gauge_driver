@@ -72,7 +72,6 @@ static BoardSharedData *g_board_data = nullptr;
 static BoardWarningLight *g_warn_batt = nullptr;
 static BoardWarningLight *g_warn_brake = nullptr;
 static BoardWarningLight *g_warn_4ws = nullptr;
-static BoardWarningLight *g_warn_high_beam = nullptr;
 
 
 static float sim_clampf(float value, float low, float high)
@@ -342,11 +341,13 @@ static PlatformSample sim_collect_platform_sample()
   if (((int)t % 9) == 5) sample.btn = BTN_L;
   if (((int)t % 9) == 7) sample.btn = BTN_R;
 
-  sample.warn_4ws = true;
+  const int warning_phase = (int)t % 16;
+  const bool warnings_clear = warning_phase < 4;
+  sample.warn_4ws = !warnings_clear && warning_phase >= 8;
   sample.warn_lamp_on = (((int)t % 8) < 4);
   sample.warn_high_beam = (((int)t % 6) >= 3);
-  sample.warn_batt = (((int)t % 10) >= 2);
-  sample.warn_brake = (((int)t % 11) >= 3);
+  sample.warn_batt = !warnings_clear && (((int)t % 10) >= 2);
+  sample.warn_brake = !warnings_clear && (((int)t % 11) >= 3);
   return sample;
 }
 
@@ -392,8 +393,7 @@ static void sim_publish_current_data()
     g_warn_brake->publish(sample.warn_brake);
   if (g_warn_4ws != nullptr)
     g_warn_4ws->publish(sample.warn_4ws);
-  if (g_warn_high_beam != nullptr)
-    g_warn_high_beam->publish(sample.warn_high_beam);
+  g_board_data->high_beam.publish(sample.warn_high_beam, now);
 }
 
 void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
@@ -404,7 +404,6 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
   g_warn_batt = data.add_warning_image("batt", 140, 38, &g_host_ctx.batt_img);
   g_warn_brake = data.add_warning_light("brake", "BRAKE", 110, 70, GFX_RED);
   g_warn_4ws = data.add_warning_light("4ws", "4WS", 175, 45, GFX_YELLOW);
-  g_warn_high_beam = data.add_warning_image("high_beam", 190, 68, &g_host_ctx.beam_img);
   ctx = g_host_render_ctx;
   sim_publish_current_data();
   draw_step = 0;

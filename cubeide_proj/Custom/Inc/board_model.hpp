@@ -233,6 +233,7 @@ struct BoardSharedData
   BoardValue<BoardAccelerationVector> acceleration_mps2;
   BoardValue<bool> startup_init_error;
   BoardValue<bool> lamp_on;
+  BoardValue<bool> high_beam;
   BoardValue<button_e> btn;
 
   bool ecu_supported = false;
@@ -277,6 +278,7 @@ struct BoardSharedData
     acceleration_mps2.mark_read();
     startup_init_error.mark_read();
     lamp_on.mark_read();
+    high_beam.mark_read();
     btn.mark_read();
     warning_panel.mark_all_read();
     for (std::size_t i = 0; i < string_value_count; ++i)
@@ -341,9 +343,9 @@ inline void BoardObjectPanel::render(SharedRenderCtx &ctx) const
   if (active_count == 0)
     return;
 
-  const coord_t panel_w = 150;
+  const coord_t panel_w = 180;
   const coord_t panel_h = 96;
-  const coord_t panel_center_y = 164;
+  const coord_t panel_center_y = 164 + (panel_h * 30) / 100;
   const coord_t panel_x = (ctx.screen_width - panel_w) / 2;
   const coord_t panel_y = panel_center_y - panel_h / 2;
   gdispFillArea(panel_x, panel_y, panel_w, panel_h, GFX_BLACK);

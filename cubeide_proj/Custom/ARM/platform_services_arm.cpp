@@ -135,7 +135,6 @@ struct ArmMainCtx
   BoardWarningLight *warn_batt = nullptr;
   BoardWarningLight *warn_brake = nullptr;
   BoardWarningLight *warn_4ws = nullptr;
-  BoardWarningLight *warn_high_beam = nullptr;
   flasher_t ecuGoodFlasher = {.rate_ms = 500, .last_ms = 0};
 
   uint32_t timerLoop = 0;
@@ -533,8 +532,7 @@ static void arm_publish_current_data()
     g_arm_main.warn_brake->publish(sample.warn_brake);
   if (g_arm_main.warn_4ws != nullptr)
     g_arm_main.warn_4ws->publish(sample.warn_4ws);
-  if (g_arm_main.warn_high_beam != nullptr)
-    g_arm_main.warn_high_beam->publish(sample.warn_high_beam);
+  g_board_data->high_beam.publish(sample.warn_high_beam, now);
 }
 
 void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
@@ -578,7 +576,6 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
   g_arm_main.warn_batt = data.add_warning_image("batt", 140, 38, &g_arm_main.battImg);
   g_arm_main.warn_brake = data.add_warning_light("brake", "BRAKE", 110, 70, GFX_RED);
   g_arm_main.warn_4ws = data.add_warning_light("4ws", "4WS", 175, 45, GFX_YELLOW);
-  g_arm_main.warn_high_beam = data.add_warning_image("high_beam", 190, 68, &g_arm_main.beamImg);
 
   const uint32_t now = HAL_GetTick();
   g_arm_main.timerLoop = now;
