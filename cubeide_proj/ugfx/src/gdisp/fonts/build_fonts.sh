@@ -31,7 +31,7 @@ function build {
 
 	$MCUFONT filter $dat $CHARS
 
-	if [ $outfile = 'LargeNumbers' ]; then
+	if [[ $outfile = 'LargeNumbers' || $outfile = BITSUMIS*_Numbers ]]; then
 		$MCUFONT filter $dat 0x20-0x39
 	fi
 
@@ -60,6 +60,9 @@ build DejaVuSans.ttf DejaVuSans24_aa rlefont 24
 build DejaVuSans.ttf DejaVuSans32_aa rlefont 32
 build DejaVuSans-Bold.ttf DejaVuSansBold12 bwfont 12 bw
 build DejaVuSans-Bold.ttf DejaVuSansBold12_aa rlefont 12
+build BITSUMIS.ttf BITSUMIS60_Numbers rlefont 60 bw
+build BITSUMIS.ttf BITSUMIS72_Numbers rlefont 72 bw
+build BITSUMIS.ttf BITSUMIS84_Numbers rlefont 84 bw
 build DejaVuSans-Bold.ttf LargeNumbers rlefont 24 bw
 build fixed_10x20.bdf fixed_10x20 bwfont
 build fixed_7x14.bdf fixed_7x14 bwfont

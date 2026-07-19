@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 #include <atomic>
-#include <stm32wb55xx.h>
+#include "platform_api.h"
 
 class SwitecX12
 {

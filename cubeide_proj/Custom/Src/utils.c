@@ -1,8 +1,7 @@
 #include "utils.h"
 #include "common.h"
 #include "gfx.h"
-#include "stm32wbxx_hal.h"
-#include "main.h"
+#include "platform_api.h"
 #include "assert.h"
 #include "stdbool.h"
 

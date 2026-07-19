@@ -4,3 +4,7 @@
 [Rr]elease
 [Dd]ebug
 .launch
+/build*
+!scripts/build-preset.sh
+!build-environments.md
+__pycache__

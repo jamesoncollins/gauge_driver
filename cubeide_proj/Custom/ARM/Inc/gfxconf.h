@@ -30,27 +30,25 @@
 #ifndef _GFXCONF_H
 #define _GFXCONF_H
 
-/* The operating system to use. One of these must be defined - preferably in your Makefile */
-//#define GFX_USE_OS_CHIBIOS	GFXOFF
-//#define GFX_USE_OS_WIN32		GFXOFF
-//#define GFX_USE_OS_LINUX		GFXOFF
-//#define GFX_USE_OS_OSX		GFXOFF
+/* The operating system to use. */
 #define GFX_USE_OS_RAW32 GFXON
 #define GFX_OS_HEAP_SIZE 31500
 
 /* GFX sub-systems to turn on */
-#define GFX_USE_GDISP			GFXON
+#define GFX_USE_GDISP GFXON
 
 /* Features for the GDISP sub-system. */
-#define GDISP_NEED_VALIDATION                        GFXON
-#define GDISP_NEED_CLIP                              GFXON
-#define GDISP_NEED_TEXT                          GFXON
-#define GDISP_NEED_CIRCLE                       GFXON
-#define GDISP_NEED_DUALCIRCLE                   GFXON
-#define GDISP_NEED_CONVEX_POLYGON               GFXON // thick lines
-#define GDISP_INCLUDE_FONT_DEJAVUSANS10          GFXON
-#define GDISP_INCLUDE_FONT_DEJAVUSANS20          GFXON
+#define GDISP_NEED_VALIDATION GFXON
+#define GDISP_NEED_CLIP GFXON
+#define GDISP_NEED_TEXT GFXON
+#define GDISP_NEED_CIRCLE GFXON
+#define GDISP_NEED_DUALCIRCLE GFXON
+#define GDISP_NEED_CONVEX_POLYGON GFXON
+#define GDISP_INCLUDE_FONT_DEJAVUSANS10 GFXON
+#define GDISP_INCLUDE_FONT_DEJAVUSANS20 GFXON
 #define GDISP_INCLUDE_FONT_LCDDOT_TR30 GFXON
+//#define GDISP_INCLUDE_FONT_BITSUMIS60_NUMBERS GFXON
+#define GDISP_INCLUDE_FONT_BITSUMIS84_NUMBERS GFXON
 
 #define GFX_USE_GFILE GFXON
 #define GFILE_NEED_MEMFS GFXON
@@ -58,13 +56,6 @@
 #define GDISP_NEED_IMAGE_GIF GFXON
 #define GDISP_NEED_IMAGE_BMP GFXON
 
-//#define GWIN_NEED_WIDGET GFXON
-//#define GFX_USE_GINPUT GFXON
-//#define GFX_USE_GWIN GFXON
-//#define GWIN_NEED_PROGRESSBAR GFXON
-
-#define GDISP_NEED_STARTUP_LOGO                      GFXOFF
-
+#define GDISP_NEED_STARTUP_LOGO GFXOFF
 
 #endif /* _GFXCONF_H */
-

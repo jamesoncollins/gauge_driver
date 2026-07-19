@@ -4,5 +4,4 @@
 [Rr]elease
 [Dd]ebug
 .launch
-.vscode
-build
+build*

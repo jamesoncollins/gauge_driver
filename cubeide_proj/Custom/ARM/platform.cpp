@@ -10,6 +10,9 @@
 
 #include "main.h"
 #include "cpp_main.h"
+#include "build_config.hpp"
+#include "runtime_context.hpp"
+#include "arm_runtime.hpp"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 extern "C" {
@@ -17,9 +20,6 @@ extern "C" {
 #include "custom_app.h"
 #include "custom_stm.h"
 }
-#include "../SwitecX12-lib/SwitecX12.hpp"
-#include "HzSensorKalmanFilter.hpp"
-
 extern I2C_HandleTypeDef hi2c1, hi2c3;
 extern SPI_HandleTypeDef hspi1;
 extern LPTIM_HandleTypeDef hlptim2; // sim signals for tach/rpm on GPIO3 / PA8
@@ -251,10 +251,11 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 
     // Odometer ticks with speed
     speed_tick_count++;
-    if (speed_tick_count == SPEED_TICKS_PER_ODO_TICK)
+    const VehicleConfig &vehicle = get_build_config().vehicle;
+    if (speed_tick_count == vehicle.speed_ticks_per_odo_tick)
     {
       speed_tick_count = 0;
-      odo_ticks += ODO_STEPS_PER_TICK;
+      odo_ticks += vehicle.odo_steps_per_tick;
     }
   }
   else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4)

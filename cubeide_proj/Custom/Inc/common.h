@@ -8,7 +8,7 @@
 #ifndef INC_COMMON_H_
 #define INC_COMMON_H_
 
-#include "stm32wbxx_hal.h"
+#include "platform_api.h"
 
 #define SYS_TICKS_PER_US (uint32_t) ((float) 64000000 * (float) 0.000001)
 #define US_PER_SYS_TICK (float) (1.0f / (float) 64000000 * (float) 1e6)

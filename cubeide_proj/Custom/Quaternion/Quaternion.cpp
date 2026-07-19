@@ -34,8 +34,8 @@ constexpr EulerAngles ToEulerAngles (Quaternion q)
   float cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
 
   // pitch (y-axis rotation)
-  float sinp = std::sqrt (1. + 2. * (q.w * q.y - q.x * q.z));
-  float cosp = std::sqrt (1. - 2. * (q.w * q.y - q.x * q.z));
+  float sinp = sqrt (1. + 2. * (q.w * q.y - q.x * q.z));
+  float cosp = sqrt (1. - 2. * (q.w * q.y - q.x * q.z));
 
   // yaw (z-axis rotation)
   float siny_cosp = 2 * (q.w * q.z + q.x * q.y);
@@ -43,9 +43,9 @@ constexpr EulerAngles ToEulerAngles (Quaternion q)
 
   return
   {
-    std::atan2(sinr_cosp, cosr_cosp),
-    2.f * std::atan2(sinp, cosp) - (float)M_PI / 2.f,
-    std::atan2(siny_cosp, cosy_cosp),
+    atan2(sinr_cosp, cosr_cosp),
+    2.f * atan2(sinp, cosp) - (float)M_PI / 2.f,
+    atan2(siny_cosp, cosy_cosp),
   };
 }
 

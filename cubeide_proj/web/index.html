@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gauge Driver Web Smoke</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --header-height: 40px;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: #111;
+      color: #ddd;
+      font-family: system-ui, sans-serif;
+    }
+
+    #wrap {
+      display: grid;
+      grid-template-rows: var(--header-height) minmax(0, 1fr);
+      min-height: 100%;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      background: #202020;
+    }
+
+    #stage {
+      display: grid;
+      min-height: 0;
+      place-items: center;
+      padding: 12px;
+    }
+
+    canvas {
+      display: block;
+      width: min(100%, 480px, calc((100vh - var(--header-height) - 24px) * 240 / 320));
+      height: auto;
+      aspect-ratio: 240 / 320;
+      image-rendering: pixelated;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <header>Gauge Driver Web Smoke</header>
+    <div id="stage">
+      <canvas id="canvas" width="240" height="320" tabindex="0"></canvas>
+    </div>
+  </div>
+  <script>
+    window.Module = {
+      canvas: document.getElementById('canvas'),
+      print: console.log,
+      printErr: console.error,
+      onRuntimeInitialized: () => console.log('runtime initialized')
+    };
+  </script>
+  <script src="gauge_driver.js?v=overlay-mask-240x320-4"></script>
+</body>
+</html>

@@ -1,38 +1,17 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "stm32wbxx_hal.h"
-#include "ble.h"
-#include "custom_app.h"
-#include "custom_stm.h"
 #include "BTBuffer.hpp"
+#include "BTBufferBackend.hpp"
 
 
 BTBuffer *BTBuffer::BTBuffer_ = nullptr;
 
-void BTBuffer::disableIRQs()
-{
-  for(int i=0; i<numIRQ; i++)
-  {
-    HAL_NVIC_DisableIRQ(irqList[i]);
-  }
-}
+BTBuffer::BTBuffer(BTBufferBackend *backend) : backend_(backend) {}
 
-void BTBuffer::enableIRQs()
+bool BTBuffer::IsCreated()
 {
-  for(int i=0; i<numIRQ; i++)
-  {
-    HAL_NVIC_EnableIRQ(irqList[i]);
-  }
-}
-
-BTBuffer::BTBuffer( IRQn_Type *irqs, int num_irqs )
-{
-  for(int i=0; i<num_irqs; i++)
-  {
-    irqList[i] = irqs[i];
-  }
-  numIRQ = num_irqs;
+  return BTBuffer_ != nullptr;
 }
 
 BTBuffer* BTBuffer::GetInstance ()
@@ -43,11 +22,11 @@ BTBuffer* BTBuffer::GetInstance ()
 
 }
 
-void BTBuffer::CreateInstance( IRQn_Type *irqs, int num_irqs )
+void BTBuffer::CreateInstance(BTBufferBackend *backend)
 {
   if (BTBuffer_ == nullptr)
   {
-    BTBuffer_ = new BTBuffer (irqs, num_irqs);
+    BTBuffer_ = new BTBuffer(backend);
   }
   else
   {
@@ -73,10 +52,8 @@ bool BTBuffer::popBuffer()
     return false;
   if(BTBuffer->isEmpty())
     return false;
-  Custom_STM_App_Update_Char(
-      CUSTOM_STM_READNEXT,
-      (uint8_t*)&BTBuffer->buffer[BTBuffer->head]
-      );
+  if(BTBuffer->backend_ != nullptr)
+    BTBuffer->backend_->emit_readnext(BTBuffer->buffer[BTBuffer->head]);
   BTBuffer->head = (BTBuffer->head + 1) % BTBuffer->numBuffers;
   return true;
 }
@@ -88,17 +65,28 @@ bool BTBuffer::pushBuffer( uint16_t id1, uint16_t id2, uint32_t timestamp, const
     return false;
   if(BTBuffer->isFull())
     return false;
+  if(datalen < 0)
+    return false;
   if(datalen>BTBuffer::dataLen)
     return false;
-  BTBuffer->disableIRQs();
+  if(BTBuffer->backend_ != nullptr)
+    BTBuffer->backend_->lock();
   BTBuffer->buffer[BTBuffer->tail].id1 = id1;
   BTBuffer->buffer[BTBuffer->tail].id2 = id2;
   BTBuffer->buffer[BTBuffer->tail].timestamp = timestamp;
   memcpy(
       BTBuffer->buffer[BTBuffer->tail].data,
       data,
-      dataLen);
+      (size_t)datalen);
+  if(datalen < BTBuffer::dataLen)
+  {
+    memset(
+        &BTBuffer->buffer[BTBuffer->tail].data[datalen],
+        0,
+        (size_t)(BTBuffer::dataLen - datalen));
+  }
   BTBuffer->tail = (BTBuffer->tail + 1) % BTBuffer->numBuffers;
-  BTBuffer->enableIRQs();
+  if(BTBuffer->backend_ != nullptr)
+    BTBuffer->backend_->unlock();
   return true;
 }

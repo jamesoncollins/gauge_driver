@@ -4,6 +4,10 @@
 #include "stm32wbxx_hal.h"
 #include "stdint.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // i2c addresses
 #define ACC_ADDR	0b00110000
 #define GYR_ADDR 	0b11010000
@@ -115,5 +119,9 @@ uint8_t
 BMI088_ReadGyroscopeDMA (BMI088 *imu);
 void
 BMI088_ReadGyroscopeDMA_Complete (BMI088 *imu);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

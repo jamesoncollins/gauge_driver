@@ -17,11 +17,37 @@
       }
     },
     {
+      "name": "base-ucrt64",
+      "displayName": "Base x86 MSYS2 UCRT64 build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "environment": {
+        "PATH": "C:/msys64/ucrt64/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CUSTOM_PLATFORM": "x86",
+        "CMAKE_MAKE_PROGRAM": "C:/msys64/ucrt64/bin/ninja.exe",
+        "CMAKE_C_COMPILER": "C:/msys64/ucrt64/bin/gcc.exe",
+        "CMAKE_CXX_COMPILER": "C:/msys64/ucrt64/bin/g++.exe"
+      }
+    },
+    {
+      "name": "base-web",
+      "displayName": "Base Emscripten web build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/toolchain-emcc.cmake",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
       "name": "st7789vi-debug",
       "displayName": "Debug - ST7789VI",
       "inherits": "base",
       "cacheVariables": {
-        "UGFX_DRIVER": "st7789vi"
+        "BUILD_TARGET": "3000gt_lcd"
       }
     },
     {
@@ -29,7 +55,23 @@
       "displayName": "Debug - S6E63D6",
       "inherits": "base",
       "cacheVariables": {
-        "UGFX_DRIVER": "s6e63d6"
+        "BUILD_TARGET": "3000gt_oled"
+      }
+    },
+    {
+      "name": "x86-debug",
+      "displayName": "Debug - x86 UCRT64",
+      "inherits": "base-ucrt64",
+      "cacheVariables": {
+        "BUILD_TARGET": "sim_3000gt_soft"
+      }
+    },
+    {
+      "name": "web-debug",
+      "displayName": "Debug - Web",
+      "inherits": "base-web",
+      "cacheVariables": {
+        "BUILD_TARGET": "web_3000gt_soft"
       }
     }
   ],
@@ -41,6 +83,16 @@
     {
       "name": "s6e63d6-debug",
       "configurePreset": "s6e63d6-debug"
+    },
+    {
+      "name": "x86-debug",
+      "configurePreset": "x86-debug",
+      "jobs": 8
+    },
+    {
+      "name": "web-debug",
+      "configurePreset": "web-debug",
+      "jobs": 8
     }
   ]
 }
