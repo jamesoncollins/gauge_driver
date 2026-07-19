@@ -145,7 +145,7 @@ static void render_high_beam_telltale(const RuntimeState &state, SharedRenderCtx
     return;
 
   const coord_t image_x = (coord_t)(190);
-  const coord_t image_y = (coord_t)(160);
+  const coord_t image_y = (coord_t)(170);
   gdispImageDraw(ctx.beam_img, image_x, image_y, ctx.beam_img->width, ctx.beam_img->height, 0, 0);
 }
 
@@ -177,7 +177,7 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
   static UgfxTextBarMeter wb_meter;
   static UgfxTextBarMeter map_meter;
 
-  wb_meter.setBounds(24, 85, 192, 62);
+  wb_meter.setBounds(24, 93, 192, 62);
   wb_meter.setColors(amber, GFX_RED, GFX_BLACK);
   wb_meter.configure("O2", "AFR", 10.0f, 16.0f, 1, font20, fontValue);
   wb_meter.setBands(wb_bands, sizeof(wb_bands) / sizeof(wb_bands[0]));
@@ -265,7 +265,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         case BTN_R:  tmpString[0] = 'R'; break;
         default: break;
       }
-      gdispFillString(205, 120, tmpString, ctx.font20, amber, GFX_BLACK);
+      gdispFillString(212, 42, tmpString, ctx.font20, amber, GFX_BLACK);
       break;
     }
 

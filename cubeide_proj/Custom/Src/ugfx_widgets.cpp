@@ -35,6 +35,26 @@ coord_t clamp_coord(coord_t value, coord_t min_value, coord_t max_value)
     return max_value;
   return value;
 }
+
+coord_t decimal_aligned_x(const char *text, font_t font, coord_t decimal_x, coord_t fallback_x)
+{
+  if (text == nullptr || font == nullptr)
+    return fallback_x;
+
+  char prefix[16];
+  std::size_t prefix_len = 0;
+  while (text[prefix_len] != '\0' && text[prefix_len] != '.' && prefix_len < (sizeof(prefix) - 1))
+  {
+    prefix[prefix_len] = text[prefix_len];
+    ++prefix_len;
+  }
+
+  if (text[prefix_len] != '.')
+    return fallback_x;
+
+  prefix[prefix_len] = '\0';
+  return decimal_x - gdispGetStringWidth(prefix, font);
+}
 }
 
 void UgfxWidget::setBounds(coord_t x, coord_t y, coord_t width, coord_t height)
@@ -254,7 +274,8 @@ void UgfxTextBarMeter::draw()
   const color_t frame_color = valid_ ? primary_ : GFX_GRAY;
 
   char value_text[16];
-  (void)std::snprintf(value_text, sizeof(value_text), "%.*f", (int)decimals_, value_);
+  const int value_width = (int)decimals_ + (decimals_ > 0 ? 4 : 3);
+  (void)std::snprintf(value_text, sizeof(value_text), "%*.*f", value_width, (int)decimals_, value_);
 
   if (width_ < 6 || height_ < 12)
     return;
@@ -265,14 +286,9 @@ void UgfxTextBarMeter::draw()
   const coord_t bar_h = requested_bar_h < (height_ - 4) ? requested_bar_h : (height_ - 4);
   const coord_t bar_y = y_ + 2;
 
-  if (label_font_ != nullptr)
-  {
-    gdispFillString(x_ + 2, bar_y + bar_h + 2, label_, label_font_, text_color, background_);
-    gdispFillString(x_ + 2, bar_y + bar_h + 22, units_, label_font_, text_color, background_);
-  }
-
   if (value_font_ != nullptr)
-    gdispFillString(x_ + 64, bar_y + bar_h + 4, value_text, value_font_, text_color, background_);
+    gdispFillString(decimal_aligned_x(value_text, value_font_, x_ + 122, x_), bar_y + bar_h - 2, value_text, value_font_, text_color, background_);
+
   gdispDrawBox(bar_x, bar_y, bar_w, bar_h, frame_color);
 
   switch (mode_)
@@ -290,6 +306,12 @@ void UgfxTextBarMeter::draw()
     default:
       drawFilledBar(bar_x, bar_y, bar_w, bar_h, bar_color);
       break;
+  }
+
+  if (label_font_ != nullptr)
+  {
+    gdispFillString(x_ + 2, bar_y + bar_h + 2, label_, label_font_, text_color, background_);
+    gdispFillString(x_ + 2, bar_y + bar_h + 22, units_, label_font_, text_color, background_);
   }
 }
 /*
