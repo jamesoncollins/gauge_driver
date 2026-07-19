@@ -306,6 +306,8 @@ static PlatformSample arm_collect_platform_sample()
 
 static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
 {
+  HAL_GPIO_WritePin(PWREN_GPIO_Port, PWREN_Pin, GPIO_PIN_SET);
+
   HAL_PWR_EnableBkUpAccess();
   g_arm_main.cleanPwr = (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == 0xBEEF);
   HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x0);
