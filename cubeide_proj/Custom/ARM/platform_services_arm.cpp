@@ -174,8 +174,12 @@ static float clamp_needle_value(float value, float min_value, float max_value)
   return value;
 }
 
+static uint32_t arm_filter_time_us()
+{
+  return HAL_GetTick() * 1000U;
+}
+
 static float extrapolate_needle_value(float measurement,
-                                      bool updated,
                                       bool stale,
                                       float &last_value,
                                       uint32_t &last_update_time,
@@ -183,6 +187,7 @@ static float extrapolate_needle_value(float measurement,
                                       float max_value)
 {
   const uint32_t now = HAL_GetTick();
+  const uint32_t dt_ms = now - last_update_time;
   if (stale)
   {
     last_value = 0.0f;
@@ -191,9 +196,8 @@ static float extrapolate_needle_value(float measurement,
     return 0.0f;
   }
 
-  if (updated || last_update_time == 0)
+  if (measurement != last_value)
   {
-    const uint32_t dt_ms = now - last_update_time;
     if (last_update_time != 0 && dt_ms > 0)
       rate_per_ms = (measurement - last_value) / (float)dt_ms;
     else
@@ -203,10 +207,10 @@ static float extrapolate_needle_value(float measurement,
     last_update_time = now;
   }
 
-  const uint32_t extrapolate_ms = now - last_update_time;
-  const float extrapolated = last_value + (rate_per_ms * (float)extrapolate_ms);
+  const float extrapolated = last_value + (rate_per_ms * (float)dt_ms);
   return clamp_needle_value(extrapolated, 0.0f, max_value);
 }
+
 static void arm_reset_motor_driver()
 {
   HAL_GPIO_WritePin(RESET_MOTOR_GPIO_Port, RESET_MOTOR_Pin, GPIO_PIN_RESET);
@@ -401,7 +405,7 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
     speed_cfg.zero_periods_without_tick = 3.0f;
     speed_cfg.max_accel_units_per_s = 60.0f;
     speed_cfg.max_units = SPEED_MAX_MPH;
-    g_speed.init(speed_cfg, get_us_32);
+    g_speed.init(speed_cfg, arm_filter_time_us);
 
     HzSensorKalmanFilter<16>::Config tach_cfg = {};
     tach_cfg.units_per_hz = vehicle.rpm_per_hz;
@@ -414,7 +418,7 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
     tach_cfg.zero_periods_without_tick = 3.0f;
     tach_cfg.max_accel_units_per_s = 4000.0f;
     tach_cfg.max_units = TACH_MAX_RPM;
-    g_tach.init(tach_cfg, get_us_32);
+    g_tach.init(tach_cfg, arm_filter_time_us);
   }
 
   arm_reset_motor_driver();
@@ -712,14 +716,12 @@ void board_update()
     rpm = tach.stale ? 0.0f : tach.units;
     speed = spd.stale ? 0.0f : spd.units;
     const float extrapolated_rpm = extrapolate_needle_value(rpm,
-                                                            tach.updated,
                                                             tach.stale,
                                                             g_arm_main.last_rpm,
                                                             g_arm_main.last_rpm_time,
                                                             g_arm_main.rpm_rate_per_ms,
                                                             TACH_MAX_RPM);
     const float extrapolated_speed = extrapolate_needle_value(speed,
-                                                              spd.updated,
                                                               spd.stale,
                                                               g_arm_main.last_speed,
                                                               g_arm_main.last_speed_time,
