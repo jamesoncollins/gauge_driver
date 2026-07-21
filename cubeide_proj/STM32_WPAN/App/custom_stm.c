@@ -68,7 +68,7 @@ extern uint16_t Connection_Handle;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-uint16_t SizeButtonpress = 1;
+uint16_t SizeButtonpress = 20;
 uint16_t SizeReadnext = 64;
 uint16_t SizeBm_Req_Char = 3;
 
