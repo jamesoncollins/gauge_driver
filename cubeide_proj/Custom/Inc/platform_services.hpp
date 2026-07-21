@@ -14,5 +14,6 @@ bool board_display_ready();
 void board_render_before(const RuntimeState &state, const BoardSharedData &data, SharedRenderCtx &ctx);
 void board_render_after(const RuntimeState &state, const BoardSharedData &data, SharedRenderCtx &ctx);
 void board_shutdown();
+void board_reset_loop_diag();
 
 #endif /* INC_PLATFORM_SERVICES_HPP_ */

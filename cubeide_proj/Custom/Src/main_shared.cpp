@@ -12,6 +12,10 @@
 namespace
 {
 constexpr float kGimbalScale = 5.0f;
+bool g_diag_square_enabled = false;
+uint32_t g_diag_fps = 0;
+uint32_t g_diag_fps_frames = 0;
+uint32_t g_diag_fps_last_ms = 0;
 
 void compute_gimbal_from_board_acceleration(const BoardAccelerationVector &accel, int &gimbal_x, int &gimbal_y)
 {
@@ -42,6 +46,33 @@ void render_ctx_init_shared(SharedRenderCtx &ctx)
 #else
 #define GAUGE_WEAK
 #endif
+
+bool runtime_diag_square_enabled()
+{
+  return g_diag_square_enabled;
+}
+
+uint32_t runtime_diag_fps()
+{
+  return g_diag_fps;
+}
+
+void runtime_diag_set_square_enabled(bool enabled)
+{
+  g_diag_square_enabled = enabled;
+}
+
+void runtime_diag_reset_shared()
+{
+  g_diag_fps = 0;
+  g_diag_fps_frames = 0;
+  g_diag_fps_last_ms = HAL_GetTick();
+  board_reset_loop_diag();
+}
+
+GAUGE_WEAK void board_reset_loop_diag()
+{
+}
 
 GAUGE_WEAK void board_render_before(const RuntimeState &state, const BoardSharedData &data, SharedRenderCtx &ctx)
 {
@@ -302,20 +333,33 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
       if (platform_state_has(state.data_mask, PLATFORM_DATA_STARTUP_ERROR) && state.startup_init_error)
         gdispFillString((ctx.screen_width >> 1) - 50, (ctx.screen_height >> 1), "ERR", ctx.fontLCD, GFX_RED, GFX_BLACK);
 
-#ifdef DIAG_SQUARE
       {
-        char logBuf[32];
-        static const int xdiag = 30, ydiag = 192;
-        gdispFillArea(xdiag - 1, ydiag - 1, 70, 70, GFX_BLACK);
-        gdispDrawBox(xdiag - 1, ydiag - 1, 70, 70, GFX_AMBER);
-        (void)std::snprintf(logBuf, sizeof(logBuf), "%lu", (unsigned long)state.loop_period_ms);
-        gdispFillString(xdiag, ydiag + 0, logBuf, ctx.font10, GFX_AMBER, GFX_BLACK);
-        (void)std::snprintf(logBuf, sizeof(logBuf), "%lu", (unsigned long)state.worst_loop_period_ms);
-        gdispFillString(xdiag, ydiag + 10, logBuf, ctx.font10, GFX_AMBER, GFX_BLACK);
-        (void)std::snprintf(logBuf, sizeof(logBuf), "%lu", (unsigned long)state.loop_count);
-        gdispFillString(xdiag, ydiag + 20, logBuf, ctx.font10, GFX_AMBER, GFX_BLACK);
+        static bool diag_square_was_visible = false;
+        static const int diag_size = 86;
+        const int xdiag = ((int)ctx.screen_width - diag_size) / 2;
+        const int ydiag = ((int)ctx.screen_height - diag_size) / 2;
+        const bool show_diag_square = runtime_diag_square_enabled() && platform_state_has(state.data_mask, PLATFORM_DATA_TIMING_DIAG);
+        if (show_diag_square)
+        {
+          char logBuf[32];
+          gdispFillArea(xdiag - 1, ydiag - 1, diag_size, diag_size, GFX_BLACK);
+          gdispDrawBox(xdiag - 1, ydiag - 1, diag_size, diag_size, amber);
+          (void)std::snprintf(logBuf, sizeof(logBuf), "fps %lu", (unsigned long)runtime_diag_fps());
+          gdispFillString(xdiag + 4, ydiag + 6, logBuf, ctx.font10, amber, GFX_BLACK);
+          (void)std::snprintf(logBuf, sizeof(logBuf), "loop %lu", (unsigned long)state.loop_period_ms);
+          gdispFillString(xdiag + 4, ydiag + 20, logBuf, ctx.font10, amber, GFX_BLACK);
+          (void)std::snprintf(logBuf, sizeof(logBuf), "worst %lu", (unsigned long)state.worst_loop_period_ms);
+          gdispFillString(xdiag + 4, ydiag + 34, logBuf, ctx.font10, amber, GFX_BLACK);
+          (void)std::snprintf(logBuf, sizeof(logBuf), "cnt %lu", (unsigned long)state.loop_count);
+          gdispFillString(xdiag + 4, ydiag + 48, logBuf, ctx.font10, amber, GFX_BLACK);
+          diag_square_was_visible = true;
+        }
+        else if (diag_square_was_visible)
+        {
+          gdispFillArea(xdiag - 1, ydiag - 1, diag_size, diag_size, GFX_BLACK);
+          diag_square_was_visible = false;
+        }
       }
-#endif
 
 
       if (platform_state_has(state.data_mask, PLATFORM_DATA_WARN_LAMP) && state.warn_lamp_on)
@@ -361,10 +405,23 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
     }
 
     default:
+    {
+      const uint32_t now = HAL_GetTick();
+      if (g_diag_fps_last_ms == 0U)
+        g_diag_fps_last_ms = now;
+      ++g_diag_fps_frames;
+      const uint32_t fps_elapsed_ms = now - g_diag_fps_last_ms;
+      if (fps_elapsed_ms >= 1000U)
+      {
+        g_diag_fps = (g_diag_fps_frames * 1000U) / fps_elapsed_ms;
+        g_diag_fps_frames = 0;
+        g_diag_fps_last_ms = now;
+      }
       flush_after_hooks = true;
       draw_step = 0;
-      timer_draw_ms = HAL_GetTick();
+      timer_draw_ms = now;
       break;
+    }
   }
 
   ctx.render_cycle_complete = flush_after_hooks;

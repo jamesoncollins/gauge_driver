@@ -569,6 +569,15 @@ static void platform_update_loop_diag()
   g_arm_main.loopCnt++;
 }
 
+void board_reset_loop_diag()
+{
+  const uint32_t now = HAL_GetTick();
+  g_arm_main.timerLoop = now;
+  g_arm_main.loopPeriod = 0;
+  g_arm_main.worstLoopPeriod = 0;
+  g_arm_main.loopCnt = 0;
+}
+
 static void arm_publish_current_data()
 {
   if (g_board_data == nullptr)
