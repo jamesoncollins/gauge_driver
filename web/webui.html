@@ -175,20 +175,22 @@
     <details class="section" open>
       <summary><span class="chev">&gt;</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
       <div class="panel">
+                <div class="row" style="margin-bottom:10px">
+          <span class="pill">V1 framed commands</span>
+          <span class="pill">20-byte writes</span>
+        </div>
         <div class="row" style="margin-bottom:10px">
-      <label style="min-width:160px">Command encoding</label>
-      <select id="cmdEncoding">
-        <option value="ascii">ASCII (U/D/L/R/E/B)</option>
-        <option value="enum" selected>Enum (0,1,2,3,4,255)</option>
-      </select>
-    </div>
-        <div class="row" style="margin-bottom:10px">
-      <button data-cmd="LEFT">&lt; Left</button>
+          <button data-cmd="LEFT">&lt; Left</button>
           <button data-cmd="RIGHT">Right &gt;</button>
           <button data-cmd="UP">Up</button>
           <button data-cmd="DOWN">Down</button>
           <button data-cmd="ENTER">Enter</button>
-          <button data-cmd="BACK">Back</button>
+        </div>
+        <div class="row" style="margin-bottom:10px">
+          <button id="btnDiagOn">Diag Square On</button>
+          <button id="btnDiagOff">Diag Square Off</button>
+          <button id="btnDiagReset">Reset Diag Stats</button>
+          <button id="btnDiagPing">Ping</button>
         </div>
         <div class="row">
           <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
@@ -248,7 +250,7 @@
 <script>
 (function(){
   'use strict';
-  var UI_VERSION = 'v0.6.6';
+  var UI_VERSION = 'v0.6.7';
 
   // ===== Defaults & Known Services =====
   var Defaults = {
@@ -264,11 +266,52 @@
     '00000a00-cc7a-482a-984a-7f2ed5b3e58f'  // RebootReqService (OTA reboot)
   ];
 
-  // ===== Command Encoding =====
-  var CommandMapEnum  = { LEFT:[3], RIGHT:[4], UP:[1], DOWN:[2], ENTER:[0], BACK:[255] };
-  var CommandMapASCII = { LEFT:[0x4C], RIGHT:[0x52], UP:[0x55], DOWN:[0x44], ENTER:[0x45], BACK:[0x42] };
-  function getCmdMap(){ var sel=document.querySelector('#cmdEncoding'); var mode=sel?sel.value:'ascii'; return mode==='enum'?CommandMapEnum:CommandMapASCII; }
-
+    // ===== Command Protocol V1 =====
+  var CMD_MAGIC = 0x47;
+  var CMD_VERSION = 0x01;
+  var CMD_ACK_REQUESTED = 0x01;
+  var CMD_FRAME_LEN = 20;
+  var cmdSeq = 0;
+  var CommandOpcode = {
+    BUTTON: 0x01,
+    DIAG_PING: 0x20,
+    DIAG_RESET_STATS: 0x21,
+    DIAG_SQUARE: 0x22
+  };
+  var ButtonId = { ENTER:0, UP:1, DOWN:2, LEFT:3, RIGHT:4 };
+  var CommandStatus = {
+    0x00:'OK', 0x01:'BAD_FRAME', 0x02:'BAD_CRC', 0x03:'UNSUPPORTED_VERSION',
+    0x04:'UNKNOWN_OPCODE', 0x05:'BAD_LENGTH', 0x06:'BAD_VALUE', 0x07:'BUSY',
+    0x08:'DENIED', 0x09:'INTERNAL_ERROR'
+  };
+  function commandName(opcode){
+    for(var k in CommandOpcode){ if(CommandOpcode[k]===opcode) return k; }
+    return '0x'+opcode.toString(16);
+  }
+  function crc8(u8, len){
+    var crc=0;
+    for(var i=0;i<len;i++){
+      crc ^= u8[i];
+      for(var bit=0;bit<8;bit++) crc = (crc & 0x80) ? (((crc << 1) ^ 0x07) & 0xFF) : ((crc << 1) & 0xFF);
+    }
+    return crc;
+  }
+  function buildCommandFrame(opcode, payload, ack){
+    payload = payload || [];
+    if(payload.length > (CMD_FRAME_LEN - 7)) throw new Error('payload too large');
+    var frame = new Uint8Array(CMD_FRAME_LEN);
+    var seq = cmdSeq++ & 0xFF;
+    var frameLen = 6 + payload.length + 1;
+    frame[0] = CMD_MAGIC;
+    frame[1] = CMD_VERSION;
+    frame[2] = seq;
+    frame[3] = opcode;
+    frame[4] = ack === false ? 0 : CMD_ACK_REQUESTED;
+    frame[5] = payload.length;
+    for(var i=0;i<payload.length;i++) frame[6+i] = payload[i] & 0xFF;
+    frame[frameLen - 1] = crc8(frame, frameLen - 1);
+    return {frame:frame, seq:seq, frameLen:frameLen};
+  }
   // ===== OTA magic =====
   // OTA reboot payload: [reboot_flag, start_sector_idx, num_sectors] per CubeWB BLE_Ota app_conf
   // 0x01 = reboot into BLE OTA app, sector index defaults to 7, num_sectors left 0
@@ -478,6 +521,18 @@
     var id1=dv.getUint16(0,true); var id2=dv.getUint16(2,true); if(id2===0xFFFF) id2=-1; var tick=dv.getUint32(4,true);
     var words=[]; for(var off=8; off+4<=payload.byteLength; off+=4){ words.push(dv.getUint32(off,true)); }
     var obj={id1:id1,id2:id2,tick:tick,wordsCount:words.length};
+    if(id1===0x434D && payload.byteLength>=11){
+      var detailLen=dv.getUint8(10);
+      var detailEnd=Math.min(payload.byteLength, 11+detailLen);
+      obj.packet='command_ack';
+      obj.seq=id2;
+      obj.status=dv.getUint8(8);
+      obj.status_name=CommandStatus[obj.status] || ('0x'+obj.status.toString(16));
+      obj.opcode=dv.getUint8(9);
+      obj.command=commandName(obj.opcode);
+      obj.detail_hex=hex(payload.slice(11, detailEnd));
+      return obj;
+    }
     if(id1===1 && id2===1){ decodeDashboardTlv(dv,obj); }
     else if(id1===0 && id2===0 && words.length>=6){ obj.packet='dashboard_legacy'; obj.loopCnt=words[0]; obj.loopPeriod_ms=words[1]; obj.worstLoop_ms=words[2]; obj.speed=words[4]; obj.rpm=words[5]; }
     else if(id1===1 && id2===-1 && words.length>=1){ obj.ecu_req=words[0]; }
@@ -743,18 +798,34 @@
     var tbody=$('#tblBody'); if(!tbody) return; tbody.prepend(tr); while(tbody.rows.length>300) tbody.deleteRow(-1);
   }
 
-  async function sendCommand(kind){
+    async function writeCommandFrame(opcode, payload, label, ack){
     if(!state.chars.cmd) return log('No command characteristic');
-    var map=getCmdMap(); var bytes=map[kind]; if(!bytes) return log('Unknown command '+kind);
-    var u8=new Uint8Array(bytes); var props=state.chars.cmd && state.chars.cmd.properties; var mode=(document.querySelector('#cmdEncoding')||{value:'ascii'}).value;
     try{
-      if(props && props.writeWithoutResponse){ await state.chars.cmd.writeValueWithoutResponse(u8); return log('Sent '+kind+' ('+mode+') via WWR: '+bytes.map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')); }
-      if(props && props.write){ await state.chars.cmd.writeValue(u8); return log('Sent '+kind+' ('+mode+') via WRITE: '+bytes.map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')); }
-      try{ await state.chars.cmd.writeValueWithoutResponse(u8); return log('Sent '+kind+' ('+mode+') via WWR (fallback)'); }
-      catch(_e2){ await state.chars.cmd.writeValue(u8); return log('Sent '+kind+' ('+mode+') via WRITE (fallback)'); }
-    }catch(err){ log('Send error ('+kind+'): '+err.message); }
+      var built=buildCommandFrame(opcode, payload || [], ack !== false);
+      await writeChar(state.chars.cmd, built.frame, false);
+      log('Sent '+label+' seq='+built.seq+' frame='+hex(built.frame));
+    }catch(err){
+      log('Send error ('+label+'): '+err.message);
+    }
   }
 
+  async function sendCommand(kind){
+    var button = ButtonId[kind];
+    if(button === undefined) return log('Unknown button command '+kind);
+    await writeCommandFrame(CommandOpcode.BUTTON, [button], 'BUTTON '+kind, true);
+  }
+
+  async function sendDiagSquare(enabled){
+    await writeCommandFrame(CommandOpcode.DIAG_SQUARE, [enabled ? 1 : 0], 'DIAG_SQUARE '+(enabled?'on':'off'), true);
+  }
+
+  async function sendDiagReset(){
+    await writeCommandFrame(CommandOpcode.DIAG_RESET_STATS, [], 'DIAG_RESET_STATS', true);
+  }
+
+  async function sendDiagPing(){
+    await writeCommandFrame(CommandOpcode.DIAG_PING, [0x70,0x69,0x6E,0x67], 'DIAG_PING', true);
+  }
   async function sendRaw(){
     if(!state.chars.cmd) return log('No command characteristic');
     var text=$('#rawHex') && $('#rawHex').value ? $('#rawHex').value.trim() : ''; if(!text) return;
@@ -881,6 +952,10 @@
     ok = wire('#btnDisconnect',disconnect) && ok;
     var cmdBtns = document.querySelectorAll('[data-cmd]');
     for(var i=0;i<cmdBtns.length;i++){ (function(btn){ btn.addEventListener('click', function(){ sendCommand(btn.getAttribute('data-cmd')); }); })(cmdBtns[i]); }
+    ok = wire('#btnDiagOn', function(){ sendDiagSquare(true); }) && ok;
+    ok = wire('#btnDiagOff', function(){ sendDiagSquare(false); }) && ok;
+    ok = wire('#btnDiagReset', sendDiagReset) && ok;
+    ok = wire('#btnDiagPing', sendDiagPing) && ok;
     ok = wire('#btnSendRaw',sendRaw) && ok;
     ok = wire('#btnStartLog',startLog) && ok;
     ok = wire('#btnStopLog',stopLog) && ok;
