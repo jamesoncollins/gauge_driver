@@ -664,10 +664,14 @@
         if(cfg.chunkDelayMs>0) await new Promise(function(res){ setTimeout(res, cfg.chunkDelayMs); });
         if((off/chunkSize)%25===0) setOtaStatus('Sending... '+Math.min(bin.length, off+chunkSize)+' / '+bin.length);
       }
-      // upload finished command: [0x07, addr0, addr1, addr2] per AN5247
-      var fin=new Uint8Array([0x07, baseAddr & 0xFF, (baseAddr>>8)&0xFF, (baseAddr>>16)&0xFF]);
+      // Loader expects finish as [0x07, start_sector, num_sectors, 0x00].
+      // Send twice; older working UI did this and some loader builds miss the first write.
+      var fin=new Uint8Array([0x07, startSector & 0xFF, numSectors & 0xFF, 0x00]);
       await writeChar(state.ota.base, fin, true);
-      setOtaStatus('Finish command sent; waiting for conf/reboot');
+      setOtaStatus('Finish command sent (1)');
+      await new Promise(function(res){ setTimeout(res, 50); });
+      await writeChar(state.ota.base, fin, true);
+      setOtaStatus('Finish command sent (2); waiting for conf/reboot');
       // wait for conf indication or timeout
       var waited=false;
       var timeoutId=null;

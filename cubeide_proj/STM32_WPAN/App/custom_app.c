@@ -130,8 +130,21 @@ void Custom_STM_App_Notification(Custom_STM_App_Notification_evt_t *pNotificatio
     /* RebootReqService */
     case CUSTOM_STM_BM_REQ_CHAR_WRITE_EVT:
       /* USER CODE BEGIN CUSTOM_STM_BM_REQ_CHAR_WRITE_EVT */
-      *(uint32_t*)SRAM1_BASE = *(uint32_t*)pNotification->DataTransfered.pPayload;
-      NVIC_SystemReset();
+      const uint8_t *payload = pNotification->DataTransfered.pPayload;
+      uint8_t length = pNotification->DataTransfered.Length;
+      uint32_t boot_request = 0;
+
+      if (length >= 3U)
+      {
+        boot_request = ((uint32_t)payload[0]) |
+                       ((uint32_t)payload[1] << 8) |
+                       ((uint32_t)payload[2] << 16);
+        *(volatile uint32_t*)SRAM1_BASE = boot_request;
+        __DSB();
+        __ISB();
+        NVIC_SystemReset();
+        while (1) {}
+      }
       /* USER CODE END CUSTOM_STM_BM_REQ_CHAR_WRITE_EVT */
       break;
 

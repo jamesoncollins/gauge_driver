@@ -353,7 +353,10 @@ add_executable(${PROJECT_NAME}
 )
 
 if(CUSTOM_PLATFORM STREQUAL "arm")
-  set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".elf")
+  set_target_properties(${PROJECT_NAME} PROPERTIES
+    SUFFIX ".elf"
+    LINK_DEPENDS ${LINKER_SCRIPT}
+  )
 endif()
 
 # ---------------------------------------------------------------------------
