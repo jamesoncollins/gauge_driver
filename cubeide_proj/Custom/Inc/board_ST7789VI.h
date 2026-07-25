@@ -48,14 +48,14 @@ extern DMA_HandleTypeDef hdma_memtomem_dma2_channel1;
 // Backlight polarity: active HIGH (MOSFET gate high turns LED on)
 #define BL_ACTIVE_LOW 0
 
-bool busy = false;
-uint8_t *data_ptr;
-uint32_t size_left = 0;
-uint32_t xfer_len = 0;
-bool autoClear = false;
-uint32_t clear_int = 0;
-bool isLastClear = false;
-bool txPending = false;
+volatile bool busy = false;
+uint8_t * volatile data_ptr;
+volatile uint32_t size_left = 0;
+volatile uint32_t xfer_len = 0;
+volatile bool autoClear = false;
+volatile uint32_t clear_int = 0;
+volatile bool isLastClear = false;
+volatile bool txPending = false;
 static bool bl_started = false;
 static bool bl_gpio_prepped = false;
 // 20 kHz PWM from ~500 kHz LPTIM2 clock -> ARR = 25

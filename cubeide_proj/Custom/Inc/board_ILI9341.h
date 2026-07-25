@@ -38,9 +38,9 @@ extern DMA_HandleTypeDef hdma_spi2_tx;
 #define SET_CS SET_BIT(CS_PORT->ODR, CS_PIN)
 #define GET_CS READ_BIT(CS_PORT->IDR, CS_PIN)
 
-bool busy = false;
-uint8_t *data_ptr;
-uint32_t size_left = 0;
+volatile bool busy = false;
+uint8_t * volatile data_ptr;
+volatile uint32_t size_left = 0;
 
 bool bus_busy()
 {

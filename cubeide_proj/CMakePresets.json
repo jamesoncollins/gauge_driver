@@ -59,6 +59,42 @@
       }
     },
     {
+      "name": "st7789vi-release",
+      "displayName": "Release - ST7789VI",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TARGET": "3000gt_lcd"
+      }
+    },
+    {
+      "name": "s6e63d6-release",
+      "displayName": "Release - S6E63D6",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TARGET": "3000gt_oled"
+      }
+    },
+    {
+      "name": "st7789vi-o1-diag",
+      "displayName": "O1 Diagnostic - ST7789VI",
+      "inherits": "base",
+      "cacheVariables": {
+        "BUILD_TARGET": "3000gt_lcd",
+        "GAUGE_OPT_LEVEL": "O1"
+      }
+    },
+    {
+      "name": "s6e63d6-o1-diag",
+      "displayName": "O1 Diagnostic - S6E63D6",
+      "inherits": "base",
+      "cacheVariables": {
+        "BUILD_TARGET": "3000gt_oled",
+        "GAUGE_OPT_LEVEL": "O1"
+      }
+    },
+    {
       "name": "x86-debug",
       "displayName": "Debug - x86 UCRT64",
       "inherits": "base-ucrt64",
@@ -83,6 +119,22 @@
     {
       "name": "s6e63d6-debug",
       "configurePreset": "s6e63d6-debug"
+    },
+    {
+      "name": "st7789vi-release",
+      "configurePreset": "st7789vi-release"
+    },
+    {
+      "name": "s6e63d6-release",
+      "configurePreset": "s6e63d6-release"
+    },
+    {
+      "name": "st7789vi-o1-diag",
+      "configurePreset": "st7789vi-o1-diag"
+    },
+    {
+      "name": "s6e63d6-o1-diag",
+      "configurePreset": "s6e63d6-o1-diag"
     },
     {
       "name": "x86-debug",

@@ -164,6 +164,12 @@ struct ArmMainCtx
 };
 
 static ArmMainCtx g_arm_main;
+static volatile uint32_t g_startup_diag_marker = 0;
+
+static void startup_diag_mark(uint32_t marker)
+{
+  g_startup_diag_marker = marker;
+}
 
 static float clamp_needle_value(float value, float min_value, float max_value)
 {
@@ -220,9 +226,11 @@ static void arm_reset_motor_driver()
 
 static void arm_run_startup_animation_and_needle_dance()
 {
+  startup_diag_mark(0x1000U);
   gImage startup_anim;
   if (gdispImageOpenMemory(&startup_anim, mitslogoanim_128) != GDISP_IMAGE_ERR_OK)
   {
+    startup_diag_mark(0x1001U);
     g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(9000));
     g_arm_main.speedX12->setPosition(get_x12_ticks_speed(180));
     while (!g_arm_main.tachX12->atTarget() || !g_arm_main.speedX12->atTarget())
@@ -235,9 +243,11 @@ static void arm_run_startup_animation_and_needle_dance()
     return;
   }
 
+  startup_diag_mark(0x1010U);
   gDelay delay = 0;
   int display_count = 42;
   gdispClear(GFX_BLACK);
+  startup_diag_mark(0x1011U);
   gdispImageDraw(&startup_anim,
                  (screenWidth >> 1) - (startup_anim.width >> 1),
                  75,
@@ -245,6 +255,7 @@ static void arm_run_startup_animation_and_needle_dance()
                  0, 0);
   for (int i = 0; i < 17; ++i)
   {
+    startup_diag_mark(0x1020U + (uint32_t)i);
     gdispImageNext(&startup_anim);
     --display_count;
   }
@@ -257,20 +268,24 @@ static void arm_run_startup_animation_and_needle_dance()
     switch (startup_state)
     {
       case 0:
+        startup_diag_mark(0x1030U);
         g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(9000));
         g_arm_main.speedX12->setPosition(get_x12_ticks_speed(180));
         ++startup_state;
         break;
       case 1:
+        startup_diag_mark(0x1031U);
         if (g_arm_main.tachX12->atTarget() && g_arm_main.speedX12->atTarget())
           ++startup_state;
         break;
       case 2:
+        startup_diag_mark(0x1032U);
         g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(0));
         g_arm_main.speedX12->setPosition(get_x12_ticks_speed(0));
         ++startup_state;
         break;
       case 3:
+        startup_diag_mark(0x1033U);
         if (g_arm_main.tachX12->atTarget() && g_arm_main.speedX12->atTarget())
           ++startup_state;
         break;
@@ -282,6 +297,7 @@ static void arm_run_startup_animation_and_needle_dance()
 
     if ((HAL_GetTick() - timer_anim) > delay && display_count >= 0)
     {
+      startup_diag_mark(0x1040U);
       gdispImageDraw(&startup_anim,
                      (screenWidth >> 1) - (startup_anim.width >> 1),
                      75,
@@ -289,17 +305,22 @@ static void arm_run_startup_animation_and_needle_dance()
                      0, 0);
       delay = gdispImageNext(&startup_anim);
       timer_anim = HAL_GetTick();
+      startup_diag_mark(0x1041U);
       gdispFlush();
       --display_count;
     }
+
+    HAL_Delay(1);
   }
 
+  startup_diag_mark(0x1050U);
   gdispImageClose(&startup_anim);
   gdispClear(GFX_BLACK);
   setAutoClear(true);
   gdispClear(GFX_BLACK);
   gdispFlush();
   gdispFlush();
+  startup_diag_mark(0x10FFU);
 }
 
 static void platform_poll_bulb_inputs()

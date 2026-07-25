@@ -16,6 +16,21 @@ bool g_diag_square_enabled = false;
 uint32_t g_diag_fps = 0;
 uint32_t g_diag_fps_frames = 0;
 uint32_t g_diag_fps_last_ms = 0;
+bool g_shift_alarm_fast_path_active = false;
+
+void record_completed_frame(uint32_t now)
+{
+  if (g_diag_fps_last_ms == 0U)
+    g_diag_fps_last_ms = now;
+  ++g_diag_fps_frames;
+  const uint32_t fps_elapsed_ms = now - g_diag_fps_last_ms;
+  if (fps_elapsed_ms >= 1000U)
+  {
+    g_diag_fps = (g_diag_fps_frames * 1000U) / fps_elapsed_ms;
+    g_diag_fps_frames = 0;
+    g_diag_fps_last_ms = now;
+  }
+}
 
 void compute_gimbal_from_board_acceleration(const BoardAccelerationVector &accel, int &gimbal_x, int &gimbal_y)
 {
@@ -190,9 +205,8 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
   if (!platform_state_has(state.data_mask, PLATFORM_DATA_ECU) || state.ecu == nullptr)
     return;
 
-  ECUK::ecuParam_t *map_p = state.ecu->getParam(state.ecu_param_map_index);
   ECUK::ecuParam_t *wb_p = state.ecu->getParam(state.ecu_param_wb_index);
-  if (map_p == nullptr || wb_p == nullptr)
+  if (wb_p == nullptr)
     return;
 
   static const UgfxMeterBand wb_bands[] = {
@@ -200,15 +214,9 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
       {12.0f, 15.0f, GFX_AMBER_YEL},
       {15.0f, 20.0f, GFX_RED},
   };
-  static const UgfxMeterBand map_bands[] = {
-      {-20.0f, 0.0f, GFX_AMBER_YEL},
-      {0.0f, 15.0f, GFX_GREEN},
-      {15.0f, 20.0f, GFX_RED},
-  };
   static UgfxTextBarMeter wb_meter;
-  static UgfxTextBarMeter map_meter;
 
-  wb_meter.setBounds(24, 93, 192, 62);
+  wb_meter.setBounds(24, 8, 192, 62);
   wb_meter.setColors(amber, GFX_RED, GFX_BLACK);
   wb_meter.configure("O2", "AFR", 10.0f, 16.0f, 1, font20, fontValue);
   wb_meter.setBands(wb_bands, sizeof(wb_bands) / sizeof(wb_bands[0]));
@@ -216,20 +224,35 @@ static void render_ecu_section(const RuntimeState &state, font_t fontValue, font
   wb_meter.setBarHeight(18);
   wb_meter.setSegmentSize(16);
 
-  map_meter.setBounds(24, 8, 192, 62);
+#if 1
+  // MAP/PSI is intentionally left out of the LCD UI for FPS; the car has a physical PSI gauge.
+  static const UgfxMeterBand map_bands[] = {
+      {-20.0f, 0.0f, GFX_AMBER_YEL},
+      {0.0f, 15.0f, GFX_GREEN},
+      {15.0f, 20.0f, GFX_RED},
+  };
+  static UgfxTextBarMeter map_meter;
+  ECUK::ecuParam_t *map_p = state.ecu->getParam(state.ecu_param_map_index);
+  map_meter.setBounds(24, 93, 192, 62);
   map_meter.setColors(amber, GFX_RED, GFX_BLACK);
   map_meter.configure("MAP", "PSI", -15.0f, 20.0f, 1, font20, fontValue);
   map_meter.setBands(map_bands, sizeof(map_bands) / sizeof(map_bands[0]));
   map_meter.setMode(UGFX_TEXT_BAR_METER_BIPOLAR);
   map_meter.setReferenceValue(0.0f);
   map_meter.setBarHeight(16);
+#endif
 
   const uint32_t now_ms = HAL_GetTick();
   const bool ecu_connected = state.ecu->isConnected();
   wb_meter.setValue(wb_p->val, ecu_connected && ecu_param_is_fresh(wb_p, now_ms));
-  map_meter.setValue(map_p->val, ecu_connected && ecu_param_is_fresh(map_p, now_ms));
   wb_meter.draw();
-  map_meter.draw();
+#if 1
+  if (map_p != nullptr)
+  {
+    map_meter.setValue(map_p->val, ecu_connected && ecu_param_is_fresh(map_p, now_ms));
+    map_meter.draw();
+  }
+#endif
 
   bool show_error = !ecu_connected;
   if (state.ecu_flasher != nullptr)
@@ -266,6 +289,29 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
   bool flush_after_hooks = false;
 
   board_render_before(state, data, ctx);
+
+  if (state.rpm_mode >= 2)
+  {
+    const int SHIFT_SIZE = 100;
+    gdispClear(GFX_BLACK);
+    gdispFillCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), SHIFT_SIZE, GFX_RED);
+    const uint32_t now = HAL_GetTick();
+    record_completed_frame(now);
+    draw_step = 0;
+    timer_draw_ms = now;
+    g_shift_alarm_fast_path_active = true;
+    ctx.render_cycle_complete = true;
+    board_render_after(state, data, ctx);
+    ctx.render_cycle_complete = false;
+    gdispFlush();
+    return;
+  }
+
+  if (g_shift_alarm_fast_path_active)
+  {
+    draw_step = 0;
+    g_shift_alarm_fast_path_active = false;
+  }
 
   switch (draw_step++)
   {
@@ -407,16 +453,7 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
     default:
     {
       const uint32_t now = HAL_GetTick();
-      if (g_diag_fps_last_ms == 0U)
-        g_diag_fps_last_ms = now;
-      ++g_diag_fps_frames;
-      const uint32_t fps_elapsed_ms = now - g_diag_fps_last_ms;
-      if (fps_elapsed_ms >= 1000U)
-      {
-        g_diag_fps = (g_diag_fps_frames * 1000U) / fps_elapsed_ms;
-        g_diag_fps_frames = 0;
-        g_diag_fps_last_ms = now;
-      }
+      record_completed_frame(now);
       flush_after_hooks = true;
       draw_step = 0;
       timer_draw_ms = now;

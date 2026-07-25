@@ -49,14 +49,14 @@ extern DMA_HandleTypeDef hdma_memtomem_dma2_channel1, hdma_memtomem_dma1_channel
 
 void DMA_TxCpltCallback (DMA_HandleTypeDef *);
 
-bool busy = false;
-uint8_t *data_ptr;
-uint32_t size_left = 0;
-uint32_t xfer_len;
-bool autoClear = false;
-uint32_t clear_int = 0;
-bool isLastClear = false;
-bool txPending = false;
+volatile bool busy = false;
+uint8_t * volatile data_ptr;
+volatile uint32_t size_left = 0;
+volatile uint32_t xfer_len;
+volatile bool autoClear = false;
+volatile uint32_t clear_int = 0;
+volatile bool isLastClear = false;
+volatile bool txPending = false;
 
 bool getAutoClear()
 {

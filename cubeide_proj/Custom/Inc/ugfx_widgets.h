@@ -55,6 +55,8 @@ typedef enum
 class UgfxTextBarMeter : public UgfxWidget
 {
 public:
+  void setBounds(coord_t x, coord_t y, coord_t width, coord_t height);
+  void setColors(color_t primary, color_t secondary, color_t background);
   void configure(const char *label, const char *units,
                  float min_value, float max_value,
                  uint8_t decimals,
@@ -76,6 +78,11 @@ private:
   void drawMarkerBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t marker_color);
   void drawBipolarBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t bar_color);
   void drawSegmentBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t segment_color);
+  void markLayoutDirty();
+  void updateLayout();
+  void updateValueText();
+
+  static constexpr std::size_t kMaxCachedSegments = 24;
 
   const char *label_ = "";
   const char *units_ = "";
@@ -92,6 +99,25 @@ private:
   coord_t bar_height_ = 7;
   coord_t segment_size_ = 0;
   bool valid_ = false;
+  bool layout_dirty_ = true;
+  bool value_text_dirty_ = true;
+  float last_text_value_ = 0.0f;
+  bool last_text_valid_ = false;
+  char value_text_[16] = "";
+  coord_t value_text_x_ = 0;
+  coord_t bar_x_ = 0;
+  coord_t bar_y_ = 0;
+  coord_t bar_w_ = 0;
+  coord_t bar_h_ = 0;
+  coord_t bar_inner_w_ = 0;
+  coord_t bar_inner_h_ = 0;
+  coord_t label_y_ = 0;
+  coord_t units_y_ = 0;
+  coord_t segment_count_ = 0;
+  coord_t segment_w_ = 0;
+  coord_t segment_h_ = 0;
+  coord_t segment_y_ = 0;
+  coord_t segment_x_[kMaxCachedSegments] = {};
 };
 #endif
 
