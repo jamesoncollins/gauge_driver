@@ -347,8 +347,6 @@ void UgfxTextBarMeter::drawSegmentBar(coord_t bar_x, coord_t bar_y, coord_t bar_
     return;
 
   const color_t inactive_color = valid_ ? HTML2COLOR(0x202020) : GFX_GRAY;
-  gdispFillArea(bar_x_ + 1, bar_y_ + 1, bar_inner_w_, bar_inner_h_, background_);
-
   for (coord_t i = 0; i < segment_count_; ++i)
     gdispFillArea(segment_x_[i], segment_y_, segment_w_, segment_h_, inactive_color);
 
@@ -489,7 +487,7 @@ void drawHorzBarGraph (
  * r, radius of outtermost ring
  * xy and yv, wher ethe gimbal is
  */
-void drawGimball ( Gimball_t *gimball, int x, int y, int r, int xv, int yv)
+static void drawGimballRings (int x, int y, int r)
 {
   const int w = 1;
   gdispDrawThickLine( x, y, x+r, y+0, COLOR_PRIMARY, w, false);
@@ -501,7 +499,11 @@ void drawGimball ( Gimball_t *gimball, int x, int y, int r, int xv, int yv)
     gdispDrawCircle (x, y, r, COLOR_PRIMARY);
     r = r>>1;
   }
+}
 
+static void drawGimballDots ( Gimball_t *gimball, int x, int y, int xv, int yv)
+{
+  const int w = 1;
   int r2 = xv*xv+yv*yv;
   if(r2>gimball->r2Max || HAL_GetTick() - gimball->peakHold_ms_last > gimball->peakHold_ms)
   {
@@ -514,7 +516,12 @@ void drawGimball ( Gimball_t *gimball, int x, int y, int r, int xv, int yv)
   int ball_r = w*8;
   gdispFillDualCircle (x+gimball->xMax, y+gimball->yMax, ball_r, GFX_ORANGE, ball_r>>1, GFX_BLACK);
   gdispFillCircle (x+xv, y+yv, ball_r, COLOR_SECONDARY);
+}
 
+void drawGimball ( Gimball_t *gimball, int x, int y, int r, int xv, int yv)
+{
+  drawGimballRings(x, y, r);
+  drawGimballDots(gimball, x, y, xv, yv);
 }
 
 bool flasher_fun(flasher_t *flasher)

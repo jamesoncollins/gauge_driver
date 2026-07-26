@@ -18,6 +18,26 @@ uint32_t g_diag_fps_frames = 0;
 uint32_t g_diag_fps_last_ms = 0;
 bool g_shift_alarm_fast_path_active = false;
 
+void render_diag_overlay(const RuntimeState &state, const SharedRenderCtx &ctx, color_t color)
+{
+  if (!runtime_diag_square_enabled() || !platform_state_has(state.data_mask, PLATFORM_DATA_TIMING_DIAG))
+    return;
+
+  static const int diag_size = 86;
+  const int xdiag = ((int)ctx.screen_width - diag_size) / 2;
+  const int ydiag = ((int)ctx.screen_height - diag_size) / 2;
+  char logBuf[32];
+  gdispFillArea(xdiag - 1, ydiag - 1, diag_size, diag_size, GFX_BLACK);
+  gdispDrawBox(xdiag - 1, ydiag - 1, diag_size, diag_size, color);
+  (void)std::snprintf(logBuf, sizeof(logBuf), "fps %lu", (unsigned long)runtime_diag_fps());
+  gdispFillString(xdiag + 4, ydiag + 6, logBuf, ctx.font10, color, GFX_BLACK);
+  (void)std::snprintf(logBuf, sizeof(logBuf), "loop %lu", (unsigned long)state.loop_period_ms);
+  gdispFillString(xdiag + 4, ydiag + 20, logBuf, ctx.font10, color, GFX_BLACK);
+  (void)std::snprintf(logBuf, sizeof(logBuf), "worst %lu", (unsigned long)state.worst_loop_period_ms);
+  gdispFillString(xdiag + 4, ydiag + 34, logBuf, ctx.font10, color, GFX_BLACK);
+  (void)std::snprintf(logBuf, sizeof(logBuf), "cnt %lu", (unsigned long)state.loop_count);
+  gdispFillString(xdiag + 4, ydiag + 48, logBuf, ctx.font10, color, GFX_BLACK);
+}
 void record_completed_frame(uint32_t now)
 {
   if (g_diag_fps_last_ms == 0U)
@@ -39,8 +59,6 @@ void compute_gimbal_from_board_acceleration(const BoardAccelerationVector &accel
   const float sin_pitch = std::sin(pitch_rad);
   float rotated_accel[3] = {accel.x_mps2, accel.y_mps2, accel.z_mps2};
 
-  // Restore the original gimbal path: rotate the mounted board frame by the
-  // known pitch, then map rotated Y/X into widget X/Y.
   rotateVectorKnownPitch(rotated_accel, cos_pitch, sin_pitch);
   gimbal_x = (int)(-rotated_accel[1] * kGimbalScale);
   gimbal_y = (int)(-rotated_accel[0] * kGimbalScale);
@@ -137,6 +155,10 @@ RuntimeState runtime_state_from_board_data(const BoardSharedData &data)
   {
     state.data_mask |= PLATFORM_DATA_STARTUP_ERROR;
     state.startup_init_error = data.startup_init_error.good && data.startup_init_error.value;
+  }
+  if (data.startup_init_error_code.supported && data.startup_init_error_code.good)
+  {
+    state.startup_init_error_code = data.startup_init_error_code.value;
   }
   if (data.lamp_on.supported)
   {
@@ -320,33 +342,12 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
       break;
 
     case 1:
-      if (ctx.gimball != nullptr && platform_state_has(state.data_mask, PLATFORM_DATA_GIMBAL))
-        drawGimball(ctx.gimball, 50, 210, 34, state.gimbal_x, state.gimbal_y);
-      break;
-
-    case 2:
     {
       render_ecu_section(state, ctx.fontValue, ctx.font20, amber);
       break;
     }
 
-    case 3:
-    {
-      static char tmpString[4] = {'N', 0, 0, 0};
-      switch (state.btn)
-      {
-        case BTN_OK: tmpString[0] = 'O'; break;
-        case BTN_U:  tmpString[0] = 'U'; break;
-        case BTN_D:  tmpString[0] = 'D'; break;
-        case BTN_L:  tmpString[0] = 'L'; break;
-        case BTN_R:  tmpString[0] = 'R'; break;
-        default: break;
-      }
-      gdispFillString(212, 42, tmpString, ctx.font20, amber, GFX_BLACK);
-      break;
-    }
-
-    case 4:
+    case 2:
     {
       ECUK::ecuParam_t *tps_p = nullptr;
       ECUK::ecuParam_t *knock_p = nullptr;
@@ -374,37 +375,13 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
       break;
     }
 
-    case 5:
+    case 3:
     {
       if (platform_state_has(state.data_mask, PLATFORM_DATA_STARTUP_ERROR) && state.startup_init_error)
-        gdispFillString((ctx.screen_width >> 1) - 50, (ctx.screen_height >> 1), "ERR", ctx.fontLCD, GFX_RED, GFX_BLACK);
-
       {
-        static bool diag_square_was_visible = false;
-        static const int diag_size = 86;
-        const int xdiag = ((int)ctx.screen_width - diag_size) / 2;
-        const int ydiag = ((int)ctx.screen_height - diag_size) / 2;
-        const bool show_diag_square = runtime_diag_square_enabled() && platform_state_has(state.data_mask, PLATFORM_DATA_TIMING_DIAG);
-        if (show_diag_square)
-        {
-          char logBuf[32];
-          gdispFillArea(xdiag - 1, ydiag - 1, diag_size, diag_size, GFX_BLACK);
-          gdispDrawBox(xdiag - 1, ydiag - 1, diag_size, diag_size, amber);
-          (void)std::snprintf(logBuf, sizeof(logBuf), "fps %lu", (unsigned long)runtime_diag_fps());
-          gdispFillString(xdiag + 4, ydiag + 6, logBuf, ctx.font10, amber, GFX_BLACK);
-          (void)std::snprintf(logBuf, sizeof(logBuf), "loop %lu", (unsigned long)state.loop_period_ms);
-          gdispFillString(xdiag + 4, ydiag + 20, logBuf, ctx.font10, amber, GFX_BLACK);
-          (void)std::snprintf(logBuf, sizeof(logBuf), "worst %lu", (unsigned long)state.worst_loop_period_ms);
-          gdispFillString(xdiag + 4, ydiag + 34, logBuf, ctx.font10, amber, GFX_BLACK);
-          (void)std::snprintf(logBuf, sizeof(logBuf), "cnt %lu", (unsigned long)state.loop_count);
-          gdispFillString(xdiag + 4, ydiag + 48, logBuf, ctx.font10, amber, GFX_BLACK);
-          diag_square_was_visible = true;
-        }
-        else if (diag_square_was_visible)
-        {
-          gdispFillArea(xdiag - 1, ydiag - 1, diag_size, diag_size, GFX_BLACK);
-          diag_square_was_visible = false;
-        }
+        char err_string[16];
+        (void)std::snprintf(err_string, sizeof(err_string), "ERR %02lX", (unsigned long)(state.startup_init_error_code & 0xFFU));
+        gdispFillString((ctx.screen_width >> 1) - 72, (ctx.screen_height >> 1), err_string, ctx.fontLCD, GFX_RED, GFX_BLACK);
       }
 
 
@@ -423,7 +400,14 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
       break;
     }
 
-    case 6:
+    case 4:
+    {
+      if (ctx.gimball != nullptr && platform_state_has(state.data_mask, PLATFORM_DATA_GIMBAL))
+        drawGimball(ctx.gimball, 50, 210, 34, state.gimbal_x, state.gimbal_y);
+      break;
+    }
+
+    case 5:
     {
       render_high_beam_telltale(state, ctx);
 
@@ -445,13 +429,9 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
         gdispFillDualCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), WARN_FINAL_SIZE, GFX_BLACK, WARN_FINAL_SIZE, GFX_GREEN);
         gdispFillCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), current_warn_size, GFX_YELLOW);
       }
-      
-      data.warning_panel.render(ctx);
-      break;
-    }
 
-    default:
-    {
+      data.warning_panel.render(ctx);
+
       const uint32_t now = HAL_GetTick();
       record_completed_frame(now);
       flush_after_hooks = true;
@@ -459,14 +439,22 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
       timer_draw_ms = now;
       break;
     }
+
+    default:
+      draw_step = 0;
+      break;
   }
+
 
   ctx.render_cycle_complete = flush_after_hooks;
   board_render_after(state, data, ctx);
   ctx.render_cycle_complete = false;
 
   if (flush_after_hooks)
+  {
+    render_diag_overlay(state, ctx, amber);
     gdispFlush();
+  }
 }
 
 namespace
@@ -476,6 +464,8 @@ struct SharedMainLoopState
   BoardSharedData board_data = {};
   SharedRenderCtx render_ctx = {};
   RuntimeState state = {};
+  BoardSharedData render_board_data = {};
+  RuntimeState render_state = {};
   int draw_step = 0;
   uint32_t timer_draw_ms = 0;
   uint32_t timer_telemetry_ms = 0;
@@ -524,7 +514,12 @@ void main_loop_step(SharedMainLoopState &loop)
 
   if (((HAL_GetTick() - loop.timer_draw_ms) >= get_draw_interval_ms()) && board_display_ready())
   {
-    render_step_shared(loop.state, loop.board_data, loop.render_ctx, loop.draw_step, loop.timer_draw_ms);
+    if (loop.draw_step == 0 || loop.state.rpm_mode >= 2)
+    {
+      loop.render_board_data = loop.board_data;
+      loop.render_state = loop.state;
+    }
+    render_step_shared(loop.render_state, loop.render_board_data, loop.render_ctx, loop.draw_step, loop.timer_draw_ms);
     loop.board_data.mark_all_read();
   }
 }

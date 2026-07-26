@@ -367,6 +367,7 @@ static void sim_publish_current_data()
   g_board_data->loop_count.publish(sample.loop_count, now);
   g_board_data->loop_period_ms.publish(sample.loop_period_ms, now);
   g_board_data->worst_loop_period_ms.publish(sample.worst_loop_period_ms, now);
+  g_board_data->startup_init_error_code.publish(sample.startup_init_error ? 1U : 0U, now);
   const SimVehicleSnapshot vehicle = sim_make_wot_pull(sample.elapsed_ms);
   BoardAccelerationVector accel = {};
   const float pitch_rad = get_build_config().vehicle.board_mount_pitch_deg * 3.14159265358979323846f / 180.0f;

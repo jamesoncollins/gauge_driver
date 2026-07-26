@@ -103,6 +103,13 @@ static constexpr uint16_t BULB_HIGH_BEAM_MASK = bulb_mask(3);
 static constexpr uint16_t BULB_BATT_MASK = bulb_mask(7);
 static constexpr uint16_t BULB_INPUT_MASK = 0x00FF;
 static constexpr uint16_t BULB_PULLUP_MASK = BULB_BRAKE_MASK | BULB_BATT_MASK;
+static constexpr uint32_t STARTUP_ERR_IOEXP_SCREEN = 1U << 0;
+static constexpr uint32_t STARTUP_ERR_IOEXP_SPEEDO = 1U << 1;
+static constexpr uint32_t STARTUP_ERR_IMU = 1U << 2;
+static constexpr uint32_t STARTUP_ERR_TIM17 = 1U << 3;
+static constexpr uint32_t STARTUP_ERR_TIM2_CH3 = 1U << 4;
+static constexpr uint32_t STARTUP_ERR_TIM2_CH4 = 1U << 5;
+static constexpr uint32_t STARTUP_ERR_TIM16 = 1U << 6;
 
 typedef enum
 {
@@ -169,6 +176,12 @@ static volatile uint32_t g_startup_diag_marker = 0;
 static void startup_diag_mark(uint32_t marker)
 {
   g_startup_diag_marker = marker;
+}
+
+static void record_startup_error(int status, uint32_t bit)
+{
+  if (status != 0)
+    startupInitError |= bit;
 }
 
 static float clamp_needle_value(float value, float min_value, float max_value)
@@ -403,11 +416,11 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
 
   gdispImageOpenMemory(&g_arm_main.battImg, batt);
   gdispImageOpenMemory(&g_arm_main.beamImg, beam);
-  startupInitError |= g_arm_main.ioexp_screen->init(BULB_PULLUP_MASK, BULB_INPUT_MASK);
-  startupInitError |= g_arm_main.ioexp_speedo->init(0x0000, 0x0000);
+  record_startup_error(g_arm_main.ioexp_screen->init(BULB_PULLUP_MASK, BULB_INPUT_MASK), STARTUP_ERR_IOEXP_SCREEN);
+  record_startup_error(g_arm_main.ioexp_speedo->init(0x0000, 0x0000), STARTUP_ERR_IOEXP_SPEEDO);
   g_arm_main.bulbVals = g_arm_main.ioexp_screen->get();
 
-  startupInitError |= BMI088_Init(&imu, &hi2c1);
+  record_startup_error(BMI088_Init(&imu, &hi2c1), STARTUP_ERR_IMU);
   regAddr = BMI_ACC_DATA;
 
   // Initialize microsecond timebase and sensor filters before enabling
@@ -475,13 +488,13 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
   g_arm_main.speedX12->reset();
   g_arm_main.odoX12->reset();
   needles_ready = true;
-  startupInitError |= HAL_TIM_Base_Start_IT(&htim17);
+  record_startup_error(HAL_TIM_Base_Start_IT(&htim17), STARTUP_ERR_TIM17);
   arm_run_startup_animation_and_needle_dance();
   measure_freq = true;
 
-  startupInitError |= HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
-  startupInitError |= HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
-  startupInitError |= HAL_TIM_Base_Start_IT(&htim16);
+  record_startup_error(HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3), STARTUP_ERR_TIM2_CH3);
+  record_startup_error(HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4), STARTUP_ERR_TIM2_CH4);
+  record_startup_error(HAL_TIM_Base_Start_IT(&htim16), STARTUP_ERR_TIM16);
 
   arm_render_ctx = {
       .amber_ptr = (color_t *)&g_arm_main.amber,
@@ -613,6 +626,7 @@ static void arm_publish_current_data()
   g_board_data->loop_count.publish(sample.loop_count, now);
   g_board_data->loop_period_ms.publish(sample.loop_period_ms, now);
   g_board_data->worst_loop_period_ms.publish(sample.worst_loop_period_ms, now);
+  g_board_data->startup_init_error_code.publish(startupInitError, now);
   g_board_data->acceleration_mps2.publish(g_acceleration_mps2, now);
   g_board_data->startup_init_error.publish(sample.startup_init_error, now);
   g_board_data->lamp_on.publish(sample.warn_lamp_on, now);

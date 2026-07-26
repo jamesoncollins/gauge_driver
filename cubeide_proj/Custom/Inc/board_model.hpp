@@ -230,6 +230,7 @@ struct BoardSharedData
   BoardValue<uint32_t> loop_count;
   BoardValue<uint32_t> loop_period_ms;
   BoardValue<uint32_t> worst_loop_period_ms;
+  BoardValue<uint32_t> startup_init_error_code;
   BoardValue<BoardAccelerationVector> acceleration_mps2;
   BoardValue<bool> startup_init_error;
   BoardValue<bool> lamp_on;
@@ -275,6 +276,7 @@ struct BoardSharedData
     loop_count.mark_read();
     loop_period_ms.mark_read();
     worst_loop_period_ms.mark_read();
+    startup_init_error_code.mark_read();
     acceleration_mps2.mark_read();
     startup_init_error.mark_read();
     lamp_on.mark_read();
@@ -295,6 +297,7 @@ typedef struct
   uint32_t loop_count;
   uint32_t loop_period_ms;
   uint32_t worst_loop_period_ms;
+  uint32_t startup_init_error_code;
   int rpm_mode;
   int gimbal_x;
   int gimbal_y;
