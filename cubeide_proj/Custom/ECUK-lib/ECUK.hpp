@@ -29,7 +29,7 @@ public:
   }
   ecuState_e;
 
-  typedef struct
+  typedef struct ecuParam_t
   {
     const char name[16];
     const char units[16];

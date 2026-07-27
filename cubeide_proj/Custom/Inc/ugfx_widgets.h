@@ -152,7 +152,7 @@ void drawHorzBarGraph (
 bool dissolve(int x, int y, int width, int height, int iter);
 
 
-typedef struct
+typedef struct Gimball_t
 {
   int r2Max, xMax, yMax;
   uint32_t peakHold_ms = 2000;
@@ -177,7 +177,7 @@ bool flasher_fun(flasher_t*);
 #define flasher(flasher_struct, arg) if(flasher_fun(flasher_struct)) arg;
 
 
-typedef struct
+typedef struct LinePlot_t
 {
   int *data;
   int len = -1;

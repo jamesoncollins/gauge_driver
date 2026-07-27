@@ -23,7 +23,7 @@ Use the UCRT64 tool environment in the current shell:
 Build the recommended native simulator:
 
 ```sh
-./scripts/build-preset.sh x86-ucrt-debug
+./scripts/build-preset.sh x86-debug
 ```
 
 Build hardware display variants:

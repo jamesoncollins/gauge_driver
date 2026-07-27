@@ -22,5 +22,22 @@ Persistent/constant element overlap is not: check the ECU meters, button text,
 gimbal, line plots, and warning indicators against each other across multiple
 frames.
 
+## Routine Validation
 
+After shared application changes, build the simulator and hardware debug
+presets when feasible:
+
+- `cmake --build --preset x86-debug`
+- `cmake --build --preset web-debug`
+- `cmake --build --preset st7789vi-debug`
+- `cmake --build --preset s6e63d6-debug`
+
+For gauge layout or rendering changes, capture `web-debug` frames with:
+
+```sh
+python scripts/capture_web_frames.py --frames 12 --interval 0.75
+```
+
+Then inspect `build/web-debug/analysis/contact-sheet.png` for persistent layout
+overlap or clipping.
 

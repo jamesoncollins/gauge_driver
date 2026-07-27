@@ -41,10 +41,10 @@ Source the UCRT64 tool environment in the current shell:
 Configure and build the recommended native simulator:
 
 ```sh
-./scripts/build-preset.sh x86-ucrt-debug
+./scripts/build-preset.sh x86-debug
 ```
 
-The older `x86-debug` preset still targets `C:/msys64/mingw64`. Prefer `x86-ucrt-debug` for new local setup.
+`x86-debug` targets MSYS2 UCRT64 through `C:/msys64/ucrt64`.
 
 ## ARM Firmware
 
@@ -74,12 +74,12 @@ The web toolchain sets the executable suffix to `.html`.
 The wrapper is only a convenience. After sourcing the environment, direct CMake commands also work:
 
 ```sh
-cmake --preset x86-ucrt-debug
-cmake --build --preset x86-ucrt-debug
+cmake --preset x86-debug
+cmake --build --preset x86-debug
 ```
 
 For a clean configure through the wrapper:
 
 ```sh
-./scripts/build-preset.sh --fresh x86-ucrt-debug
+./scripts/build-preset.sh --fresh x86-debug
 ```
