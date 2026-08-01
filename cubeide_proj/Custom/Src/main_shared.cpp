@@ -178,6 +178,12 @@ RuntimeState runtime_state_from_board_data(const BoardSharedData &data)
     state.ecu_param_wb_index = data.ecu_param_wb_index;
     state.ecu_param_map_index = data.ecu_param_map_index;
     state.ecu_param_knock_index = data.ecu_param_knock_index;
+    state.ecu_param_fuel_trim_front_low_index = data.ecu_param_fuel_trim_front_low_index;
+    state.ecu_param_fuel_trim_front_med_index = data.ecu_param_fuel_trim_front_med_index;
+    state.ecu_param_fuel_trim_front_high_index = data.ecu_param_fuel_trim_front_high_index;
+    state.ecu_param_fuel_trim_rear_low_index = data.ecu_param_fuel_trim_rear_low_index;
+    state.ecu_param_fuel_trim_rear_med_index = data.ecu_param_fuel_trim_rear_med_index;
+    state.ecu_param_fuel_trim_rear_high_index = data.ecu_param_fuel_trim_rear_high_index;
     state.ecu_flasher = data.ecu_flasher;
   }
   if (data.btn.supported)

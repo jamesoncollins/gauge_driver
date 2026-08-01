@@ -12,6 +12,12 @@ struct SimVehicleSnapshot
   float map_psi = 0.0f;
   float knock_count = 0.0f;
   float battery_v = 13.8f;
+  float fuel_trim_front_low_pct = 0.0f;
+  float fuel_trim_front_med_pct = 0.0f;
+  float fuel_trim_front_high_pct = 0.0f;
+  float fuel_trim_rear_low_pct = 0.0f;
+  float fuel_trim_rear_med_pct = 0.0f;
+  float fuel_trim_rear_high_pct = 0.0f;
   float acceleration_mps2 = 0.0f;
   int gear = 0;
 };
@@ -26,6 +32,12 @@ public:
     PARAM_MAP,
     PARAM_KNOCK,
     PARAM_VBAT,
+    PARAM_FFTL,
+    PARAM_FFTM,
+    PARAM_FFTH,
+    PARAM_RFTL,
+    PARAM_RFTM,
+    PARAM_RFTH,
     PARAM_COUNT
   };
 
@@ -47,6 +59,12 @@ private:
       {"MAP", "PSI", 0, 1, 1, 0, false, 0, 0, false, 1, 0},
       {"Knock", "Count", 0, 1, 1, 0, false, 0, 0, false, 1, 0},
       {"Battery", "V", 0, 1, 1, 0, false, 0, 0, false, 1, 0},
+      {"FFTL", "%", 0, 1, 1, 1, 0, false, 0, 0, false, 1000},
+      {"FFTM", "%", 0, 1, 1, 1, 0, false, 0, 0, false, 1001},
+      {"FFTH", "%", 0, 1, 1, 1, 0, false, 0, 0, false, 1002},
+      {"RFTL", "%", 0, 1, 1, 1, 0, false, 0, 0, false, 1003},
+      {"RFTM", "%", 0, 1, 1, 1, 0, false, 0, 0, false, 1004},
+      {"RFTH", "%", 0, 1, 1, 1, 0, false, 0, 0, false, 1005},
   };
   volatile bool tx_done_ = false;
   volatile bool rx_done_ = false;

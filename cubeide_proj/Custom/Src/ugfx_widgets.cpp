@@ -399,6 +399,239 @@ void UgfxTextBarMeter::draw()
     gdispFillString(x_ + 2, units_y_, units_, label_font_, text_color, background_);
   }
 }
+
+void UgfxMultiMarkerMeter::setBounds(coord_t x, coord_t y, coord_t width, coord_t height)
+{
+  if (x_ == x && y_ == y && width_ == width && height_ == height)
+    return;
+
+  UgfxWidget::setBounds(x, y, width, height);
+  markLayoutDirty();
+}
+
+void UgfxMultiMarkerMeter::setColors(color_t primary, color_t secondary, color_t background)
+{
+  if (primary_ == primary && secondary_ == secondary && background_ == background)
+    return;
+
+  UgfxWidget::setColors(primary, secondary, background);
+}
+
+void UgfxMultiMarkerMeter::configure(const char *label, const char *units,
+                                     float min_value, float max_value,
+                                     uint8_t decimals,
+                                     font_t label_font, font_t value_font)
+{
+  const char *next_label = label != nullptr ? label : "";
+  const char *next_units = units != nullptr ? units : "";
+  if (label_ == next_label && units_ == next_units && min_value_ == min_value && max_value_ == max_value &&
+      decimals_ == decimals && label_font_ == label_font && value_font_ == value_font)
+    return;
+
+  label_ = next_label;
+  units_ = next_units;
+  min_value_ = min_value;
+  max_value_ = max_value;
+  decimals_ = decimals;
+  label_font_ = label_font;
+  value_font_ = value_font;
+  markLayoutDirty();
+}
+
+void UgfxMultiMarkerMeter::setBands(const UgfxMeterBand *bands, std::size_t band_count)
+{
+  if (bands_ == bands && band_count_ == band_count)
+    return;
+
+  bands_ = bands;
+  band_count_ = band_count;
+}
+
+void UgfxMultiMarkerMeter::setMarkers(const UgfxMeterMarker *markers, std::size_t marker_count)
+{
+  markers_ = markers;
+  marker_count_ = marker_count;
+  value_text_dirty_ = true;
+}
+
+void UgfxMultiMarkerMeter::setTextMode(UgfxMultiMarkerTextMode text_mode)
+{
+  if (text_mode_ == text_mode)
+    return;
+
+  text_mode_ = text_mode;
+  value_text_dirty_ = true;
+}
+
+void UgfxMultiMarkerMeter::setBarHeight(coord_t bar_height)
+{
+  const coord_t next_bar_height = bar_height > 2 ? bar_height : 3;
+  if (bar_height_ == next_bar_height)
+    return;
+
+  bar_height_ = next_bar_height;
+  markLayoutDirty();
+}
+
+bool UgfxMultiMarkerMeter::anyMarkerValid() const
+{
+  for (std::size_t i = 0; i < marker_count_; ++i)
+  {
+    if (markers_[i].valid)
+      return true;
+  }
+  return false;
+}
+
+coord_t UgfxMultiMarkerMeter::valueToBarX(float value, coord_t bar_x, coord_t inner_w) const
+{
+  const float range = max_value_ - min_value_;
+  if (range <= 0.0f || inner_w <= 0)
+    return bar_x;
+
+  const float clamped = clamp_float(value, min_value_, max_value_);
+  const float percent = (clamped - min_value_) / range;
+  return bar_x + 1 + clamp_coord((coord_t)round((float)inner_w * percent), 0, inner_w);
+}
+
+void UgfxMultiMarkerMeter::drawBandRail(bool enabled)
+{
+  if (!enabled || bands_ == nullptr || band_count_ == 0)
+  {
+    gdispFillArea(bar_x_ + 1, bar_y_ + 1, bar_inner_w_, bar_inner_h_, GFX_GRAY);
+    return;
+  }
+
+  for (std::size_t i = 0; i < band_count_; ++i)
+  {
+    const coord_t start_x = valueToBarX(bands_[i].min_value, bar_x_, bar_inner_w_);
+    const coord_t end_x = valueToBarX(bands_[i].max_value, bar_x_, bar_inner_w_);
+    const coord_t segment_w = end_x > start_x ? end_x - start_x : 1;
+    gdispFillArea(start_x, bar_y_ + 1, segment_w, bar_inner_h_, bands_[i].color);
+  }
+}
+
+void UgfxMultiMarkerMeter::drawMarkers()
+{
+  if (markers_ == nullptr)
+    return;
+
+  for (std::size_t i = 0; i < marker_count_; ++i)
+  {
+    const UgfxMeterMarker &marker = markers_[i];
+    const coord_t marker_x = valueToBarX(marker.value, bar_x_, bar_inner_w_);
+    const coord_t tick_x = clamp_coord(marker_x - 1, bar_x_ + 1, bar_x_ + bar_w_ - 3);
+    const color_t marker_color = marker.valid ? marker.color : GFX_GRAY;
+    gdispFillArea(tick_x, bar_y_ - 2, 3, bar_h_ + 4, marker_color);
+  }
+}
+
+void UgfxMultiMarkerMeter::markLayoutDirty()
+{
+  layout_dirty_ = true;
+  value_text_dirty_ = true;
+}
+
+void UgfxMultiMarkerMeter::updateLayout()
+{
+  if (!layout_dirty_)
+    return;
+
+  layout_dirty_ = false;
+  value_text_dirty_ = true;
+
+  if (width_ < 12 || height_ < 8)
+    return;
+
+  const coord_t label_w = label_font_ != nullptr && label_[0] != '\0' ? 42 : 2;
+  bar_x_ = x_ + label_w;
+  bar_w_ = width_ > (label_w + 2) ? width_ - label_w - 2 : 0;
+  const coord_t requested_bar_h = bar_height_ > 2 ? bar_height_ : 3;
+  bar_h_ = requested_bar_h < (height_ - 2) ? requested_bar_h : (height_ - 2);
+  bar_y_ = y_ + 2;
+  bar_inner_w_ = bar_w_ > 2 ? bar_w_ - 2 : 0;
+  bar_inner_h_ = bar_h_ > 2 ? bar_h_ - 2 : 0;
+  label_y_ = bar_y_ + 1;
+  value_text_y_ = bar_y_ + bar_h_ + 2;
+}
+
+void UgfxMultiMarkerMeter::updateValueText()
+{
+  if (!value_text_dirty_)
+    return;
+
+  value_text_[0] = '\0';
+  if (text_mode_ == UGFX_MULTI_MARKER_TEXT_NONE || markers_ == nullptr || marker_count_ == 0)
+  {
+    value_text_dirty_ = false;
+    return;
+  }
+
+  if (text_mode_ == UGFX_MULTI_MARKER_TEXT_AVERAGE)
+  {
+    float sum = 0.0f;
+    std::size_t valid_count = 0;
+    for (std::size_t i = 0; i < marker_count_; ++i)
+    {
+      if (!markers_[i].valid)
+        continue;
+      sum += markers_[i].value;
+      ++valid_count;
+    }
+
+    if (valid_count == 0)
+      (void)std::snprintf(value_text_, sizeof(value_text_), "AVG -- %s", units_);
+    else
+      (void)std::snprintf(value_text_, sizeof(value_text_), "AVG %.*f %s", (int)decimals_, sum / (float)valid_count, units_);
+
+    value_text_dirty_ = false;
+    return;
+  }
+
+  char *out = value_text_;
+  std::size_t left = sizeof(value_text_);
+  for (std::size_t i = 0; i < marker_count_ && left > 1; ++i)
+  {
+    const UgfxMeterMarker &marker = markers_[i];
+    const char *marker_label = marker.label != nullptr ? marker.label : "";
+    const int written = marker.valid
+        ? std::snprintf(out, left, "%s%s%.*f", i == 0 ? "" : " ", marker_label, (int)decimals_, marker.value)
+        : std::snprintf(out, left, "%s%s--", i == 0 ? "" : " ", marker_label);
+    if (written < 0)
+      break;
+    const std::size_t used = (std::size_t)written >= left ? left - 1 : (std::size_t)written;
+    out += used;
+    left -= used;
+  }
+
+  value_text_dirty_ = false;
+}
+
+void UgfxMultiMarkerMeter::draw()
+{
+  if (!visible_)
+    return;
+
+  updateLayout();
+  if (width_ <= 0 || height_ <= 0 || bar_w_ < 3 || bar_h_ < 3)
+    return;
+
+  updateValueText();
+
+  const bool enabled = anyMarkerValid();
+  const color_t text_color = enabled ? primary_ : GFX_GRAY;
+  const color_t frame_color = enabled ? primary_ : GFX_GRAY;
+
+  if (label_font_ != nullptr)
+    gdispFillString(x_ + 2, label_y_, label_, label_font_, text_color, background_);
+
+  gdispDrawBox(bar_x_, bar_y_, bar_w_, bar_h_, frame_color);
+  drawBandRail(enabled);
+  drawMarkers();
+
+  if (value_font_ != nullptr && text_mode_ != UGFX_MULTI_MARKER_TEXT_NONE)
+    gdispFillString(x_ + 2, value_text_y_, value_text_, value_font_, text_color, background_);
+}
 /*
  *
  * TODO: detect GDISP_HARDWARE_FILLS and fill boxes isntead of drawing lines

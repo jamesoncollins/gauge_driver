@@ -243,6 +243,12 @@ struct BoardSharedData
   int ecu_param_wb_index = 0;
   int ecu_param_map_index = 0;
   int ecu_param_knock_index = 0;
+  int ecu_param_fuel_trim_front_low_index = 0;
+  int ecu_param_fuel_trim_front_med_index = 0;
+  int ecu_param_fuel_trim_front_high_index = 0;
+  int ecu_param_fuel_trim_rear_low_index = 0;
+  int ecu_param_fuel_trim_rear_med_index = 0;
+  int ecu_param_fuel_trim_rear_high_index = 0;
   flasher_t *ecu_flasher = nullptr;
 
   BoardObjectPanel warning_panel;
@@ -312,6 +318,12 @@ typedef struct
   int ecu_param_wb_index;
   int ecu_param_map_index;
   int ecu_param_knock_index;
+  int ecu_param_fuel_trim_front_low_index;
+  int ecu_param_fuel_trim_front_med_index;
+  int ecu_param_fuel_trim_front_high_index;
+  int ecu_param_fuel_trim_rear_low_index;
+  int ecu_param_fuel_trim_rear_med_index;
+  int ecu_param_fuel_trim_rear_high_index;
   flasher_t *ecu_flasher;
   button_e btn;
 } RuntimeState;

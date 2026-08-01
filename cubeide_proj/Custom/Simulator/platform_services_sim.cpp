@@ -35,6 +35,12 @@ struct PlatformSample
   int ecu_param_wb_index;
   int ecu_param_map_index;
   int ecu_param_knock_index;
+  int ecu_param_fuel_trim_front_low_index;
+  int ecu_param_fuel_trim_front_med_index;
+  int ecu_param_fuel_trim_front_high_index;
+  int ecu_param_fuel_trim_rear_low_index;
+  int ecu_param_fuel_trim_rear_med_index;
+  int ecu_param_fuel_trim_rear_high_index;
   flasher_t *ecu_flasher;
   button_e btn;
 };
@@ -175,6 +181,12 @@ static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
   out.map_psi = -8.5f;
   out.knock_count = 0.0f;
   out.battery_v = 13.8f + 0.15f * std::sinf(t * 0.37f);
+  out.fuel_trim_front_low_pct = 3.5f * std::sinf(t * 0.31f) - 1.0f;
+  out.fuel_trim_front_med_pct = 4.5f * std::sinf(t * 0.23f + 1.2f) + 1.0f;
+  out.fuel_trim_front_high_pct = 6.5f * std::sinf(t * 0.19f + 2.4f);
+  out.fuel_trim_rear_low_pct = 3.0f * std::sinf(t * 0.29f + 2.1f) + 0.5f;
+  out.fuel_trim_rear_med_pct = 5.0f * std::sinf(t * 0.21f + 0.4f) - 1.5f;
+  out.fuel_trim_rear_high_pct = 7.0f * std::sinf(t * 0.17f + 1.6f) + 0.8f;
   out.acceleration_mps2 = 0.0f;
   out.gear = 0;
 
@@ -334,6 +346,12 @@ static PlatformSample sim_collect_platform_sample()
   sample.ecu_param_wb_index = SimECUK::PARAM_WB;
   sample.ecu_param_map_index = SimECUK::PARAM_MAP;
   sample.ecu_param_knock_index = SimECUK::PARAM_KNOCK;
+  sample.ecu_param_fuel_trim_front_low_index = SimECUK::PARAM_FFTL;
+  sample.ecu_param_fuel_trim_front_med_index = SimECUK::PARAM_FFTM;
+  sample.ecu_param_fuel_trim_front_high_index = SimECUK::PARAM_FFTH;
+  sample.ecu_param_fuel_trim_rear_low_index = SimECUK::PARAM_RFTL;
+  sample.ecu_param_fuel_trim_rear_med_index = SimECUK::PARAM_RFTM;
+  sample.ecu_param_fuel_trim_rear_high_index = SimECUK::PARAM_RFTH;
   sample.ecu_flasher = nullptr;
   sample.startup_init_error = false;
 
@@ -388,6 +406,12 @@ static void sim_publish_current_data()
   g_board_data->ecu_param_wb_index = sample.ecu_param_wb_index;
   g_board_data->ecu_param_map_index = sample.ecu_param_map_index;
   g_board_data->ecu_param_knock_index = sample.ecu_param_knock_index;
+  g_board_data->ecu_param_fuel_trim_front_low_index = sample.ecu_param_fuel_trim_front_low_index;
+  g_board_data->ecu_param_fuel_trim_front_med_index = sample.ecu_param_fuel_trim_front_med_index;
+  g_board_data->ecu_param_fuel_trim_front_high_index = sample.ecu_param_fuel_trim_front_high_index;
+  g_board_data->ecu_param_fuel_trim_rear_low_index = sample.ecu_param_fuel_trim_rear_low_index;
+  g_board_data->ecu_param_fuel_trim_rear_med_index = sample.ecu_param_fuel_trim_rear_med_index;
+  g_board_data->ecu_param_fuel_trim_rear_high_index = sample.ecu_param_fuel_trim_rear_high_index;
   g_board_data->ecu_flasher = sample.ecu_flasher;
 
   if (g_warn_batt != nullptr)

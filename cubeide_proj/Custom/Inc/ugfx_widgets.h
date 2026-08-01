@@ -119,6 +119,71 @@ private:
   coord_t segment_y_ = 0;
   coord_t segment_x_[kMaxCachedSegments] = {};
 };
+
+struct UgfxMeterMarker
+{
+  float value;
+  bool valid;
+  color_t color;
+  const char *label;
+};
+
+typedef enum
+{
+  UGFX_MULTI_MARKER_TEXT_BOTH = 0,
+  UGFX_MULTI_MARKER_TEXT_AVERAGE,
+  UGFX_MULTI_MARKER_TEXT_NONE
+} UgfxMultiMarkerTextMode;
+
+class UgfxMultiMarkerMeter : public UgfxWidget
+{
+public:
+  void setBounds(coord_t x, coord_t y, coord_t width, coord_t height);
+  void setColors(color_t primary, color_t secondary, color_t background);
+  void configure(const char *label, const char *units,
+                 float min_value, float max_value,
+                 uint8_t decimals,
+                 font_t label_font, font_t value_font);
+  void setBands(const UgfxMeterBand *bands, std::size_t band_count);
+  void setMarkers(const UgfxMeterMarker *markers, std::size_t marker_count);
+  void setTextMode(UgfxMultiMarkerTextMode text_mode);
+  void setBarHeight(coord_t bar_height);
+  void draw() override;
+
+private:
+  bool anyMarkerValid() const;
+  coord_t valueToBarX(float value, coord_t bar_x, coord_t inner_w) const;
+  void drawBandRail(bool enabled);
+  void drawMarkers();
+  void markLayoutDirty();
+  void updateLayout();
+  void updateValueText();
+
+  const char *label_ = "";
+  const char *units_ = "";
+  float min_value_ = 0.0f;
+  float max_value_ = 1.0f;
+  uint8_t decimals_ = 1;
+  font_t label_font_ = nullptr;
+  font_t value_font_ = nullptr;
+  const UgfxMeterBand *bands_ = nullptr;
+  std::size_t band_count_ = 0;
+  const UgfxMeterMarker *markers_ = nullptr;
+  std::size_t marker_count_ = 0;
+  UgfxMultiMarkerTextMode text_mode_ = UGFX_MULTI_MARKER_TEXT_BOTH;
+  coord_t bar_height_ = 10;
+  bool layout_dirty_ = true;
+  bool value_text_dirty_ = true;
+  char value_text_[32] = "";
+  coord_t bar_x_ = 0;
+  coord_t bar_y_ = 0;
+  coord_t bar_w_ = 0;
+  coord_t bar_h_ = 0;
+  coord_t bar_inner_w_ = 0;
+  coord_t bar_inner_h_ = 0;
+  coord_t label_y_ = 0;
+  coord_t value_text_y_ = 0;
+};
 #endif
 
 void setColors(uint32_t,uint32_t,uint32_t);

@@ -16,6 +16,12 @@ void SimECUK::simulate(uint32_t now_ms, const SimVehicleSnapshot &vehicle)
   params_[PARAM_TPS].val = vehicle.throttle_pct;
   params_[PARAM_KNOCK].val = vehicle.knock_count;
   params_[PARAM_VBAT].val = vehicle.battery_v;
+  params_[PARAM_FFTL].val = vehicle.fuel_trim_front_low_pct;
+  params_[PARAM_FFTM].val = vehicle.fuel_trim_front_med_pct;
+  params_[PARAM_FFTH].val = vehicle.fuel_trim_front_high_pct;
+  params_[PARAM_RFTL].val = vehicle.fuel_trim_rear_low_pct;
+  params_[PARAM_RFTM].val = vehicle.fuel_trim_rear_med_pct;
+  params_[PARAM_RFTH].val = vehicle.fuel_trim_rear_high_pct;
 
   for (int i = 0; i < PARAM_COUNT; ++i)
   {
