@@ -41,3 +41,26 @@ python scripts/capture_web_frames.py --frames 12 --interval 0.75
 Then inspect `build/web-debug/analysis/contact-sheet.png` for persistent layout
 overlap or clipping.
 
+
+## Windows Sandbox Command Notes
+
+The Windows ACL sandbox can fail before a command starts with:
+
+```text
+windows sandbox: helper_unknown_error: apply deny-read ACLs
+```
+
+Known-good first attempts:
+
+- Run simple commands one at a time, especially `git status --short`,
+  `git diff`, and `cmake --build --preset x86-debug`.
+- Prefer direct approved command forms before wrapping them in PowerShell.
+
+Avoid as a first attempt:
+
+- Parallel shell calls for filesystem-heavy reads.
+- Complex PowerShell pipelines, variables, globs, or nested quoting.
+
+If a needed command fails with the ACL error, rerun the simplest equivalent
+command outside the sandbox with escalation instead of spending time trying
+several quoting variants.
