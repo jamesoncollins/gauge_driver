@@ -35,6 +35,8 @@ struct PlatformSample
   int ecu_param_wb_index;
   int ecu_param_map_index;
   int ecu_param_knock_index;
+  int ecu_param_timing_index = 0;
+  int ecu_param_afr_target_index = 0;
   int ecu_param_fuel_trim_front_low_index;
   int ecu_param_fuel_trim_front_med_index;
   int ecu_param_fuel_trim_front_high_index;
@@ -180,6 +182,8 @@ static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
   out.wideband_afr = 14.7f;
   out.map_psi = -8.5f;
   out.knock_count = 0.0f;
+  out.timing_deg = 14.0f;
+  out.afr_target = 14.7f;
   out.battery_v = 13.8f + 0.15f * std::sinf(t * 0.37f);
   out.fuel_trim_front_low_pct = 3.5f * std::sinf(t * 0.31f) - 1.0f;
   out.fuel_trim_front_med_pct = 4.5f * std::sinf(t * 0.23f + 1.2f) + 1.0f;
@@ -221,6 +225,8 @@ static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
       const float spool = sim_smoothstep(3300.0f, 5200.0f, out.rpm) * sim_smoothstep(0.05f, 0.45f, pull);
       out.map_psi = sim_lerpf(-1.0f, boost_target_psi[gear], spool);
       out.wideband_afr = sim_lerpf(12.6f, 11.2f, spool);
+      out.afr_target = 11.2f;
+      out.timing_deg = sim_lerpf(18.0f, 8.0f, spool);
       out.knock_count = (out.rpm > 5850.0f) ? (0.8f + 1.5f * std::pow((out.rpm - 5850.0f) / 700.0f, 2.0f)) : 0.0f;
       out.knock_count += 0.35f * (0.5f + 0.5f * std::sinf(t * 18.0f + (float)gear));
       out.acceleration_mps2 = sim_lerpf(8.8f - (float)gear * 0.95f, 4.4f - (float)gear * 0.35f, pull);
@@ -237,6 +243,8 @@ static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
       out.throttle_pct = sim_lerpf(100.0f, 22.0f, sim_smoothstep(0.0f, 0.45f, shift));
       out.map_psi = sim_lerpf(boost_target_psi[gear], -2.5f, sim_smoothstep(0.0f, 0.7f, shift));
       out.wideband_afr = sim_lerpf(11.4f, 13.3f, shift);
+      out.afr_target = sim_lerpf(11.2f, 14.7f, shift);
+      out.timing_deg = sim_lerpf(8.0f, 16.0f, shift);
       out.knock_count = 1.0f + 0.8f * (0.5f + 0.5f * std::sinf(t * 28.0f));
       out.acceleration_mps2 = -2.0f;
       return out;
@@ -251,6 +259,8 @@ static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
   out.throttle_pct = sim_lerpf(18.0f, 4.0f, coast);
   out.map_psi = sim_lerpf(-2.0f, -9.0f, coast);
   out.wideband_afr = sim_lerpf(13.5f, 15.2f, coast);
+  out.afr_target = 14.7f;
+  out.timing_deg = sim_lerpf(16.0f, 28.0f, coast);
   out.knock_count = 0.0f;
   out.acceleration_mps2 = -3.0f;
   return out;
@@ -346,6 +356,8 @@ static PlatformSample sim_collect_platform_sample()
   sample.ecu_param_wb_index = SimECUK::PARAM_WB;
   sample.ecu_param_map_index = SimECUK::PARAM_MAP;
   sample.ecu_param_knock_index = SimECUK::PARAM_KNOCK;
+  sample.ecu_param_timing_index = SimECUK::PARAM_TIMING;
+  sample.ecu_param_afr_target_index = SimECUK::PARAM_AFR_TARGET;
   sample.ecu_param_fuel_trim_front_low_index = SimECUK::PARAM_FFTL;
   sample.ecu_param_fuel_trim_front_med_index = SimECUK::PARAM_FFTM;
   sample.ecu_param_fuel_trim_front_high_index = SimECUK::PARAM_FFTH;
@@ -406,6 +418,8 @@ static void sim_publish_current_data()
   g_board_data->ecu_param_wb_index = sample.ecu_param_wb_index;
   g_board_data->ecu_param_map_index = sample.ecu_param_map_index;
   g_board_data->ecu_param_knock_index = sample.ecu_param_knock_index;
+  g_board_data->ecu_param_timing_index = sample.ecu_param_timing_index;
+  g_board_data->ecu_param_afr_target_index = sample.ecu_param_afr_target_index;
   g_board_data->ecu_param_fuel_trim_front_low_index = sample.ecu_param_fuel_trim_front_low_index;
   g_board_data->ecu_param_fuel_trim_front_med_index = sample.ecu_param_fuel_trim_front_med_index;
   g_board_data->ecu_param_fuel_trim_front_high_index = sample.ecu_param_fuel_trim_front_high_index;

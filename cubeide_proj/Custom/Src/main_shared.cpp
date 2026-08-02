@@ -5,6 +5,8 @@
 #include "build_config.hpp"
 #include "platform_services.hpp"
 #include "telemetry.hpp"
+#include "gui_layout.hpp"
+#include "gauge_layouts.hpp"
 #include "gfx.h"
 #include "ugfx_widgets.h"
 #include "../ECUK-lib/ECUK.hpp"
@@ -178,6 +180,8 @@ RuntimeState runtime_state_from_board_data(const BoardSharedData &data)
     state.ecu_param_wb_index = data.ecu_param_wb_index;
     state.ecu_param_map_index = data.ecu_param_map_index;
     state.ecu_param_knock_index = data.ecu_param_knock_index;
+    state.ecu_param_timing_index = data.ecu_param_timing_index;
+    state.ecu_param_afr_target_index = data.ecu_param_afr_target_index;
     state.ecu_param_fuel_trim_front_low_index = data.ecu_param_fuel_trim_front_low_index;
     state.ecu_param_fuel_trim_front_med_index = data.ecu_param_fuel_trim_front_med_index;
     state.ecu_param_fuel_trim_front_high_index = data.ecu_param_fuel_trim_front_high_index;
@@ -213,98 +217,6 @@ int compute_rpm_mode_shared(float rpm, int prev_mode)
   return 0;
 }
 
-static void render_high_beam_telltale(const RuntimeState &state, SharedRenderCtx &ctx)
-{
-  if (!platform_state_has(state.data_mask, PLATFORM_DATA_WARN_HIGH_BEAM) || !state.warn_high_beam || ctx.beam_img == nullptr)
-    return;
-
-  const coord_t image_x = (coord_t)(190);
-  const coord_t image_y = (coord_t)(170);
-  gdispImageDraw(ctx.beam_img, image_x, image_y, ctx.beam_img->width, ctx.beam_img->height, 0, 0);
-}
-
-static bool ecu_param_is_fresh(const ECUK::ecuParam_t *param, uint32_t now_ms)
-{
-  return param != nullptr && (now_ms - param->lastTime_ms) <= 1000U;
-}
-
-static void render_ecu_section(const RuntimeState &state, font_t fontValue, font_t font20, color_t amber)
-{
-  if (!platform_state_has(state.data_mask, PLATFORM_DATA_ECU) || state.ecu == nullptr)
-    return;
-
-  ECUK::ecuParam_t *wb_p = state.ecu->getParam(state.ecu_param_wb_index);
-  if (wb_p == nullptr)
-    return;
-
-  static const UgfxMeterBand wb_bands[] = {
-      {10.0f, 12.0f, GFX_GREEN},
-      {12.0f, 15.0f, GFX_AMBER_YEL},
-      {15.0f, 20.0f, GFX_RED},
-  };
-  static UgfxTextBarMeter wb_meter;
-
-  wb_meter.setBounds(24, 8, 192, 62);
-  wb_meter.setColors(amber, GFX_RED, GFX_BLACK);
-  wb_meter.configure("O2", "AFR", 10.0f, 16.0f, 1, font20, fontValue);
-  wb_meter.setBands(wb_bands, sizeof(wb_bands) / sizeof(wb_bands[0]));
-  wb_meter.setMode(UGFX_TEXT_BAR_METER_SEGMENT);
-  wb_meter.setBarHeight(18);
-  wb_meter.setSegmentSize(16);
-
-#if 1
-  // MAP/PSI is intentionally left out of the LCD UI for FPS; the car has a physical PSI gauge.
-  static const UgfxMeterBand map_bands[] = {
-      {-20.0f, 0.0f, GFX_AMBER_YEL},
-      {0.0f, 15.0f, GFX_GREEN},
-      {15.0f, 20.0f, GFX_RED},
-  };
-  static UgfxTextBarMeter map_meter;
-  ECUK::ecuParam_t *map_p = state.ecu->getParam(state.ecu_param_map_index);
-  map_meter.setBounds(24, 93, 192, 62);
-  map_meter.setColors(amber, GFX_RED, GFX_BLACK);
-  map_meter.configure("MAP", "PSI", -15.0f, 20.0f, 1, font20, fontValue);
-  map_meter.setBands(map_bands, sizeof(map_bands) / sizeof(map_bands[0]));
-  map_meter.setMode(UGFX_TEXT_BAR_METER_BIPOLAR);
-  map_meter.setReferenceValue(0.0f);
-  map_meter.setBarHeight(16);
-#endif
-
-  const uint32_t now_ms = HAL_GetTick();
-  const bool ecu_connected = state.ecu->isConnected();
-  wb_meter.setValue(wb_p->val, ecu_connected && ecu_param_is_fresh(wb_p, now_ms));
-  wb_meter.draw();
-#if 1
-  if (map_p != nullptr)
-  {
-    map_meter.setValue(map_p->val, ecu_connected && ecu_param_is_fresh(map_p, now_ms));
-    map_meter.draw();
-  }
-#endif
-
-  bool show_error = !ecu_connected;
-  if (state.ecu_flasher != nullptr)
-    show_error = flasher_fun(state.ecu_flasher);
-  if (!ecu_connected && show_error)
-  {
-    const coord_t error_x = 44;
-    const coord_t error_y = 52;
-    const coord_t error_w = 152;
-    const coord_t error_h = 62;
-    gdispFillArea(error_x, error_y, error_w, error_h, GFX_BLACK);
-    gdispDrawBox(error_x, error_y, error_w, error_h, GFX_AMBER_YEL);
-    gdispFillStringBox(error_x + 4,
-                       error_y + 4,
-                       error_w - 8,
-                       error_h - 8,
-                       "ECU ERR",
-                       font20,
-                       GFX_RED,
-                       GFX_BLACK,
-                       (gJustify)(gJustifyCenter | gJustifyNoWordWrap));
-  }
-}
-
 void render_step_shared(const RuntimeState &state, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
 {
   static const BoardSharedData empty_data = {};
@@ -315,6 +227,12 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
 {
   color_t amber = (ctx.amber_ptr != nullptr) ? *ctx.amber_ptr : GFX_AMBER_YEL;
   bool flush_after_hooks = false;
+
+  if (gui_layout_consume_transition())
+  {
+    draw_step = 0;
+    gdispClear(GFX_BLACK);
+  }
 
   board_render_before(state, data, ctx);
 
@@ -341,116 +259,24 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
     g_shift_alarm_fast_path_active = false;
   }
 
-  switch (draw_step++)
+  const int current_step = draw_step++;
+  if (current_step == 0)
   {
-    case 0:
-      gdispClear(GFX_BLACK);
-      break;
-
-    case 1:
-    {
-      render_ecu_section(state, ctx.fontValue, ctx.font20, amber);
-      break;
-    }
-
-    case 2:
-    {
-      ECUK::ecuParam_t *tps_p = nullptr;
-      ECUK::ecuParam_t *knock_p = nullptr;
-      if (state.ecu != nullptr)
-      {
-        tps_p = state.ecu->getParam(state.ecu_param_tps_index);
-        knock_p = state.ecu->getParam(state.ecu_param_knock_index);
-      }
-
-      if (ctx.line_plot_tps != nullptr && tps_p != nullptr && tps_p->isNew)
-      {
-        linePlotPush(ctx.line_plot_tps, (int)tps_p->val);
-        tps_p->isNew = false;
-      }
-      if (ctx.line_plot_tps != nullptr)
-        linePlot(77, 240, ctx.line_plot_tps);
-
-      if (ctx.line_plot_knock != nullptr && knock_p != nullptr && knock_p->isNew)
-      {
-        linePlotPush(ctx.line_plot_knock, (int)knock_p->val);
-        knock_p->isNew = false;
-      }
-      if (ctx.line_plot_knock != nullptr)
-        linePlot(77, 240, ctx.line_plot_knock);
-      break;
-    }
-
-    case 3:
-    {
-      if (platform_state_has(state.data_mask, PLATFORM_DATA_STARTUP_ERROR) && state.startup_init_error)
-      {
-        char err_string[16];
-        (void)std::snprintf(err_string, sizeof(err_string), "ERR %02lX", (unsigned long)(state.startup_init_error_code & 0xFFU));
-        gdispFillString((ctx.screen_width >> 1) - 72, (ctx.screen_height >> 1), err_string, ctx.fontLCD, GFX_RED, GFX_BLACK);
-      }
-
-
-      if (platform_state_has(state.data_mask, PLATFORM_DATA_WARN_LAMP) && state.warn_lamp_on)
-      {
-        if (ctx.amber_ptr != nullptr)
-          *ctx.amber_ptr = GFX_AMBER_SAE;
-        setColors(GFX_AMBER_SAE, GFX_RED, GFX_BLACK);
-      }
-      else
-      {
-        if (ctx.amber_ptr != nullptr)
-          *ctx.amber_ptr = GFX_AMBER_YEL;
-        setColors(GFX_AMBER_YEL, GFX_RED, GFX_BLACK);
-      }
-      break;
-    }
-
-    case 4:
-    {
-      if (ctx.gimball != nullptr && platform_state_has(state.data_mask, PLATFORM_DATA_GIMBAL))
-        drawGimball(ctx.gimball, 50, 210, 34, state.gimbal_x, state.gimbal_y);
-      break;
-    }
-
-    case 5:
-    {
-      render_high_beam_telltale(state, ctx);
-
-      const int WARN_SIZE = 20;
-      const int WARN_FINAL_SIZE = 70;
-      const int SHIFT_SIZE = 100;
-      const VehicleConfig &vehicle = get_build_config().vehicle;
-      const int range = vehicle.rpm_alert_final - vehicle.rpm_alert_init;
-      int over = (int)state.rpm - vehicle.rpm_alert_init;
-      int percent = (64 * over) / (range > 0 ? range : 1);
-      int current_warn_size = WARN_SIZE + (((WARN_FINAL_SIZE - WARN_SIZE) * percent) >> 6);
-
-      if (state.rpm_mode >= 2)
-      {
-        gdispFillCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), SHIFT_SIZE, GFX_RED);
-      }
-      else if (state.rpm_mode >= 1 && current_warn_size > 0)
-      {
-        gdispFillDualCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), WARN_FINAL_SIZE, GFX_BLACK, WARN_FINAL_SIZE, GFX_GREEN);
-        gdispFillCircle((ctx.screen_width >> 1), (ctx.screen_height >> 1), current_warn_size, GFX_YELLOW);
-      }
-
-      data.warning_panel.render(ctx);
-
-      const uint32_t now = HAL_GetTick();
-      record_completed_frame(now);
-      flush_after_hooks = true;
-      draw_step = 0;
-      timer_draw_ms = now;
-      break;
-    }
-
-    default:
-      draw_step = 0;
-      break;
+    gdispClear(GFX_BLACK);
+  }
+  else
+  {
+    gui_layout_render_step(state, data, ctx, current_step);
   }
 
+  if (current_step >= (int)gui_layout_render_step_count() - 1)
+  {
+    const uint32_t now = HAL_GetTick();
+    record_completed_frame(now);
+    flush_after_hooks = true;
+    draw_step = 0;
+    timer_draw_ms = now;
+  }
 
   ctx.render_cycle_complete = flush_after_hooks;
   board_render_after(state, data, ctx);
@@ -489,6 +315,7 @@ void main_loop_init(SharedMainLoopState &loop)
   loop.timer_draw_ms = HAL_GetTick();
   loop.timer_telemetry_ms = loop.timer_draw_ms;
   board_init(loop.board_data, loop.render_ctx, loop.draw_step, loop.timer_draw_ms);
+  gauge_layouts_register();
   loop.state = runtime_state_from_board_data(loop.board_data);
   render_ctx_init_shared(loop.render_ctx);
   loop.initialized = true;
@@ -504,6 +331,7 @@ void main_loop_step(SharedMainLoopState &loop)
   const int prev_rpm_mode = loop.state.rpm_mode;
   loop.state = runtime_state_from_board_data(loop.board_data);
   loop.state.rpm_mode = compute_rpm_mode_shared(loop.state.rpm, prev_rpm_mode);
+  gauge_layouts_update(loop.state);
 
   const uint32_t now_ms = HAL_GetTick();
   if ((now_ms - loop.timer_telemetry_ms) >= get_print_interval_ms())

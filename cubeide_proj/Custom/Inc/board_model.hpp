@@ -243,6 +243,8 @@ struct BoardSharedData
   int ecu_param_wb_index = 0;
   int ecu_param_map_index = 0;
   int ecu_param_knock_index = 0;
+  int ecu_param_timing_index = 0;
+  int ecu_param_afr_target_index = 0;
   int ecu_param_fuel_trim_front_low_index = 0;
   int ecu_param_fuel_trim_front_med_index = 0;
   int ecu_param_fuel_trim_front_high_index = 0;
@@ -318,6 +320,8 @@ typedef struct
   int ecu_param_wb_index;
   int ecu_param_map_index;
   int ecu_param_knock_index;
+  int ecu_param_timing_index;
+  int ecu_param_afr_target_index;
   int ecu_param_fuel_trim_front_low_index;
   int ecu_param_fuel_trim_front_med_index;
   int ecu_param_fuel_trim_front_high_index;

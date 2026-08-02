@@ -67,6 +67,8 @@ struct PlatformSample
   int ecu_param_wb_index;
   int ecu_param_map_index;
   int ecu_param_knock_index;
+  int ecu_param_timing_index = 0;
+  int ecu_param_afr_target_index = 0;
   int ecu_param_fuel_trim_front_low_index;
   int ecu_param_fuel_trim_front_med_index;
   int ecu_param_fuel_trim_front_high_index;
@@ -83,6 +85,8 @@ struct EcuSignalMap
   int wb_index;
   int map_index;
   int knock_index;
+  int timing_index;
+  int afr_target_index;
   int fuel_trim_front_low_index;
   int fuel_trim_front_med_index;
   int fuel_trim_front_high_index;
@@ -98,6 +102,8 @@ static const EcuSignalMap g_ecu_signal_map = {
     MUTII::ECU_PARAM_WB,
     MUTII::ECU_PARAM_MAP,
     MUTII::ECU_PARAM_KNOCK,
+    MUTII::ECU_PARAM_TIMING,
+    MUTII::ECU_PARAM_AFR_TARGET,
     MUTII::ECU_PARAM_FFTL,
     MUTII::ECU_PARAM_FFTM,
     MUTII::ECU_PARAM_FFTH,
@@ -403,6 +409,8 @@ static PlatformSample arm_collect_platform_sample()
   sample.ecu_param_wb_index = g_ecu_signal_map.wb_index;
   sample.ecu_param_map_index = g_ecu_signal_map.map_index;
   sample.ecu_param_knock_index = g_ecu_signal_map.knock_index;
+  sample.ecu_param_timing_index = g_ecu_signal_map.timing_index;
+  sample.ecu_param_afr_target_index = g_ecu_signal_map.afr_target_index;
   sample.ecu_param_fuel_trim_front_low_index = g_ecu_signal_map.fuel_trim_front_low_index;
   sample.ecu_param_fuel_trim_front_med_index = g_ecu_signal_map.fuel_trim_front_med_index;
   sample.ecu_param_fuel_trim_front_high_index = g_ecu_signal_map.fuel_trim_front_high_index;
@@ -662,6 +670,8 @@ static void arm_publish_current_data()
   g_board_data->ecu_param_wb_index = sample.ecu_param_wb_index;
   g_board_data->ecu_param_map_index = sample.ecu_param_map_index;
   g_board_data->ecu_param_knock_index = sample.ecu_param_knock_index;
+  g_board_data->ecu_param_timing_index = sample.ecu_param_timing_index;
+  g_board_data->ecu_param_afr_target_index = sample.ecu_param_afr_target_index;
   g_board_data->ecu_param_fuel_trim_front_low_index = sample.ecu_param_fuel_trim_front_low_index;
   g_board_data->ecu_param_fuel_trim_front_med_index = sample.ecu_param_fuel_trim_front_med_index;
   g_board_data->ecu_param_fuel_trim_front_high_index = sample.ecu_param_fuel_trim_front_high_index;
