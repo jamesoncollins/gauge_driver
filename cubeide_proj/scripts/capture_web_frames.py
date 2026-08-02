@@ -40,9 +40,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup", type=float, default=2.0)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--chrome", type=pathlib.Path, default=None)
+    parser.add_argument("--layout", choices=["default", "wot", "cruise", "post-wot", "fuel-trims"], default=None)
+    parser.add_argument("--layout-id", type=int, choices=range(1, 6), default=None)
     parser.add_argument("--keep-profile", action="store_true")
     return parser.parse_args()
 
+LAYOUT_IDS = {
+    "default": 1,
+    "wot": 2,
+    "cruise": 3,
+    "post-wot": 4,
+    "fuel-trims": 5,
+}
+
+
+def selected_layout_id(args: argparse.Namespace) -> int | None:
+    if args.layout_id is not None and args.layout is not None:
+        raise SystemExit("Pass only one of --layout or --layout-id.")
+    if args.layout_id is not None:
+        return args.layout_id
+    if args.layout is not None:
+        return LAYOUT_IDS[args.layout]
+    return None
 
 def find_chrome(explicit: pathlib.Path | None) -> pathlib.Path:
     candidates = []
@@ -379,6 +398,20 @@ def wait_for_canvas(client: CdpClient) -> None:
         time.sleep(0.1)
     raise RuntimeError(f"Canvas did not render non-black pixels: {last_metrics}")
 
+def set_sim_layout(client: CdpClient, layout_id: int) -> None:
+    expr = f"""(() => {{
+  if (!window.Module || typeof Module._sim_control_set_layout_mode !== 'function') {{
+    return {{error: 'sim_control_set_layout_mode export is not available'}};
+  }}
+  const ok = Module._sim_control_set_layout_mode({layout_id});
+  return {{ok}};
+}})()"""
+    result = client.command("Runtime.evaluate", {"expression": expr, "returnByValue": True}, timeout=5)
+    value = result.get("result", {}).get("result", {}).get("value", {})
+    if value.get("error"):
+        raise RuntimeError(value["error"])
+    if value.get("ok") != 1:
+        raise RuntimeError(f"sim layout mode {layout_id} was rejected")
 
 def capture_frames(client: CdpClient, output_dir: pathlib.Path, count: int, interval: float) -> list[dict]:
     frames = []
@@ -465,10 +498,13 @@ def main() -> int:
                 client.command("Runtime.enable")
                 client.command("Page.enable")
                 wait_for_canvas(client)
+                layout_id = selected_layout_id(args)
+                if layout_id is not None:
+                    set_sim_layout(client, layout_id)
                 time.sleep(args.warmup)
                 frames = capture_frames(client, output_dir, args.frames, args.interval)
                 (output_dir / "frames.json").write_text(
-                    json.dumps({"url": url, "frames": frames}, indent=2),
+                    json.dumps({"url": url, "layout_id": layout_id, "frames": frames}, indent=2),
                     encoding="utf-8",
                 )
             finally:

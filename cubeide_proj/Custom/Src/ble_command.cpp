@@ -5,6 +5,7 @@
 #include "board_model.hpp"
 #include "platform_api.h"
 #include "main_shared.h"
+#include "gauge_layouts.hpp"
 #include "../BTBuffer-lib/BTBuffer.hpp"
 
 #if !defined(CUSTOM_PLATFORM_X86)
@@ -125,6 +126,12 @@ BleCommand::Status dispatch_command(const ParsedCommand &cmd, const uint8_t **de
     return BleCommand::STATUS_OK;
 
   case BleCommand::OPCODE_SET_MODE:
+    if (cmd.payload_len != 1)
+      return BleCommand::STATUS_BAD_LENGTH;
+    return gauge_layouts_set_mode(cmd.payload[0]) == GaugeLayouts::SET_MODE_OK
+               ? BleCommand::STATUS_OK
+               : BleCommand::STATUS_BAD_VALUE;
+
   case BleCommand::OPCODE_SET_BRIGHTNESS:
   case BleCommand::OPCODE_REQUEST_SNAPSHOT:
   case BleCommand::OPCODE_CONFIG_GET:
