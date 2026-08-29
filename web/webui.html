@@ -23,7 +23,7 @@
     .card{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
     label{display:block;font-size:12px;color:var(--muted);margin:4px 0}
-    input[type="text"], textarea{width:100%;padding:10px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);border-radius:10px}
+    input[type="text"], textarea, select{width:100%;padding:10px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);border-radius:10px}
     button{padding:9px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);cursor:pointer;transition:.15s ease}
     button:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.35)}
     button.primary{background:var(--acc);border-color:transparent;color:#041224}
@@ -192,6 +192,17 @@
           <button id="btnDiagReset">Reset Diag Stats</button>
           <button id="btnDiagPing">Ping</button>
         </div>
+        <div class="row" style="margin-bottom:10px">
+          <div style="min-width:220px;flex:1">
+            <label for="displayMode">Display Mode</label>
+            <select id="displayMode">
+              <option value="3">Cruise</option>
+              <option value="2">WOT</option>
+              <option value="4">Post-WOT Analysis</option>
+            </select>
+          </div>
+          <button id="btnSetDisplayMode">Set Display</button>
+        </div>
         <div class="row">
           <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
           <button id="btnSendRaw">Send Raw</button>
@@ -250,7 +261,7 @@
 <script>
 (function(){
   'use strict';
-  var UI_VERSION = 'v0.6.7';
+  var UI_VERSION = 'v0.6.8';
 
   // ===== Defaults & Known Services =====
   var Defaults = {
@@ -274,6 +285,7 @@
   var cmdSeq = 0;
   var CommandOpcode = {
     BUTTON: 0x01,
+    SET_MODE: 0x02,
     DIAG_PING: 0x20,
     DIAG_RESET_STATS: 0x21,
     DIAG_SQUARE: 0x22
@@ -819,6 +831,13 @@
     await writeCommandFrame(CommandOpcode.BUTTON, [button], 'BUTTON '+kind, true);
   }
 
+  async function sendDisplayMode(){
+    var el=$('#displayMode');
+    var mode=el ? parseInt(el.value, 10) : NaN;
+    if(!isFinite(mode) || [2,3,4].indexOf(mode) < 0) return log('Invalid display mode');
+    await writeCommandFrame(CommandOpcode.SET_MODE, [mode & 0xFF], 'SET_MODE '+mode, true);
+  }
+
   async function sendDiagSquare(enabled){
     await writeCommandFrame(CommandOpcode.DIAG_SQUARE, [enabled ? 1 : 0], 'DIAG_SQUARE '+(enabled?'on':'off'), true);
   }
@@ -960,6 +979,7 @@
     ok = wire('#btnDiagOff', function(){ sendDiagSquare(false); }) && ok;
     ok = wire('#btnDiagReset', sendDiagReset) && ok;
     ok = wire('#btnDiagPing', sendDiagPing) && ok;
+    ok = wire('#btnSetDisplayMode', sendDisplayMode) && ok;
     ok = wire('#btnSendRaw',sendRaw) && ok;
     ok = wire('#btnStartLog',startLog) && ok;
     ok = wire('#btnStopLog',stopLog) && ok;
