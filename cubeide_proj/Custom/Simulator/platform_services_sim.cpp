@@ -185,12 +185,12 @@ static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
   out.timing_deg = 14.0f;
   out.afr_target = 14.7f;
   out.battery_v = 13.8f + 0.15f * std::sinf(t * 0.37f);
-  out.fuel_trim_front_low_pct = 3.5f * std::sinf(t * 0.31f) - 1.0f;
-  out.fuel_trim_front_med_pct = 4.5f * std::sinf(t * 0.23f + 1.2f) + 1.0f;
-  out.fuel_trim_front_high_pct = 6.5f * std::sinf(t * 0.19f + 2.4f);
-  out.fuel_trim_rear_low_pct = 3.0f * std::sinf(t * 0.29f + 2.1f) + 0.5f;
-  out.fuel_trim_rear_med_pct = 5.0f * std::sinf(t * 0.21f + 0.4f) - 1.5f;
-  out.fuel_trim_rear_high_pct = 7.0f * std::sinf(t * 0.17f + 1.6f) + 0.8f;
+  out.fuel_trim_front_low_pct = 100.0f + 3.0f * std::sinf(t * 0.31f) - 0.8f;
+  out.fuel_trim_front_med_pct = 100.0f + 3.5f * std::sinf(t * 0.23f + 1.2f) + 0.8f;
+  out.fuel_trim_front_high_pct = 100.0f + 4.0f * std::sinf(t * 0.19f + 2.4f);
+  out.fuel_trim_rear_low_pct = 100.0f + 3.0f * std::sinf(t * 0.29f + 2.1f) + 0.5f;
+  out.fuel_trim_rear_med_pct = 100.0f + 3.5f * std::sinf(t * 0.21f + 0.4f) - 0.8f;
+  out.fuel_trim_rear_high_pct = 100.0f + 4.0f * std::sinf(t * 0.17f + 1.6f) + 0.6f;
   out.acceleration_mps2 = 0.0f;
   out.gear = 0;
 
