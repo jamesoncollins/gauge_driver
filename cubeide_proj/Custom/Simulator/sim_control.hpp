@@ -8,6 +8,8 @@ extern "C" {
 #endif
 
 int sim_control_set_layout_mode(uint8_t mode);
+const char *sim_control_help_text(void);
+int sim_control_line_is_help(const char *line);
 int sim_control_handle_line(const char *line);
 
 #ifdef __cplusplus

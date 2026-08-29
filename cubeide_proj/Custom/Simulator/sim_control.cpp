@@ -61,22 +61,12 @@ bool parse_layout_mode(const char *text, uint8_t &mode)
   }
   trim_token(token);
 
-  if (len == 1 && token[0] >= '1' && token[0] <= '5')
-  {
-    mode = (uint8_t)(token[0] - '0');
-    return true;
-  }
-
-  if (equals_ignore_case(token, "default"))
-    mode = GaugeLayouts::APP_LAYOUT_DEFAULT;
-  else if (equals_ignore_case(token, "wot"))
-    mode = GaugeLayouts::APP_LAYOUT_WOT;
-  else if (equals_ignore_case(token, "cruise"))
+  if (equals_ignore_case(token, "1") || equals_ignore_case(token, "cruise"))
     mode = GaugeLayouts::APP_LAYOUT_CRUISE;
-  else if (equals_ignore_case(token, "post-wot") || equals_ignore_case(token, "post_wot") || equals_ignore_case(token, "postwot"))
+  else if (equals_ignore_case(token, "2") || equals_ignore_case(token, "wot"))
+    mode = GaugeLayouts::APP_LAYOUT_WOT;
+  else if (equals_ignore_case(token, "3") || equals_ignore_case(token, "post-wot") || equals_ignore_case(token, "post_wot") || equals_ignore_case(token, "postwot"))
     mode = GaugeLayouts::APP_LAYOUT_POST_WOT_ANALYSIS;
-  else if (equals_ignore_case(token, "fuel-trims") || equals_ignore_case(token, "fuel_trims") || equals_ignore_case(token, "trims"))
-    mode = GaugeLayouts::APP_LAYOUT_FUEL_TRIMS;
   else
     return false;
 
@@ -87,6 +77,37 @@ bool parse_layout_mode(const char *text, uint8_t &mode)
 extern "C" EMSCRIPTEN_KEEPALIVE int sim_control_set_layout_mode(uint8_t mode)
 {
   return gauge_layouts_set_mode(mode) == GaugeLayouts::SET_MODE_OK ? 1 : 0;
+}
+
+extern "C" const char *sim_control_help_text(void)
+{
+  return "Simulator console commands:\n"
+         "  help, ?                         Show this menu\n"
+         "  layout <mode>, mode <mode>      Select display layout\n"
+         "\n"
+         "Layout modes:\n"
+         "  1 cruise        WB/MAP with fuel trims\n"
+         "  2 wot           WB/MAP with fuel trims and knock/TPS plots\n"
+         "  3 post-wot      Post-WOT quick analysis\n"
+         "\n"
+         "Mode names also accepted: cruise, wot, post-wot\n";
+}
+
+extern "C" int sim_control_line_is_help(const char *line)
+{
+  const char *command = skip_space(line);
+  if (command == nullptr || *command == '\0')
+    return 0;
+
+  char verb[16] = {};
+  size_t verb_len = 0;
+  while (command[verb_len] != '\0' && !isspace((unsigned char)command[verb_len]) && verb_len < sizeof(verb) - 1)
+  {
+    verb[verb_len] = command[verb_len];
+    ++verb_len;
+  }
+
+  return equals_ignore_case(verb, "help") || equals_ignore_case(verb, "?");
 }
 
 extern "C" int sim_control_handle_line(const char *line)

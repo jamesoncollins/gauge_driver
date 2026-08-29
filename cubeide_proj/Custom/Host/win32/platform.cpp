@@ -23,13 +23,24 @@ extern "C" uint8_t CDC_Transmit_FS(uint8_t *Buf, uint16_t Len)
 int main()
 {
   std::thread([]() {
+    std::fprintf(stderr, "sim console ready. Type 'help' for commands.\n");
+
     char line[64];
     while (std::fgets(line, sizeof(line), stdin) != nullptr)
     {
-      if (sim_control_handle_line(line))
+      if (sim_control_line_is_help(line))
+      {
+        std::fprintf(stderr, "%s", sim_control_help_text());
+      }
+      else if (sim_control_handle_line(line))
+      {
         std::fprintf(stderr, "sim command accepted: %s", line);
+      }
       else
+      {
         std::fprintf(stderr, "sim command not recognized: %s", line);
+        std::fprintf(stderr, "type 'help' for commands.\n");
+      }
     }
   }).detach();
 
