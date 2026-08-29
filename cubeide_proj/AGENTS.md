@@ -1,4 +1,4 @@
-﻿# Codex Notes
+# Codex Notes
 
 ## Gauge Screen Capture
 
@@ -41,6 +41,29 @@ python scripts/capture_web_frames.py --frames 12 --interval 0.75
 Then inspect `build/web-debug/analysis/contact-sheet.png` for persistent layout
 overlap or clipping.
 
+
+## MSYS2 UCRT Shell
+
+If the session was not launched from the MSYS2 UCRT environment, open one
+directly from Windows with:
+
+```powershell
+C:\msys64\msys2_shell.cmd -ucrt64 -here -defterm -no-start -shell bash
+```
+
+From that shell, move to this repository and run validation normally:
+
+```sh
+cd "/c/Users/user/git/gauge driver stuff/gauge_driver/cubeide_proj"
+export PATH="/ucrt64/bin:/mingw64/bin:$PATH"
+cmake --build --preset x86-debug
+cmake --build --preset web-debug
+python scripts/capture_web_frames.py --layout default --frames 12 --interval 0.75
+```
+
+The same shell is also the preferred path for Emscripten/web simulator capture
+when `python` in PowerShell resolves to the Microsoft Store alias or when the
+VS Code environment has not inherited MSYS2/UCRT paths.
 
 ## Windows Sandbox Command Notes
 
