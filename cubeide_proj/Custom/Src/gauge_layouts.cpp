@@ -26,6 +26,13 @@ enum GaugeDataSourceId : GuiDataSourceId
   GAUGE_SOURCE_FUEL_TRIM_REAR_HIGH
 };
 
+struct TrimPairConfig
+{
+  const char *label;
+  GaugeDataSourceId front_source;
+  GaugeDataSourceId rear_source;
+};
+
 struct TextBarConfig
 {
   const char *label;
@@ -77,29 +84,17 @@ static const UgfxMeterBand kMapBands[] = {
 };
 
 static const UgfxMeterBand kTrimBands[] = {
-    {-25.0f, -10.0f, GFX_RED},
-    {-10.0f, 10.0f, GFX_GREEN},
-    {10.0f, 25.0f, GFX_RED},
-};
-
-static const UgfxMeterBand kKnockBands[] = {
-    {0.0f, 3.0f, GFX_GREEN},
-    {3.0f, 7.0f, GFX_AMBER_YEL},
-    {7.0f, 15.0f, GFX_RED},
+    {95.0f, 98.0f, GFX_RED},
+    {98.0f, 102.0f, GFX_GREEN},
+    {102.0f, 105.0f, GFX_RED},
 };
 
 static const TextBarConfig kAfrMeter = {"O2", "AFR", GAUGE_SOURCE_WB_AFR, 10.0f, 16.0f, 1, UGFX_TEXT_BAR_METER_SEGMENT, 0.0f, 18, 16, kAfrBands, sizeof(kAfrBands) / sizeof(kAfrBands[0])};
 static const TextBarConfig kMapMeter = {"MAP", "PSI", GAUGE_SOURCE_MAP_PSI, -15.0f, 20.0f, 1, UGFX_TEXT_BAR_METER_BIPOLAR, 0.0f, 16, 0, kMapBands, sizeof(kMapBands) / sizeof(kMapBands[0])};
-static const TextBarConfig kTpsMeter = {"TPS", "%", GAUGE_SOURCE_TPS, 0.0f, 100.0f, 0, UGFX_TEXT_BAR_METER_FILLED, 0.0f, 12, 0, nullptr, 0};
-static const TextBarConfig kKnockMeter = {"KNK", "CNT", GAUGE_SOURCE_KNOCK, 0.0f, 15.0f, 1, UGFX_TEXT_BAR_METER_MARKER, 0.0f, 14, 0, kKnockBands, sizeof(kKnockBands) / sizeof(kKnockBands[0])};
-static const TextBarConfig kTimingMeter = {"TIM", "DEG", GAUGE_SOURCE_TIMING, -10.0f, 40.0f, 0, UGFX_TEXT_BAR_METER_MARKER, 0.0f, 12, 0, nullptr, 0};
 
-static const TextBarConfig kTrimFfl = {"FF L", "%", GAUGE_SOURCE_FUEL_TRIM_FRONT_LOW, -25.0f, 25.0f, 1, UGFX_TEXT_BAR_METER_BIPOLAR, 0.0f, 10, 0, kTrimBands, sizeof(kTrimBands) / sizeof(kTrimBands[0])};
-static const TextBarConfig kTrimFfm = {"FF M", "%", GAUGE_SOURCE_FUEL_TRIM_FRONT_MED, -25.0f, 25.0f, 1, UGFX_TEXT_BAR_METER_BIPOLAR, 0.0f, 10, 0, kTrimBands, sizeof(kTrimBands) / sizeof(kTrimBands[0])};
-static const TextBarConfig kTrimFfh = {"FF H", "%", GAUGE_SOURCE_FUEL_TRIM_FRONT_HIGH, -25.0f, 25.0f, 1, UGFX_TEXT_BAR_METER_BIPOLAR, 0.0f, 10, 0, kTrimBands, sizeof(kTrimBands) / sizeof(kTrimBands[0])};
-static const TextBarConfig kTrimRfl = {"RF L", "%", GAUGE_SOURCE_FUEL_TRIM_REAR_LOW, -25.0f, 25.0f, 1, UGFX_TEXT_BAR_METER_BIPOLAR, 0.0f, 10, 0, kTrimBands, sizeof(kTrimBands) / sizeof(kTrimBands[0])};
-static const TextBarConfig kTrimRfm = {"RF M", "%", GAUGE_SOURCE_FUEL_TRIM_REAR_MED, -25.0f, 25.0f, 1, UGFX_TEXT_BAR_METER_BIPOLAR, 0.0f, 10, 0, kTrimBands, sizeof(kTrimBands) / sizeof(kTrimBands[0])};
-static const TextBarConfig kTrimRfh = {"RF H", "%", GAUGE_SOURCE_FUEL_TRIM_REAR_HIGH, -25.0f, 25.0f, 1, UGFX_TEXT_BAR_METER_BIPOLAR, 0.0f, 10, 0, kTrimBands, sizeof(kTrimBands) / sizeof(kTrimBands[0])};
+static const TrimPairConfig kTrimLow = {"LOW", GAUGE_SOURCE_FUEL_TRIM_FRONT_LOW, GAUGE_SOURCE_FUEL_TRIM_REAR_LOW};
+static const TrimPairConfig kTrimMed = {"MED", GAUGE_SOURCE_FUEL_TRIM_FRONT_MED, GAUGE_SOURCE_FUEL_TRIM_REAR_MED};
+static const TrimPairConfig kTrimHigh = {"HIGH", GAUGE_SOURCE_FUEL_TRIM_FRONT_HIGH, GAUGE_SOURCE_FUEL_TRIM_REAR_HIGH};
 
 static bool ecu_param_is_fresh(const ECUK::ecuParam_t *param, uint32_t now_ms)
 {
@@ -180,42 +175,32 @@ static void render_meter_at(const GuiLayoutRenderCtx &ctx, const void *config, c
   meter.draw();
 }
 
-static void render_default_afr(const GuiLayoutRenderCtx &ctx, const void *)
-{
-  render_meter_at(ctx, &kAfrMeter, 24, 8, 192, 62);
-}
 
-static void render_default_map(const GuiLayoutRenderCtx &ctx, const void *)
+static void render_compact_trim_pair_at(const GuiLayoutRenderCtx &ctx, const void *config, coord_t x, coord_t y, coord_t w, coord_t h)
 {
-  render_meter_at(ctx, &kMapMeter, 24, 93, 192, 62);
-}
-
-static void render_ecu_error(const GuiLayoutRenderCtx &ctx, const void *)
-{
-  if (!platform_state_has(ctx.state.data_mask, PLATFORM_DATA_ECU) || ctx.state.ecu == nullptr)
+  const TrimPairConfig *trim_config = static_cast<const TrimPairConfig *>(config);
+  if (trim_config == nullptr)
     return;
 
-  bool show_error = !ctx.state.ecu->isConnected();
-  if (ctx.state.ecu_flasher != nullptr)
-    show_error = flasher_fun(ctx.state.ecu_flasher);
-  if (!ctx.state.ecu->isConnected() && show_error)
-  {
-    const coord_t error_x = 44;
-    const coord_t error_y = 52;
-    const coord_t error_w = 152;
-    const coord_t error_h = 62;
-    gdispFillArea(error_x, error_y, error_w, error_h, GFX_BLACK);
-    gdispDrawBox(error_x, error_y, error_w, error_h, GFX_AMBER_YEL);
-    gdispFillStringBox(error_x + 4,
-                       error_y + 4,
-                       error_w - 8,
-                       error_h - 8,
-                       "ECU ERR",
-                       ctx.render.font20,
-                       GFX_RED,
-                       GFX_BLACK,
-                       (gJustify)(gJustifyCenter | gJustifyNoWordWrap));
-  }
+  bool front_valid = false;
+  bool rear_valid = false;
+  const float front_value = source_value(ctx.state, trim_config->front_source, front_valid);
+  const float rear_value = source_value(ctx.state, trim_config->rear_source, rear_valid);
+  const color_t amber = (ctx.render.amber_ptr != nullptr) ? *ctx.render.amber_ptr : GFX_AMBER_YEL;
+  const UgfxMeterMarker markers[] = {
+      {front_value, front_valid, amber, "F "},
+      {rear_value, rear_valid, GFX_BLUE, "R "},
+  };
+
+  UgfxMultiMarkerMeter meter;
+  meter.setBounds(x, y, w, h);
+  meter.setColors(amber, GFX_BLUE, GFX_BLACK);
+  meter.configure(trim_config->label, "%", 95.0f, 105.0f, 1, ctx.render.font10, ctx.render.font10);
+  meter.setBands(kTrimBands, sizeof(kTrimBands) / sizeof(kTrimBands[0]));
+  meter.setMarkers(markers, sizeof(markers) / sizeof(markers[0]));
+  meter.setTextMode(UGFX_MULTI_MARKER_TEXT_BOTH);
+  meter.setBarHeight(8);
+  meter.draw();
 }
 
 static void render_plots(const GuiLayoutRenderCtx &ctx, const void *)
@@ -228,8 +213,11 @@ static void render_plots(const GuiLayoutRenderCtx &ctx, const void *)
     linePlotPush(ctx.render.line_plot_tps, (int)tps_p->val);
     tps_p->isNew = false;
   }
+  //if (ctx.render.line_plot_tps != nullptr || ctx.render.line_plot_knock != nullptr)
+  //  gdispFillString(36, 172, "TPS/KNK", ctx.render.font10, GFX_AMBER_YEL, GFX_BLACK);
+
   if (ctx.render.line_plot_tps != nullptr)
-    linePlot(77, 240, ctx.render.line_plot_tps);
+    linePlot(2, 246, ctx.render.line_plot_tps);
 
   if (ctx.render.line_plot_knock != nullptr && knock_p != nullptr && knock_p->isNew)
   {
@@ -237,7 +225,7 @@ static void render_plots(const GuiLayoutRenderCtx &ctx, const void *)
     knock_p->isNew = false;
   }
   if (ctx.render.line_plot_knock != nullptr)
-    linePlot(77, 240, ctx.render.line_plot_knock);
+    linePlot(2, 246, ctx.render.line_plot_knock);
 }
 
 static void render_status_and_colors(const GuiLayoutRenderCtx &ctx, const void *)
@@ -263,26 +251,14 @@ static void render_status_and_colors(const GuiLayoutRenderCtx &ctx, const void *
   }
 }
 
-static void render_gimbal(const GuiLayoutRenderCtx &ctx, const void *)
-{
-  if (ctx.render.gimball != nullptr && platform_state_has(ctx.state.data_mask, PLATFORM_DATA_GIMBAL))
-    drawGimball(ctx.render.gimball, 50, 210, 34, ctx.state.gimbal_x, ctx.state.gimbal_y);
-}
-
-static void render_high_beam_telltale(const GuiLayoutRenderCtx &ctx, const void *)
+static void render_high_beam_icon(const GuiLayoutRenderCtx &ctx, const void *)
 {
   if (!platform_state_has(ctx.state.data_mask, PLATFORM_DATA_WARN_HIGH_BEAM) || !ctx.state.warn_high_beam || ctx.render.beam_img == nullptr)
     return;
 
-  gdispImageDraw(ctx.render.beam_img, 190, 170, ctx.render.beam_img->width, ctx.render.beam_img->height, 0, 0);
-}
-
-static void render_high_beam_badge(const GuiLayoutRenderCtx &ctx, const void *)
-{
-  if (!platform_state_has(ctx.state.data_mask, PLATFORM_DATA_WARN_HIGH_BEAM) || !ctx.state.warn_high_beam)
-    return;
-
-  gdispFillString(200, 6, "HB", ctx.render.font10, GFX_BLUE, GFX_BLACK);
+  const coord_t icon_x = ctx.render.screen_width - ctx.render.beam_img->width - 28;
+  const coord_t icon_y = 224;
+  gdispImageDraw(ctx.render.beam_img, icon_x, icon_y, ctx.render.beam_img->width, ctx.render.beam_img->height, 0, 0);
 }
 
 static void render_shift_warning(const GuiLayoutRenderCtx &ctx)
@@ -307,24 +283,12 @@ static void render_shift_warning(const GuiLayoutRenderCtx &ctx)
   }
 }
 
-static void render_shift_warning_and_panel(const GuiLayoutRenderCtx &ctx, const void *)
-{
-  render_high_beam_telltale(ctx, nullptr);
-  render_shift_warning(ctx);
-
-  ctx.data.warning_panel.render(ctx.render);
-}
-
 static void render_alt_indicators(const GuiLayoutRenderCtx &ctx, const void *)
 {
-  render_high_beam_badge(ctx, nullptr);
+  render_high_beam_icon(ctx, nullptr);
   render_shift_warning(ctx);
 }
 
-static void render_trim_header(const GuiLayoutRenderCtx &ctx, const void *)
-{
-  gdispFillString(58, 4, "FUEL TRIMS", ctx.render.font20, GFX_AMBER_YEL, GFX_BLACK);
-}
 
 static void render_post_wot_summary(const GuiLayoutRenderCtx &ctx, const void *)
 {
@@ -346,16 +310,6 @@ static void render_post_wot_summary(const GuiLayoutRenderCtx &ctx, const void *)
   gdispFillString(18, 108, line, ctx.render.font10, GFX_AMBER_YEL, GFX_BLACK);
 }
 
-static void render_wot_title(const GuiLayoutRenderCtx &ctx, const void *)
-{
-  gdispFillString(86, 4, "WOT", ctx.render.font20, GFX_AMBER_YEL, GFX_BLACK);
-}
-
-static void render_cruise_title(const GuiLayoutRenderCtx &ctx, const void *)
-{
-  gdispFillString(72, 4, "CRUISE", ctx.render.font20, GFX_AMBER_YEL, GFX_BLACK);
-}
-
 static GuiLayoutItem item(uint8_t group, GuiLayoutRenderFn render, const void *config = nullptr)
 {
   GuiLayoutItem out = {};
@@ -366,44 +320,21 @@ static GuiLayoutItem item(uint8_t group, GuiLayoutRenderFn render, const void *c
   return out;
 }
 
-static const GuiLayoutItem kDefaultItems[] = {
-    item(1, render_default_afr),
-    item(1, render_default_map),
-    item(1, render_ecu_error),
-    item(2, render_plots),
-    item(3, render_status_and_colors),
-    item(4, render_gimbal),
-    item(5, render_shift_warning_and_panel),
-};
-
-static const GuiLayoutItem kFuelTrimItems[] = {
-    item(1, render_trim_header),
-    item(1, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kTrimFfl, 8, 28, 106, 42); }),
-    item(1, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kTrimRfl, 126, 28, 106, 42); }),
-    item(2, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kTrimFfm, 8, 82, 106, 42); }),
-    item(2, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kTrimRfm, 126, 82, 106, 42); }),
-    item(3, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kTrimFfh, 8, 136, 106, 42); }),
-    item(3, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kTrimRfh, 126, 136, 106, 42); }),
+static const GuiLayoutItem kDefaultCruiseItems[] = {
+    item(1, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kAfrMeter, 24, 8, 192, 62); }),
+    item(1, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kMapMeter, 24, 82, 192, 62); }),
+    item(2, [](const GuiLayoutRenderCtx &ctx, const void *) { render_compact_trim_pair_at(ctx, &kTrimLow, 10, 160, 204, 22); }),
+    item(3, [](const GuiLayoutRenderCtx &ctx, const void *) { render_compact_trim_pair_at(ctx, &kTrimMed, 10, 183, 204, 22); }),
+    item(4, [](const GuiLayoutRenderCtx &ctx, const void *) { render_compact_trim_pair_at(ctx, &kTrimHigh, 10, 206, 204, 22); }),
+    item(4, render_status_and_colors),
     item(5, render_alt_indicators),
 };
 
 static const GuiLayoutItem kWotItems[] = {
-    item(1, render_wot_title),
-    item(1, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kAfrMeter, 8, 30, 106, 50); }),
-    item(1, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kMapMeter, 126, 30, 106, 50); }),
-    item(2, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kTpsMeter, 8, 92, 106, 42); }),
-    item(2, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kKnockMeter, 126, 92, 106, 42); }),
-    item(3, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kTimingMeter, 8, 146, 106, 42); }),
-    item(4, render_plots),
-    item(5, render_alt_indicators),
-};
-
-static const GuiLayoutItem kCruiseItems[] = {
-    item(1, render_cruise_title),
-    item(1, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kAfrMeter, 8, 30, 106, 50); }),
-    item(1, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kMapMeter, 126, 30, 106, 50); }),
-    item(2, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kTrimFfl, 8, 92, 106, 42); }),
-    item(2, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kTrimRfl, 126, 92, 106, 42); }),
+    item(1, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kAfrMeter, 24, 8, 192, 62); }),
+    item(1, [](const GuiLayoutRenderCtx &ctx, const void *) { render_meter_at(ctx, &kMapMeter, 24, 82, 192, 62); }),
+    item(2, render_status_and_colors),
+    item(3, render_plots),
     item(5, render_alt_indicators),
 };
 
@@ -411,11 +342,10 @@ static const GuiLayoutItem kPostWotItems[] = {
     item(1, render_post_wot_summary),
     item(5, render_alt_indicators),
 };
-
-static const GuiLayoutDescriptor kDefaultLayout = {GaugeLayouts::APP_LAYOUT_DEFAULT, kDefaultItems, sizeof(kDefaultItems) / sizeof(kDefaultItems[0]), 6};
-static const GuiLayoutDescriptor kFuelTrimLayout = {GaugeLayouts::APP_LAYOUT_FUEL_TRIMS, kFuelTrimItems, sizeof(kFuelTrimItems) / sizeof(kFuelTrimItems[0]), 6};
+static const GuiLayoutDescriptor kDefaultLayout = {GaugeLayouts::APP_LAYOUT_DEFAULT, kDefaultCruiseItems, sizeof(kDefaultCruiseItems) / sizeof(kDefaultCruiseItems[0]), 6};
+static const GuiLayoutDescriptor kFuelTrimLayout = {GaugeLayouts::APP_LAYOUT_FUEL_TRIMS, kDefaultCruiseItems, sizeof(kDefaultCruiseItems) / sizeof(kDefaultCruiseItems[0]), 6};
 static const GuiLayoutDescriptor kWotLayout = {GaugeLayouts::APP_LAYOUT_WOT, kWotItems, sizeof(kWotItems) / sizeof(kWotItems[0]), 6};
-static const GuiLayoutDescriptor kCruiseLayout = {GaugeLayouts::APP_LAYOUT_CRUISE, kCruiseItems, sizeof(kCruiseItems) / sizeof(kCruiseItems[0]), 6};
+static const GuiLayoutDescriptor kCruiseLayout = {GaugeLayouts::APP_LAYOUT_CRUISE, kDefaultCruiseItems, sizeof(kDefaultCruiseItems) / sizeof(kDefaultCruiseItems[0]), 6};
 static const GuiLayoutDescriptor kPostWotLayout = {GaugeLayouts::APP_LAYOUT_POST_WOT_ANALYSIS, kPostWotItems, sizeof(kPostWotItems) / sizeof(kPostWotItems[0]), 6};
 }
 

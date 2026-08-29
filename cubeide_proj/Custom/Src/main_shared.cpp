@@ -70,10 +70,10 @@ void compute_gimbal_from_board_acceleration(const BoardAccelerationVector &accel
 void render_ctx_init_shared(SharedRenderCtx &ctx)
 {
   if (ctx.line_plot_tps != nullptr && ctx.line_plot_tps->isInit == false)
-    linePlotInit(ctx.line_plot_tps, ctx.line_plot_tps_data, 20, 135, 42, 100, 0);
+    linePlotInit(ctx.line_plot_tps, ctx.line_plot_tps_data, 20, 210, 78, 100, 0);
 
   if (ctx.line_plot_knock != nullptr && ctx.line_plot_knock->isInit == false)
-    linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 135, 42, 15, GFX_RED);
+    linePlotInit(ctx.line_plot_knock, ctx.line_plot_knock_data, 20, 210, 78, 15, GFX_RED);
 }
 
 #if defined(__GNUC__)

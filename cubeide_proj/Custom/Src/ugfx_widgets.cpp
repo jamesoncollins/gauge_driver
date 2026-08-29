@@ -595,8 +595,8 @@ void UgfxMultiMarkerMeter::updateValueText()
     const UgfxMeterMarker &marker = markers_[i];
     const char *marker_label = marker.label != nullptr ? marker.label : "";
     const int written = marker.valid
-        ? std::snprintf(out, left, "%s%s%.*f", i == 0 ? "" : " ", marker_label, (int)decimals_, marker.value)
-        : std::snprintf(out, left, "%s%s--", i == 0 ? "" : " ", marker_label);
+        ? std::snprintf(out, left, "%s%s%.*f%s", i == 0 ? "" : " ", marker_label, (int)decimals_, marker.value, units_)
+        : std::snprintf(out, left, "%s%s--%s", i == 0 ? "" : " ", marker_label, units_);
     if (written < 0)
       break;
     const std::size_t used = (std::size_t)written >= left ? left - 1 : (std::size_t)written;
