@@ -49,7 +49,6 @@ struct PlatformSample
 
 struct HostPlatformCtx
 {
-  color_t amber;
   font_t font20;
   font_t font10;
   font_t fontLCD;
@@ -57,14 +56,8 @@ struct HostPlatformCtx
   coord_t cx;
   coord_t cy;
   uint32_t t0_ms;
-  uint32_t timer_draw_ms;
   gImage batt_img;
   gImage beam_img;
-  Gimball_t gimball;
-  LinePlot_t line_plot_tps;
-  LinePlot_t line_plot_knock;
-  int tps_plot_data[20];
-  int knock_plot_data[20];
 };
 
 static HostPlatformCtx g_host_ctx;
@@ -269,8 +262,6 @@ static void sim_bringup_hardware()
 {
   gfxInit();
   gdispClear(GFX_BLACK);
-
-  g_host_ctx.amber = HTML2COLOR(0xFFB000);
   g_host_ctx.font20 = gdispOpenFont("DejaVuSans20");
   g_host_ctx.font10 = gdispOpenFont("DejaVuSans10");
   g_host_ctx.fontLCD = gdispOpenFont("lcddot_tr80");
@@ -278,28 +269,20 @@ static void sim_bringup_hardware()
   g_host_ctx.cx = gdispGetWidth() / 2;
   g_host_ctx.cy = gdispGetHeight() / 2;
   g_host_ctx.t0_ms = HAL_GetTick();
-  g_host_ctx.timer_draw_ms = g_host_ctx.t0_ms;
   g_loop_last_tick_ms = g_host_ctx.t0_ms;
 
   gdispImageOpenMemory(&g_host_ctx.batt_img, batt);
   gdispImageOpenMemory(&g_host_ctx.beam_img, beam);
-  g_host_render_ctx = {
-    .amber_ptr = &g_host_ctx.amber,
-    .font10 = g_host_ctx.font10,
-    .font20 = g_host_ctx.font20,
-    .fontLCD = g_host_ctx.fontLCD,
-    .fontValue = g_host_ctx.fontValue,
-    .screen_width = (coord_t)gdispGetWidth(),
-    .screen_height = (coord_t)gdispGetHeight(),
-    .batt_img = &g_host_ctx.batt_img,
-    .beam_img = &g_host_ctx.beam_img,
-    .gimball = &g_host_ctx.gimball,
-    .line_plot_tps = &g_host_ctx.line_plot_tps,
-    .line_plot_tps_data = g_host_ctx.tps_plot_data,
-    .line_plot_knock = &g_host_ctx.line_plot_knock,
-    .line_plot_knock_data = g_host_ctx.knock_plot_data,
-    .render_cycle_complete = false,
-  };
+  g_host_render_ctx = {};
+  g_host_render_ctx.font10 = g_host_ctx.font10;
+  g_host_render_ctx.font20 = g_host_ctx.font20;
+  g_host_render_ctx.fontLCD = g_host_ctx.fontLCD;
+  g_host_render_ctx.fontValue = g_host_ctx.fontValue;
+  g_host_render_ctx.screen_width = (coord_t)gdispGetWidth();
+  g_host_render_ctx.screen_height = (coord_t)gdispGetHeight();
+  g_host_render_ctx.batt_img = &g_host_ctx.batt_img;
+  g_host_render_ctx.beam_img = &g_host_ctx.beam_img;
+  g_host_render_ctx.render_cycle_complete = false;
 }
 
 static PlatformSample sim_collect_platform_sample()
@@ -437,7 +420,7 @@ static void sim_publish_current_data()
   g_board_data->high_beam.publish(sample.warn_high_beam, now);
 }
 
-void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
+void board_init(BoardSharedData &data, SharedRenderCtx &ctx)
 {
   g_board_data = &data;
   sim_bringup_hardware();
@@ -446,8 +429,6 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
   g_warn_4ws = data.add_warning_light("4ws", "4WS", 175, 45, GFX_YELLOW);
   ctx = g_host_render_ctx;
   sim_publish_current_data();
-  draw_step = 0;
-  timer_draw_ms = g_host_ctx.timer_draw_ms;
 }
 
 void board_update()

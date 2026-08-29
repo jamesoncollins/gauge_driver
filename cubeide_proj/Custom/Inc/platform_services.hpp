@@ -5,9 +5,10 @@
 
 /*
  * Platform lifecycle and data flow.
- * Shared code owns the main loop and display rendering.
+ * Shared code owns the main loop, display rendering, and shared UI/widget
+ * state. Platforms provide hardware/display resources and publish data.
  */
-void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms);
+void board_init(BoardSharedData &data, SharedRenderCtx &ctx);
 void board_update();
 bool board_check_exit();
 bool board_display_ready();

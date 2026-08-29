@@ -145,7 +145,6 @@ typedef enum
 struct ArmMainCtx
 {
   bool cleanPwr = false;
-  uint32_t amber = GFX_AMBER_YEL;
   font_t font10 = nullptr;
   font_t font20 = nullptr;
   font_t fontLCD = nullptr;
@@ -157,14 +156,8 @@ struct ArmMainCtx
   SwitecX12 *tachX12 = nullptr;
   SwitecX12 *speedX12 = nullptr;
   SwitecX12 *odoX12 = nullptr;
-
-  Gimball_t gimball;
   gImage battImg;
   gImage beamImg;
-  LinePlot_t linePlotTPS;
-  int tpsPlotData[20];
-  LinePlot_t linePlotKnock;
-  int knockPlotData[20];
   BoardWarningLight *warn_batt = nullptr;
   BoardWarningLight *warn_brake = nullptr;
   BoardWarningLight *warn_4ws = nullptr;
@@ -444,7 +437,6 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
   g_arm_main.font20 = gdispOpenFont("DejaVuSans20");
   g_arm_main.fontLCD = gdispOpenFont("lcddot_tr80");
   g_arm_main.fontValue = gdispOpenFont("BITSUMIS84_Numbers");
-  g_arm_main.amber = GFX_AMBER_YEL;
 
   gdispImageOpenMemory(&g_arm_main.battImg, batt);
   gdispImageOpenMemory(&g_arm_main.beamImg, beam);
@@ -493,7 +485,7 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
     if (!g_arm_main.cleanPwr)
     {
       gdispClear(GFX_BLACK);
-      gdispFillString((screenWidth >> 1) - 77, (screenHeight >> 1), "RESET", g_arm_main.fontLCD, g_arm_main.amber, GFX_BLACK);
+      gdispFillString((screenWidth >> 1) - 77, (screenHeight >> 1), "RESET", g_arm_main.fontLCD, GFX_AMBER_YEL, GFX_BLACK);
       gdispFlush();
       step_down = X27_STEPS;
     }
@@ -528,23 +520,16 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
   record_startup_error(HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4), STARTUP_ERR_TIM2_CH4);
   record_startup_error(HAL_TIM_Base_Start_IT(&htim16), STARTUP_ERR_TIM16);
 
-  arm_render_ctx = {
-      .amber_ptr = (color_t *)&g_arm_main.amber,
-      .font10 = g_arm_main.font10,
-      .font20 = g_arm_main.font20,
-      .fontLCD = g_arm_main.fontLCD,
-      .fontValue = g_arm_main.fontValue,
-      .screen_width = (coord_t)screenWidth,
-      .screen_height = (coord_t)screenHeight,
-      .batt_img = &g_arm_main.battImg,
-      .beam_img = &g_arm_main.beamImg,
-      .gimball = &g_arm_main.gimball,
-      .line_plot_tps = &g_arm_main.linePlotTPS,
-      .line_plot_tps_data = g_arm_main.tpsPlotData,
-      .line_plot_knock = &g_arm_main.linePlotKnock,
-      .line_plot_knock_data = g_arm_main.knockPlotData,
-      .render_cycle_complete = false,
-  };
+  arm_render_ctx = {};
+  arm_render_ctx.font10 = g_arm_main.font10;
+  arm_render_ctx.font20 = g_arm_main.font20;
+  arm_render_ctx.fontLCD = g_arm_main.fontLCD;
+  arm_render_ctx.fontValue = g_arm_main.fontValue;
+  arm_render_ctx.screen_width = (coord_t)screenWidth;
+  arm_render_ctx.screen_height = (coord_t)screenHeight;
+  arm_render_ctx.batt_img = &g_arm_main.battImg;
+  arm_render_ctx.beam_img = &g_arm_main.beamImg;
+  arm_render_ctx.render_cycle_complete = false;
 }
 
 static void platform_process_ble_and_lowrate()
@@ -689,7 +674,7 @@ static void arm_publish_current_data()
   g_board_data->high_beam.publish(sample.warn_high_beam, now);
 }
 
-void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
+void board_init(BoardSharedData &data, SharedRenderCtx &ctx)
 {
   g_board_data = &data;
 
@@ -750,8 +735,6 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
   g_arm_main.last_speed = 0.0f;
   g_arm_main.last_speed_time = 0;
   g_arm_main.speed_rate_per_ms = 0.0f;
-  draw_step = 0;
-  timer_draw_ms = now;
   arm_publish_current_data();
 }
 

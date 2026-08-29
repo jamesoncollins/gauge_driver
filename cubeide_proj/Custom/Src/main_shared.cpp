@@ -291,9 +291,20 @@ void render_step_shared(const RuntimeState &state, const BoardSharedData &data, 
 
 namespace
 {
+struct SharedUiState
+{
+  color_t amber = GFX_AMBER_YEL;
+  Gimball_t gimball = {};
+  LinePlot_t line_plot_tps = {};
+  int line_plot_tps_data[20] = {};
+  LinePlot_t line_plot_knock = {};
+  int line_plot_knock_data[20] = {};
+};
+
 struct SharedMainLoopState
 {
   BoardSharedData board_data = {};
+  SharedUiState ui = {};
   SharedRenderCtx render_ctx = {};
   RuntimeState state = {};
   BoardSharedData render_board_data = {};
@@ -307,17 +318,30 @@ struct SharedMainLoopState
 
 SharedMainLoopState g_main_loop;
 
+void bind_shared_ui_state(SharedUiState &ui, SharedRenderCtx &ctx)
+{
+  ui.amber = GFX_AMBER_YEL;
+  ctx.amber_ptr = &ui.amber;
+  ctx.gimball = &ui.gimball;
+  ctx.line_plot_tps = &ui.line_plot_tps;
+  ctx.line_plot_tps_data = ui.line_plot_tps_data;
+  ctx.line_plot_knock = &ui.line_plot_knock;
+  ctx.line_plot_knock_data = ui.line_plot_knock_data;
+}
+
 void main_loop_init(SharedMainLoopState &loop)
 {
   if (loop.initialized)
     return;
 
-  loop.timer_draw_ms = HAL_GetTick();
-  loop.timer_telemetry_ms = loop.timer_draw_ms;
-  board_init(loop.board_data, loop.render_ctx, loop.draw_step, loop.timer_draw_ms);
+  board_init(loop.board_data, loop.render_ctx);
+  bind_shared_ui_state(loop.ui, loop.render_ctx);
   gauge_layouts_register();
   loop.state = runtime_state_from_board_data(loop.board_data);
   render_ctx_init_shared(loop.render_ctx);
+  loop.draw_step = 0;
+  loop.timer_draw_ms = HAL_GetTick();
+  loop.timer_telemetry_ms = loop.timer_draw_ms;
   loop.initialized = true;
 }
 

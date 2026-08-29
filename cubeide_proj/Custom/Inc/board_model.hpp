@@ -334,6 +334,8 @@ typedef struct
 
 struct SharedRenderCtx
 {
+  // Render-facing references: fonts/images/screen geometry are platform-provided;
+  // amber, gimbal, and plots are owned by shared runtime state.
   color_t *amber_ptr;
   font_t font10;
   font_t font20;
