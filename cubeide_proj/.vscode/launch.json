@@ -11,6 +11,10 @@
             "servertype": "stlink",
             "device": "STM32WB55RGVX",
             "interface": "swd",
+            "armToolchainPath": "${config:gaugeDriver.stm32CubeIdeRoot}/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.0.202411081344/tools/bin",
+            "gdbPath": "${config:gaugeDriver.stm32CubeIdeRoot}/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.0.202411081344/tools/bin/arm-none-eabi-gdb.exe",
+            "serverpath": "${config:gaugeDriver.stm32CubeIdeRoot}/plugins/com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_2.2.100.202501151542/tools/bin/ST-LINK_gdbserver.exe",
+            "stm32cubeprogrammer": "${config:gaugeDriver.stm32CubeProgrammerRoot}",
             "runToEntryPoint": "main",
             "showDevDebugOutput": "none",
             "serverArgs": [
@@ -31,6 +35,10 @@
             "servertype": "stlink",
             "device": "STM32WB55RGVX",
             "interface": "swd",
+            "armToolchainPath": "${config:gaugeDriver.stm32CubeIdeRoot}/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.0.202411081344/tools/bin",
+            "gdbPath": "${config:gaugeDriver.stm32CubeIdeRoot}/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.0.202411081344/tools/bin/arm-none-eabi-gdb.exe",
+            "serverpath": "${config:gaugeDriver.stm32CubeIdeRoot}/plugins/com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_2.2.100.202501151542/tools/bin/ST-LINK_gdbserver.exe",
+            "stm32cubeprogrammer": "${config:gaugeDriver.stm32CubeProgrammerRoot}",
             "runToEntryPoint": "main",
             "showDevDebugOutput": "none",
             "serverArgs": [

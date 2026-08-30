@@ -32,13 +32,16 @@
         {
             "label": "CMake: configure st7789vi-debug",
             "type": "shell",
-            "command": "cmake",
+            "command": "${config:cmake.cmakePath}",
             "args": [
                 "--preset",
                 "st7789vi-debug"
             ],
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${config:gaugeDriver.buildToolPathPrefix};${env:PATH}"
+                }
             },
             "problemMatcher": [
                 "$gcc"
@@ -47,14 +50,17 @@
         {
             "label": "CMake: compile st7789vi-debug",
             "type": "shell",
-            "command": "cmake",
+            "command": "${config:cmake.cmakePath}",
             "args": [
                 "--build",
                 "--preset",
                 "st7789vi-debug"
             ],
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${config:gaugeDriver.buildToolPathPrefix};${env:PATH}"
+                }
             },
             "problemMatcher": [
                 "$gcc"
@@ -63,13 +69,16 @@
         {
             "label": "CMake: configure s6e63d6-debug",
             "type": "shell",
-            "command": "cmake",
+            "command": "${config:cmake.cmakePath}",
             "args": [
                 "--preset",
                 "s6e63d6-debug"
             ],
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${config:gaugeDriver.buildToolPathPrefix};${env:PATH}"
+                }
             },
             "problemMatcher": [
                 "$gcc"
@@ -78,18 +87,83 @@
         {
             "label": "CMake: compile s6e63d6-debug",
             "type": "shell",
-            "command": "cmake",
+            "command": "${config:cmake.cmakePath}",
             "args": [
                 "--build",
                 "--preset",
                 "s6e63d6-debug"
             ],
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${config:gaugeDriver.buildToolPathPrefix};${env:PATH}"
+                }
             },
             "problemMatcher": [
                 "$gcc"
             ]
+        },
+        {
+            "label": "BLE OTA: flash st7789vi-debug",
+            "type": "shell",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "CMake: build st7789vi-debug",
+                "BLE OTA: upload st7789vi-debug"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "BLE OTA: flash s6e63d6-debug",
+            "type": "shell",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "CMake: build s6e63d6-debug",
+                "BLE OTA: upload s6e63d6-debug"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "BLE OTA: upload st7789vi-debug",
+            "type": "shell",
+            "command": "${config:gaugeDriver.pythonCommand}",
+            "args": [
+                "scripts/ble_ota_loader.py",
+                "--file",
+                "${workspaceFolder}/build/st7789vi-debug/gauge_driver.bin"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "BLE OTA: upload s6e63d6-debug",
+            "type": "shell",
+            "command": "${config:gaugeDriver.pythonCommand}",
+            "args": [
+                "scripts/ble_ota_loader.py",
+                "--file",
+                "${workspaceFolder}/build/s6e63d6-debug/gauge_driver.bin"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "BLE OTA: scan",
+            "type": "shell",
+            "command": "${config:gaugeDriver.pythonCommand}",
+            "args": [
+                "scripts/ble_ota_loader.py",
+                "--scan",
+                "--list-all"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
         }
     ]
 }
