@@ -30,6 +30,30 @@
             ]
         },
         {
+            "label": "CMake: build st7789vi-release",
+            "type": "shell",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "CMake: configure st7789vi-release",
+                "CMake: compile st7789vi-release"
+            ],
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "CMake: build s6e63d6-release",
+            "type": "shell",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "CMake: configure s6e63d6-release",
+                "CMake: compile s6e63d6-release"
+            ],
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
             "label": "CMake: configure st7789vi-debug",
             "type": "shell",
             "command": "${config:cmake.cmakePath}",
@@ -104,6 +128,80 @@
             ]
         },
         {
+            "label": "CMake: configure st7789vi-release",
+            "type": "shell",
+            "command": "${config:cmake.cmakePath}",
+            "args": [
+                "--preset",
+                "st7789vi-release"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${config:gaugeDriver.buildToolPathPrefix};${env:PATH}"
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "CMake: compile st7789vi-release",
+            "type": "shell",
+            "command": "${config:cmake.cmakePath}",
+            "args": [
+                "--build",
+                "--preset",
+                "st7789vi-release"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${config:gaugeDriver.buildToolPathPrefix};${env:PATH}"
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "CMake: configure s6e63d6-release",
+            "type": "shell",
+            "command": "${config:cmake.cmakePath}",
+            "args": [
+                "--preset",
+                "s6e63d6-release"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${config:gaugeDriver.buildToolPathPrefix};${env:PATH}"
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "CMake: compile s6e63d6-release",
+            "type": "shell",
+            "command": "${config:cmake.cmakePath}",
+            "args": [
+                "--build",
+                "--preset",
+                "s6e63d6-release"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${config:gaugeDriver.buildToolPathPrefix};${env:PATH}"
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
             "label": "BLE OTA: flash st7789vi-debug",
             "type": "shell",
             "dependsOrder": "sequence",
@@ -120,6 +218,26 @@
             "dependsOn": [
                 "CMake: build s6e63d6-debug",
                 "BLE OTA: upload s6e63d6-debug"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "BLE OTA: flash st7789vi-release",
+            "type": "shell",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "CMake: build st7789vi-release",
+                "BLE OTA: upload st7789vi-release"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "BLE OTA: flash s6e63d6-release",
+            "type": "shell",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "CMake: build s6e63d6-release",
+                "BLE OTA: upload s6e63d6-release"
             ],
             "problemMatcher": []
         },
@@ -145,6 +263,34 @@
                 "scripts/ble_ota_loader.py",
                 "--file",
                 "${workspaceFolder}/build/s6e63d6-debug/gauge_driver.bin"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "BLE OTA: upload st7789vi-release",
+            "type": "shell",
+            "command": "${config:gaugeDriver.pythonCommand}",
+            "args": [
+                "scripts/ble_ota_loader.py",
+                "--file",
+                "${workspaceFolder}/build/st7789vi-release/gauge_driver.bin"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "BLE OTA: upload s6e63d6-release",
+            "type": "shell",
+            "command": "${config:gaugeDriver.pythonCommand}",
+            "args": [
+                "scripts/ble_ota_loader.py",
+                "--file",
+                "${workspaceFolder}/build/s6e63d6-release/gauge_driver.bin"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"

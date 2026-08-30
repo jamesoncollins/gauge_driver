@@ -33,7 +33,7 @@ Build hardware display variants:
 ./scripts/build-preset.sh st7789vi-debug
 ```
 
-Flash a hardware debug build over BLE OTA from VS Code:
+Flash a hardware build over BLE OTA from VS Code:
 
 1. Install the Python BLE dependency into the Python configured by `gaugeDriver.pythonCommand`:
 
@@ -47,6 +47,8 @@ Flash a hardware debug build over BLE OTA from VS Code:
 5. Run one of:
    - `BLE OTA: flash st7789vi-debug`
    - `BLE OTA: flash s6e63d6-debug`
+   - `BLE OTA: flash st7789vi-release`
+   - `BLE OTA: flash s6e63d6-release`
 
 The flash tasks build the selected CMake preset first, then upload
 `build/<preset>/gauge_driver.bin` with `scripts/ble_ota_loader.py`.
