@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -34,34 +34,28 @@ jobs:
         id: pages
         uses: actions/configure-pages@v5
 
-      - name: Set up MSYS2 UCRT64
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          update: true
-          install: >-
-            git
-            base-devel
-
-      - name: Install project build packages
-        shell: msys2 {0}
+      - name: Install ARM build packages
         run: |
-          set -eu
-          pacman --noconfirm -S --needed $(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' cubeide_proj/env/msys2-ucrt-packages.txt)
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            ninja-build \
+            gcc-arm-none-eabi \
+            binutils-arm-none-eabi \
+            libnewlib-arm-none-eabi
 
       - name: Build all branch heads and current tag
-        shell: msys2 {0}
+        shell: bash
         env:
           PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
         run: |
           set -eu
-          export PATH="/ucrt64/bin:/mingw64/bin:/usr/bin:$PATH"
           root="$PWD"
           site="$root/_firmware_pages"
           worktrees="$root/_firmware_worktrees"
           mkdir -p "$site" "$worktrees"
 
-          python cubeide_proj/scripts/package_firmware_pages.py init --root "$root" --site "$site"
+          python3 cubeide_proj/scripts/package_firmware_pages.py init --root "$root" --site "$site"
 
           git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'
 
@@ -93,8 +87,8 @@ jobs:
               cmake --preset s6e63d6-release
               cmake --build --preset s6e63d6-release
             )
-            python "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type branch --ref-name "$branch" --preset st7789vi-release
-            python "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type branch --ref-name "$branch" --preset s6e63d6-release
+            python3 "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type branch --ref-name "$branch" --preset st7789vi-release
+            python3 "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type branch --ref-name "$branch" --preset s6e63d6-release
             git worktree remove --force "$wt"
           done
 
@@ -113,8 +107,8 @@ jobs:
               cmake --preset s6e63d6-release
               cmake --build --preset s6e63d6-release
             )
-            python "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type tag --ref-name "$GITHUB_REF_NAME" --preset st7789vi-release
-            python "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type tag --ref-name "$GITHUB_REF_NAME" --preset s6e63d6-release
+            python3 "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type tag --ref-name "$GITHUB_REF_NAME" --preset st7789vi-release
+            python3 "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type tag --ref-name "$GITHUB_REF_NAME" --preset s6e63d6-release
             git worktree remove --force "$wt"
             fi
           fi
