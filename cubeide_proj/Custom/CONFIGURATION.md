@@ -63,6 +63,20 @@ Examples:
 3. Sensor conversion scales (`mph_per_hz`, `rpm_per_hz`)
 4. Odometer tick stepping
 
+## Hardware FPS baseline
+
+On 2026-08-30, the ST7789VI release build reported 11 FPS on hardware with the
+runtime FPS diagnostic overlay. A comparison build from commit `065e1f6` (`Clean
+up LCD render layering`, immediately after `4cbda8f` `Recover LCD render
+performance`) also reported 11 FPS when built as `st7789vi-release` and flashed
+over the current BLE OTA loader.
+
+The baseline binary used for that check was built from a side worktree at:
+
+```text
+../cubeide_proj-fps-baseline-065e1f6/cubeide_proj/build/st7789vi-release/gauge_driver.bin
+```
+
 ## Adding a new target
 
 1. Add a new `BUILD_TARGET` branch in `CMakeLists.txt` that sets the four axes.

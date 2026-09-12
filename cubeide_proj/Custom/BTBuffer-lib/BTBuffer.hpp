@@ -4,11 +4,15 @@
 #include <stdint.h>
 #include "platform_api.h"
 
+static constexpr uint8_t kBTBufferRecordLen = 64;
+static constexpr uint8_t kBTBufferMetadataLen = sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint32_t);
+static constexpr uint8_t kBTBufferPayloadLen = kBTBufferRecordLen - kBTBufferMetadataLen;
+
 typedef struct
 {
   uint16_t id1, id2;
   uint32_t timestamp;
-  uint8_t data[64-8]; // fixme: SizeReadnext
+  uint8_t data[kBTBufferPayloadLen];
 }
 BTBufferData;
 

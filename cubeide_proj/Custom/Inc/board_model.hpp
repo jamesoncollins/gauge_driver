@@ -230,6 +230,7 @@ struct BoardSharedData
   BoardValue<uint32_t> loop_count;
   BoardValue<uint32_t> loop_period_ms;
   BoardValue<uint32_t> worst_loop_period_ms;
+  BoardValue<uint32_t> startup_init_error_code;
   BoardValue<BoardAccelerationVector> acceleration_mps2;
   BoardValue<bool> startup_init_error;
   BoardValue<bool> lamp_on;
@@ -242,6 +243,14 @@ struct BoardSharedData
   int ecu_param_wb_index = 0;
   int ecu_param_map_index = 0;
   int ecu_param_knock_index = 0;
+  int ecu_param_timing_index = 0;
+  int ecu_param_afr_target_index = 0;
+  int ecu_param_fuel_trim_front_low_index = 0;
+  int ecu_param_fuel_trim_front_med_index = 0;
+  int ecu_param_fuel_trim_front_high_index = 0;
+  int ecu_param_fuel_trim_rear_low_index = 0;
+  int ecu_param_fuel_trim_rear_med_index = 0;
+  int ecu_param_fuel_trim_rear_high_index = 0;
   flasher_t *ecu_flasher = nullptr;
 
   BoardObjectPanel warning_panel;
@@ -275,6 +284,7 @@ struct BoardSharedData
     loop_count.mark_read();
     loop_period_ms.mark_read();
     worst_loop_period_ms.mark_read();
+    startup_init_error_code.mark_read();
     acceleration_mps2.mark_read();
     startup_init_error.mark_read();
     lamp_on.mark_read();
@@ -295,6 +305,7 @@ typedef struct
   uint32_t loop_count;
   uint32_t loop_period_ms;
   uint32_t worst_loop_period_ms;
+  uint32_t startup_init_error_code;
   int rpm_mode;
   int gimbal_x;
   int gimbal_y;
@@ -309,12 +320,22 @@ typedef struct
   int ecu_param_wb_index;
   int ecu_param_map_index;
   int ecu_param_knock_index;
+  int ecu_param_timing_index;
+  int ecu_param_afr_target_index;
+  int ecu_param_fuel_trim_front_low_index;
+  int ecu_param_fuel_trim_front_med_index;
+  int ecu_param_fuel_trim_front_high_index;
+  int ecu_param_fuel_trim_rear_low_index;
+  int ecu_param_fuel_trim_rear_med_index;
+  int ecu_param_fuel_trim_rear_high_index;
   flasher_t *ecu_flasher;
   button_e btn;
 } RuntimeState;
 
 struct SharedRenderCtx
 {
+  // Render-facing references: fonts/images/screen geometry are platform-provided;
+  // amber, gimbal, and plots are owned by shared runtime state.
   color_t *amber_ptr;
   font_t font10;
   font_t font20;

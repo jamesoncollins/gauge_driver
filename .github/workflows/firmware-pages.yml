@@ -1,0 +1,125 @@
+name: Firmware Pages
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: firmware-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Install ARM build packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            ninja-build \
+            gcc-arm-none-eabi \
+            binutils-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            libstdc++-arm-none-eabi-dev \
+            libstdc++-arm-none-eabi-newlib
+
+      - name: Build all branch heads and current tag
+        shell: bash
+        env:
+          PAGES_BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          set -eu
+          root="$PWD"
+          site="$root/_firmware_pages"
+          worktrees="$root/_firmware_worktrees"
+          mkdir -p "$site" "$worktrees"
+
+          python3 cubeide_proj/scripts/package_firmware_pages.py init --root "$root" --site "$site"
+
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'
+
+          has_release_presets() {
+            (
+              cd "$1/cubeide_proj"
+              cmake --list-presets | grep -q '"st7789vi-release"'
+              cmake --list-presets | grep -q '"s6e63d6-release"'
+            )
+          }
+
+          git for-each-ref --format='%(refname:short)' refs/remotes/origin | while IFS= read -r remote_ref; do
+            case "$remote_ref" in
+              origin/HEAD) continue ;;
+            esac
+            branch="${remote_ref#origin/}"
+            safe="$(printf '%s' "$branch" | sed -e 's#[^A-Za-z0-9._-]#_#g')"
+            wt="$worktrees/branch-$safe"
+            git worktree add --detach "$wt" "$remote_ref"
+            if ! has_release_presets "$wt"; then
+              echo "::warning title=Skipping $branch::Release presets are not present on this branch"
+              git worktree remove --force "$wt"
+              continue
+            fi
+            (
+              cd "$wt/cubeide_proj"
+              cmake --preset st7789vi-release
+              cmake --build --preset st7789vi-release
+              cmake --preset s6e63d6-release
+              cmake --build --preset s6e63d6-release
+            )
+            python3 "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type branch --ref-name "$branch" --preset st7789vi-release
+            python3 "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type branch --ref-name "$branch" --preset s6e63d6-release
+            git worktree remove --force "$wt"
+          done
+
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            safe="$(printf '%s' "$GITHUB_REF_NAME" | sed -e 's#[^A-Za-z0-9._-]#_#g')"
+            wt="$worktrees/tag-$safe"
+            git worktree add --detach "$wt" "$GITHUB_SHA"
+            if ! has_release_presets "$wt"; then
+              echo "::warning title=Skipping tag $GITHUB_REF_NAME::Release presets are not present on this tag"
+              git worktree remove --force "$wt"
+            else
+            (
+              cd "$wt/cubeide_proj"
+              cmake --preset st7789vi-release
+              cmake --build --preset st7789vi-release
+              cmake --preset s6e63d6-release
+              cmake --build --preset s6e63d6-release
+            )
+            python3 "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type tag --ref-name "$GITHUB_REF_NAME" --preset st7789vi-release
+            python3 "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type tag --ref-name "$GITHUB_REF_NAME" --preset s6e63d6-release
+            git worktree remove --force "$wt"
+            fi
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _firmware_pages
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

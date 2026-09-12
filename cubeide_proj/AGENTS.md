@@ -1,4 +1,4 @@
-﻿# Codex Notes
+# Codex Notes
 
 ## Gauge Screen Capture
 
@@ -22,5 +22,68 @@ Persistent/constant element overlap is not: check the ECU meters, button text,
 gimbal, line plots, and warning indicators against each other across multiple
 frames.
 
+## Routine Validation
+
+After shared application changes, build the simulator and hardware debug
+presets when feasible:
+
+- `cmake --build --preset x86-debug`
+- `cmake --build --preset web-debug`
+- `cmake --build --preset st7789vi-debug`
+- `cmake --build --preset s6e63d6-debug`
+
+For gauge layout or rendering changes, capture `web-debug` frames with:
+
+```sh
+python scripts/capture_web_frames.py --frames 12 --interval 0.75
+```
+
+Then inspect `build/web-debug/analysis/contact-sheet.png` for persistent layout
+overlap or clipping.
 
 
+## MSYS2 UCRT Shell
+
+If the session was not launched from the MSYS2 UCRT environment, open one
+directly from Windows with:
+
+```powershell
+C:\msys64\msys2_shell.cmd -ucrt64 -here -defterm -no-start -shell bash
+```
+
+From that shell, move to this repository and run validation normally:
+
+```sh
+cd "/c/Users/user/git/gauge driver stuff/gauge_driver/cubeide_proj"
+export PATH="/ucrt64/bin:/mingw64/bin:$PATH"
+cmake --build --preset x86-debug
+cmake --build --preset web-debug
+python scripts/capture_web_frames.py --layout default --frames 12 --interval 0.75
+```
+
+The same shell is also the preferred path for Emscripten/web simulator capture
+when `python` in PowerShell resolves to the Microsoft Store alias or when the
+VS Code environment has not inherited MSYS2/UCRT paths.
+
+## Windows Sandbox Command Notes
+
+The Windows ACL sandbox can fail before a command starts with:
+
+```text
+windows sandbox: helper_unknown_error: apply deny-read ACLs
+```
+
+Known-good first attempts:
+
+- Run simple commands one at a time, especially `git status --short`,
+  `git diff`, and `cmake --build --preset x86-debug`.
+- Prefer direct approved command forms before wrapping them in PowerShell.
+
+Avoid as a first attempt:
+
+- Parallel shell calls for filesystem-heavy reads.
+- Complex PowerShell pipelines, variables, globs, or nested quoting.
+
+If a needed command fails with the ACL error, rerun the simplest equivalent
+command outside the sandbox with escalation instead of spending time trying
+several quoting variants.

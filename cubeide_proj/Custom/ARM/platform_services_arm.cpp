@@ -67,6 +67,14 @@ struct PlatformSample
   int ecu_param_wb_index;
   int ecu_param_map_index;
   int ecu_param_knock_index;
+  int ecu_param_timing_index = 0;
+  int ecu_param_afr_target_index = 0;
+  int ecu_param_fuel_trim_front_low_index;
+  int ecu_param_fuel_trim_front_med_index;
+  int ecu_param_fuel_trim_front_high_index;
+  int ecu_param_fuel_trim_rear_low_index;
+  int ecu_param_fuel_trim_rear_med_index;
+  int ecu_param_fuel_trim_rear_high_index;
   flasher_t *ecu_flasher;
   button_e btn;
 };
@@ -77,6 +85,14 @@ struct EcuSignalMap
   int wb_index;
   int map_index;
   int knock_index;
+  int timing_index;
+  int afr_target_index;
+  int fuel_trim_front_low_index;
+  int fuel_trim_front_med_index;
+  int fuel_trim_front_high_index;
+  int fuel_trim_rear_low_index;
+  int fuel_trim_rear_med_index;
+  int fuel_trim_rear_high_index;
 };
 
 static ECUK *g_ecu = &ecu;
@@ -86,10 +102,20 @@ static const EcuSignalMap g_ecu_signal_map = {
     MUTII::ECU_PARAM_WB,
     MUTII::ECU_PARAM_MAP,
     MUTII::ECU_PARAM_KNOCK,
+    MUTII::ECU_PARAM_TIMING,
+    MUTII::ECU_PARAM_AFR_TARGET,
+    MUTII::ECU_PARAM_FFTL,
+    MUTII::ECU_PARAM_FFTM,
+    MUTII::ECU_PARAM_FFTH,
+    MUTII::ECU_PARAM_RFTL,
+    MUTII::ECU_PARAM_RFTM,
+    MUTII::ECU_PARAM_RFTH,
 };
 
 static BoardAccelerationVector g_acceleration_mps2 = {};
 static constexpr int X27_STEPS = 240 * 12;
+static constexpr float TACH_MAX_RPM = 10000.0f;
+static constexpr float SPEED_MAX_MPH = 180.0f;
 static constexpr uint16_t bulb_mask(unsigned bit)
 {
   return (uint16_t)(1U << bit);
@@ -101,6 +127,13 @@ static constexpr uint16_t BULB_HIGH_BEAM_MASK = bulb_mask(3);
 static constexpr uint16_t BULB_BATT_MASK = bulb_mask(7);
 static constexpr uint16_t BULB_INPUT_MASK = 0x00FF;
 static constexpr uint16_t BULB_PULLUP_MASK = BULB_BRAKE_MASK | BULB_BATT_MASK;
+static constexpr uint32_t STARTUP_ERR_IOEXP_SCREEN = 1U << 0;
+static constexpr uint32_t STARTUP_ERR_IOEXP_SPEEDO = 1U << 1;
+static constexpr uint32_t STARTUP_ERR_IMU = 1U << 2;
+static constexpr uint32_t STARTUP_ERR_TIM17 = 1U << 3;
+static constexpr uint32_t STARTUP_ERR_TIM2_CH3 = 1U << 4;
+static constexpr uint32_t STARTUP_ERR_TIM2_CH4 = 1U << 5;
+static constexpr uint32_t STARTUP_ERR_TIM16 = 1U << 6;
 
 typedef enum
 {
@@ -112,7 +145,6 @@ typedef enum
 struct ArmMainCtx
 {
   bool cleanPwr = false;
-  uint32_t amber = GFX_AMBER_YEL;
   font_t font10 = nullptr;
   font_t font20 = nullptr;
   font_t fontLCD = nullptr;
@@ -124,14 +156,8 @@ struct ArmMainCtx
   SwitecX12 *tachX12 = nullptr;
   SwitecX12 *speedX12 = nullptr;
   SwitecX12 *odoX12 = nullptr;
-
-  Gimball_t gimball;
   gImage battImg;
   gImage beamImg;
-  LinePlot_t linePlotTPS;
-  int tpsPlotData[20];
-  LinePlot_t linePlotKnock;
-  int knockPlotData[20];
   BoardWarningLight *warn_batt = nullptr;
   BoardWarningLight *warn_brake = nullptr;
   BoardWarningLight *warn_4ws = nullptr;
@@ -149,6 +175,12 @@ struct ArmMainCtx
   bool audio_started = false;
   int toggle_mode = 0;
   uint32_t toggleTime_last = 0;
+  float last_rpm = 0.0f;
+  uint32_t last_rpm_time = 0;
+  float rpm_rate_per_ms = 0.0f;
+  float last_speed = 0.0f;
+  uint32_t last_speed_time = 0;
+  float speed_rate_per_ms = 0.0f;
 
   const int bufLen = 256;
   int logBufInd = 0;
@@ -156,6 +188,64 @@ struct ArmMainCtx
 };
 
 static ArmMainCtx g_arm_main;
+static volatile uint32_t g_startup_diag_marker = 0;
+
+static void startup_diag_mark(uint32_t marker)
+{
+  g_startup_diag_marker = marker;
+}
+
+static void record_startup_error(int status, uint32_t bit)
+{
+  if (status != 0)
+    startupInitError |= bit;
+}
+
+static float clamp_needle_value(float value, float min_value, float max_value)
+{
+  if (value < min_value)
+    return min_value;
+  if (value > max_value)
+    return max_value;
+  return value;
+}
+
+static uint32_t arm_filter_time_us()
+{
+  return HAL_GetTick() * 1000U;
+}
+
+static float extrapolate_needle_value(float measurement,
+                                      bool stale,
+                                      float &last_value,
+                                      uint32_t &last_update_time,
+                                      float &rate_per_ms,
+                                      float max_value)
+{
+  const uint32_t now = HAL_GetTick();
+  const uint32_t dt_ms = now - last_update_time;
+  if (stale)
+  {
+    last_value = 0.0f;
+    last_update_time = now;
+    rate_per_ms = 0.0f;
+    return 0.0f;
+  }
+
+  if (measurement != last_value)
+  {
+    if (last_update_time != 0 && dt_ms > 0)
+      rate_per_ms = (measurement - last_value) / (float)dt_ms;
+    else
+      rate_per_ms = 0.0f;
+
+    last_value = measurement;
+    last_update_time = now;
+  }
+
+  const float extrapolated = last_value + (rate_per_ms * (float)dt_ms);
+  return clamp_needle_value(extrapolated, 0.0f, max_value);
+}
 
 static void arm_reset_motor_driver()
 {
@@ -166,9 +256,11 @@ static void arm_reset_motor_driver()
 
 static void arm_run_startup_animation_and_needle_dance()
 {
+  startup_diag_mark(0x1000U);
   gImage startup_anim;
   if (gdispImageOpenMemory(&startup_anim, mitslogoanim_128) != GDISP_IMAGE_ERR_OK)
   {
+    startup_diag_mark(0x1001U);
     g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(9000));
     g_arm_main.speedX12->setPosition(get_x12_ticks_speed(180));
     while (!g_arm_main.tachX12->atTarget() || !g_arm_main.speedX12->atTarget())
@@ -181,9 +273,11 @@ static void arm_run_startup_animation_and_needle_dance()
     return;
   }
 
+  startup_diag_mark(0x1010U);
   gDelay delay = 0;
   int display_count = 42;
   gdispClear(GFX_BLACK);
+  startup_diag_mark(0x1011U);
   gdispImageDraw(&startup_anim,
                  (screenWidth >> 1) - (startup_anim.width >> 1),
                  75,
@@ -191,6 +285,7 @@ static void arm_run_startup_animation_and_needle_dance()
                  0, 0);
   for (int i = 0; i < 17; ++i)
   {
+    startup_diag_mark(0x1020U + (uint32_t)i);
     gdispImageNext(&startup_anim);
     --display_count;
   }
@@ -203,20 +298,24 @@ static void arm_run_startup_animation_and_needle_dance()
     switch (startup_state)
     {
       case 0:
+        startup_diag_mark(0x1030U);
         g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(9000));
         g_arm_main.speedX12->setPosition(get_x12_ticks_speed(180));
         ++startup_state;
         break;
       case 1:
+        startup_diag_mark(0x1031U);
         if (g_arm_main.tachX12->atTarget() && g_arm_main.speedX12->atTarget())
           ++startup_state;
         break;
       case 2:
+        startup_diag_mark(0x1032U);
         g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(0));
         g_arm_main.speedX12->setPosition(get_x12_ticks_speed(0));
         ++startup_state;
         break;
       case 3:
+        startup_diag_mark(0x1033U);
         if (g_arm_main.tachX12->atTarget() && g_arm_main.speedX12->atTarget())
           ++startup_state;
         break;
@@ -228,6 +327,7 @@ static void arm_run_startup_animation_and_needle_dance()
 
     if ((HAL_GetTick() - timer_anim) > delay && display_count >= 0)
     {
+      startup_diag_mark(0x1040U);
       gdispImageDraw(&startup_anim,
                      (screenWidth >> 1) - (startup_anim.width >> 1),
                      75,
@@ -235,17 +335,22 @@ static void arm_run_startup_animation_and_needle_dance()
                      0, 0);
       delay = gdispImageNext(&startup_anim);
       timer_anim = HAL_GetTick();
+      startup_diag_mark(0x1041U);
       gdispFlush();
       --display_count;
     }
+
+    HAL_Delay(1);
   }
 
+  startup_diag_mark(0x1050U);
   gdispImageClose(&startup_anim);
   gdispClear(GFX_BLACK);
   setAutoClear(true);
   gdispClear(GFX_BLACK);
   gdispFlush();
   gdispFlush();
+  startup_diag_mark(0x10FFU);
 }
 
 static void platform_poll_bulb_inputs()
@@ -297,6 +402,14 @@ static PlatformSample arm_collect_platform_sample()
   sample.ecu_param_wb_index = g_ecu_signal_map.wb_index;
   sample.ecu_param_map_index = g_ecu_signal_map.map_index;
   sample.ecu_param_knock_index = g_ecu_signal_map.knock_index;
+  sample.ecu_param_timing_index = g_ecu_signal_map.timing_index;
+  sample.ecu_param_afr_target_index = g_ecu_signal_map.afr_target_index;
+  sample.ecu_param_fuel_trim_front_low_index = g_ecu_signal_map.fuel_trim_front_low_index;
+  sample.ecu_param_fuel_trim_front_med_index = g_ecu_signal_map.fuel_trim_front_med_index;
+  sample.ecu_param_fuel_trim_front_high_index = g_ecu_signal_map.fuel_trim_front_high_index;
+  sample.ecu_param_fuel_trim_rear_low_index = g_ecu_signal_map.fuel_trim_rear_low_index;
+  sample.ecu_param_fuel_trim_rear_med_index = g_ecu_signal_map.fuel_trim_rear_med_index;
+  sample.ecu_param_fuel_trim_rear_high_index = g_ecu_signal_map.fuel_trim_rear_high_index;
   sample.ecu_flasher = &g_arm_main.ecuGoodFlasher;
   sample.loop_count = g_arm_main.loopCnt;
   sample.loop_period_ms = g_arm_main.loopPeriod;
@@ -306,6 +419,8 @@ static PlatformSample arm_collect_platform_sample()
 
 static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
 {
+  HAL_GPIO_WritePin(PWREN_GPIO_Port, PWREN_Pin, GPIO_PIN_SET);
+
   HAL_PWR_EnableBkUpAccess();
   g_arm_main.cleanPwr = (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) == 0xBEEF);
   HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x0);
@@ -322,15 +437,14 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
   g_arm_main.font20 = gdispOpenFont("DejaVuSans20");
   g_arm_main.fontLCD = gdispOpenFont("lcddot_tr80");
   g_arm_main.fontValue = gdispOpenFont("BITSUMIS84_Numbers");
-  g_arm_main.amber = GFX_AMBER_YEL;
 
   gdispImageOpenMemory(&g_arm_main.battImg, batt);
   gdispImageOpenMemory(&g_arm_main.beamImg, beam);
-  startupInitError |= g_arm_main.ioexp_screen->init(BULB_PULLUP_MASK, BULB_INPUT_MASK);
-  startupInitError |= g_arm_main.ioexp_speedo->init(0x0000, 0x0000);
+  record_startup_error(g_arm_main.ioexp_screen->init(BULB_PULLUP_MASK, BULB_INPUT_MASK), STARTUP_ERR_IOEXP_SCREEN);
+  record_startup_error(g_arm_main.ioexp_speedo->init(0x0000, 0x0000), STARTUP_ERR_IOEXP_SPEEDO);
   g_arm_main.bulbVals = g_arm_main.ioexp_screen->get();
 
-  startupInitError |= BMI088_Init(&imu, &hi2c1);
+  record_startup_error(BMI088_Init(&imu, &hi2c1), STARTUP_ERR_IMU);
   regAddr = BMI_ACC_DATA;
 
   // Initialize microsecond timebase and sensor filters before enabling
@@ -340,13 +454,29 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
     const VehicleConfig &vehicle = get_build_config().vehicle;
     HzSensorKalmanFilter<16>::Config speed_cfg = {};
     speed_cfg.units_per_hz = vehicle.mph_per_hz;
+    speed_cfg.units_bias = 0.0f;
     speed_cfg.clock_hz = 1000000U; // TIM2 capture runs at 1 MHz
-    g_speed.init(speed_cfg, get_us_32);
+    speed_cfg.q_jerk = 5.0f;
+    speed_cfg.meas_var = 1.0f * 1.0f;
+    speed_cfg.gate_sigma = 5.0f;
+    speed_cfg.zero_speed_thresh_units = 5.0f;
+    speed_cfg.zero_periods_without_tick = 3.0f;
+    speed_cfg.max_accel_units_per_s = 60.0f;
+    speed_cfg.max_units = SPEED_MAX_MPH;
+    g_speed.init(speed_cfg, arm_filter_time_us);
 
     HzSensorKalmanFilter<16>::Config tach_cfg = {};
     tach_cfg.units_per_hz = vehicle.rpm_per_hz;
+    tach_cfg.units_bias = 0.0f;
     tach_cfg.clock_hz = 1000000U; // TIM2 capture runs at 1 MHz
-    g_tach.init(tach_cfg, get_us_32);
+    tach_cfg.q_jerk = 10000.0f;
+    tach_cfg.meas_var = 3.0f * 3.0f;
+    tach_cfg.gate_sigma = 5.0f;
+    tach_cfg.zero_speed_thresh_units = 400.0f;
+    tach_cfg.zero_periods_without_tick = 3.0f;
+    tach_cfg.max_accel_units_per_s = 4000.0f;
+    tach_cfg.max_units = TACH_MAX_RPM;
+    g_tach.init(tach_cfg, arm_filter_time_us);
   }
 
   arm_reset_motor_driver();
@@ -355,7 +485,7 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
     if (!g_arm_main.cleanPwr)
     {
       gdispClear(GFX_BLACK);
-      gdispFillString((screenWidth >> 1) - 77, (screenHeight >> 1), "RESET", g_arm_main.fontLCD, g_arm_main.amber, GFX_BLACK);
+      gdispFillString((screenWidth >> 1) - 77, (screenHeight >> 1), "RESET", g_arm_main.fontLCD, GFX_AMBER_YEL, GFX_BLACK);
       gdispFlush();
       step_down = X27_STEPS;
     }
@@ -372,9 +502,7 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
   }
   arm_reset_motor_driver();
 
-  // Initialize BTBuffer before enabling timer/IRQ paths that may push into it.
-  IRQn_Type bt_irqs[] = {TIM1_UP_TIM16_IRQn, TIM1_TRG_COM_TIM17_IRQn, USART1_IRQn};
-  static ArmBTBufferBackend bt_backend(bt_irqs, (int)(sizeof(bt_irqs) / sizeof(bt_irqs[0])));
+  static ArmBTBufferBackend bt_backend(nullptr, 0);
   BTBuffer::CreateInstance(&bt_backend);
 
   x12[0] = g_arm_main.tachX12;
@@ -384,31 +512,24 @@ static void arm_bringup_hardware(SharedRenderCtx &arm_render_ctx)
   g_arm_main.speedX12->reset();
   g_arm_main.odoX12->reset();
   needles_ready = true;
-  startupInitError |= HAL_TIM_Base_Start_IT(&htim17);
+  record_startup_error(HAL_TIM_Base_Start_IT(&htim17), STARTUP_ERR_TIM17);
   arm_run_startup_animation_and_needle_dance();
   measure_freq = true;
 
-  startupInitError |= HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
-  startupInitError |= HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
-  startupInitError |= HAL_TIM_Base_Start_IT(&htim16);
+  record_startup_error(HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3), STARTUP_ERR_TIM2_CH3);
+  record_startup_error(HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4), STARTUP_ERR_TIM2_CH4);
+  record_startup_error(HAL_TIM_Base_Start_IT(&htim16), STARTUP_ERR_TIM16);
 
-  arm_render_ctx = {
-      .amber_ptr = (color_t *)&g_arm_main.amber,
-      .font10 = g_arm_main.font10,
-      .font20 = g_arm_main.font20,
-      .fontLCD = g_arm_main.fontLCD,
-      .fontValue = g_arm_main.fontValue,
-      .screen_width = (coord_t)screenWidth,
-      .screen_height = (coord_t)screenHeight,
-      .batt_img = &g_arm_main.battImg,
-      .beam_img = &g_arm_main.beamImg,
-      .gimball = &g_arm_main.gimball,
-      .line_plot_tps = &g_arm_main.linePlotTPS,
-      .line_plot_tps_data = g_arm_main.tpsPlotData,
-      .line_plot_knock = &g_arm_main.linePlotKnock,
-      .line_plot_knock_data = g_arm_main.knockPlotData,
-      .render_cycle_complete = false,
-  };
+  arm_render_ctx = {};
+  arm_render_ctx.font10 = g_arm_main.font10;
+  arm_render_ctx.font20 = g_arm_main.font20;
+  arm_render_ctx.fontLCD = g_arm_main.fontLCD;
+  arm_render_ctx.fontValue = g_arm_main.fontValue;
+  arm_render_ctx.screen_width = (coord_t)screenWidth;
+  arm_render_ctx.screen_height = (coord_t)screenHeight;
+  arm_render_ctx.batt_img = &g_arm_main.battImg;
+  arm_render_ctx.beam_img = &g_arm_main.beamImg;
+  arm_render_ctx.render_cycle_complete = false;
 }
 
 static void platform_process_ble_and_lowrate()
@@ -499,6 +620,15 @@ static void platform_update_loop_diag()
   g_arm_main.loopCnt++;
 }
 
+void board_reset_loop_diag()
+{
+  const uint32_t now = HAL_GetTick();
+  g_arm_main.timerLoop = now;
+  g_arm_main.loopPeriod = 0;
+  g_arm_main.worstLoopPeriod = 0;
+  g_arm_main.loopCnt = 0;
+}
+
 static void arm_publish_current_data()
 {
   if (g_board_data == nullptr)
@@ -513,6 +643,7 @@ static void arm_publish_current_data()
   g_board_data->loop_count.publish(sample.loop_count, now);
   g_board_data->loop_period_ms.publish(sample.loop_period_ms, now);
   g_board_data->worst_loop_period_ms.publish(sample.worst_loop_period_ms, now);
+  g_board_data->startup_init_error_code.publish(startupInitError, now);
   g_board_data->acceleration_mps2.publish(g_acceleration_mps2, now);
   g_board_data->startup_init_error.publish(sample.startup_init_error, now);
   g_board_data->lamp_on.publish(sample.warn_lamp_on, now);
@@ -524,6 +655,14 @@ static void arm_publish_current_data()
   g_board_data->ecu_param_wb_index = sample.ecu_param_wb_index;
   g_board_data->ecu_param_map_index = sample.ecu_param_map_index;
   g_board_data->ecu_param_knock_index = sample.ecu_param_knock_index;
+  g_board_data->ecu_param_timing_index = sample.ecu_param_timing_index;
+  g_board_data->ecu_param_afr_target_index = sample.ecu_param_afr_target_index;
+  g_board_data->ecu_param_fuel_trim_front_low_index = sample.ecu_param_fuel_trim_front_low_index;
+  g_board_data->ecu_param_fuel_trim_front_med_index = sample.ecu_param_fuel_trim_front_med_index;
+  g_board_data->ecu_param_fuel_trim_front_high_index = sample.ecu_param_fuel_trim_front_high_index;
+  g_board_data->ecu_param_fuel_trim_rear_low_index = sample.ecu_param_fuel_trim_rear_low_index;
+  g_board_data->ecu_param_fuel_trim_rear_med_index = sample.ecu_param_fuel_trim_rear_med_index;
+  g_board_data->ecu_param_fuel_trim_rear_high_index = sample.ecu_param_fuel_trim_rear_high_index;
   g_board_data->ecu_flasher = sample.ecu_flasher;
 
   if (g_arm_main.warn_batt != nullptr)
@@ -535,7 +674,7 @@ static void arm_publish_current_data()
   g_board_data->high_beam.publish(sample.warn_high_beam, now);
 }
 
-void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
+void board_init(BoardSharedData &data, SharedRenderCtx &ctx)
 {
   g_board_data = &data;
 
@@ -590,8 +729,12 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
   g_arm_main.audio_started = false;
   g_arm_main.toggle_mode = 0;
   g_arm_main.toggleTime_last = now;
-  draw_step = 0;
-  timer_draw_ms = now;
+  g_arm_main.last_rpm = 0.0f;
+  g_arm_main.last_rpm_time = 0;
+  g_arm_main.rpm_rate_per_ms = 0.0f;
+  g_arm_main.last_speed = 0.0f;
+  g_arm_main.last_speed_time = 0;
+  g_arm_main.speed_rate_per_ms = 0.0f;
   arm_publish_current_data();
 }
 
@@ -639,9 +782,21 @@ void board_update()
     auto spd = g_speed.retrieveValue();
     rpm = tach.stale ? 0.0f : tach.units;
     speed = spd.stale ? 0.0f : spd.units;
+    const float extrapolated_rpm = extrapolate_needle_value(rpm,
+                                                            tach.stale,
+                                                            g_arm_main.last_rpm,
+                                                            g_arm_main.last_rpm_time,
+                                                            g_arm_main.rpm_rate_per_ms,
+                                                            TACH_MAX_RPM);
+    const float extrapolated_speed = extrapolate_needle_value(speed,
+                                                              spd.stale,
+                                                              g_arm_main.last_speed,
+                                                              g_arm_main.last_speed_time,
+                                                              g_arm_main.speed_rate_per_ms,
+                                                              SPEED_MAX_MPH);
+    g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(extrapolated_rpm));
+    g_arm_main.speedX12->setPosition(get_x12_ticks_speed(extrapolated_speed));
   }
-  g_arm_main.tachX12->setPosition(get_x12_ticks_rpm(rpm));
-  g_arm_main.speedX12->setPosition(get_x12_ticks_speed(speed));
 #endif
   g_arm_main.odoX12->setPosition(odo_ticks);
 

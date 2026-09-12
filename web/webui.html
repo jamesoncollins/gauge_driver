@@ -23,7 +23,7 @@
     .card{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}
     label{display:block;font-size:12px;color:var(--muted);margin:4px 0}
-    input[type="text"], textarea{width:100%;padding:10px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);border-radius:10px}
+    input[type="text"], textarea, select{width:100%;padding:10px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);border-radius:10px}
     button{padding:9px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg-3);color:var(--fg);cursor:pointer;transition:.15s ease}
     button:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.35)}
     button.primary{background:var(--acc);border-color:transparent;color:#041224}
@@ -175,20 +175,33 @@
     <details class="section" open>
       <summary><span class="chev">&gt;</span><span class="summary-title">Commands</span><span class="spacer"></span><span class="pill">Write</span></summary>
       <div class="panel">
+                <div class="row" style="margin-bottom:10px">
+          <span class="pill">V1 framed commands</span>
+          <span class="pill">20-byte writes</span>
+        </div>
         <div class="row" style="margin-bottom:10px">
-      <label style="min-width:160px">Command encoding</label>
-      <select id="cmdEncoding">
-        <option value="ascii">ASCII (U/D/L/R/E/B)</option>
-        <option value="enum" selected>Enum (0,1,2,3,4,255)</option>
-      </select>
-    </div>
-        <div class="row" style="margin-bottom:10px">
-      <button data-cmd="LEFT">&lt; Left</button>
+          <button data-cmd="LEFT">&lt; Left</button>
           <button data-cmd="RIGHT">Right &gt;</button>
           <button data-cmd="UP">Up</button>
           <button data-cmd="DOWN">Down</button>
           <button data-cmd="ENTER">Enter</button>
-          <button data-cmd="BACK">Back</button>
+        </div>
+        <div class="row" style="margin-bottom:10px">
+          <button id="btnDiagOn">Diag Square On</button>
+          <button id="btnDiagOff">Diag Square Off</button>
+          <button id="btnDiagReset">Reset Diag Stats</button>
+          <button id="btnDiagPing">Ping</button>
+        </div>
+        <div class="row" style="margin-bottom:10px">
+          <div style="min-width:220px;flex:1">
+            <label for="displayMode">Display Mode</label>
+            <select id="displayMode">
+              <option value="3">Cruise</option>
+              <option value="2">WOT</option>
+              <option value="4">Post-WOT Analysis</option>
+            </select>
+          </div>
+          <button id="btnSetDisplayMode">Set Display</button>
         </div>
         <div class="row">
           <input id="rawHex" type="text" placeholder="raw hex, e.g. A5 01 02 03"/>
@@ -218,12 +231,26 @@
       <summary><span class="chev">&gt;</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot + Upload</span></summary>
       <div class="panel">
         <div class="card" style="padding:12px;display:grid;gap:10px">
+          <div class="grid">
+            <div>
+              <label for="firmwareRef">Published firmware</label>
+              <select id="firmwareRef"><option value="">No published firmware loaded</option></select>
+            </div>
+            <div>
+              <label for="firmwarePreset">Release variant</label>
+              <select id="firmwarePreset"><option value="">Select a branch or tag</option></select>
+            </div>
+          </div>
+          <div class="row" style="align-items:center;gap:10px;flex-wrap:wrap">
+            <button id="btnFirmwareRefresh" class="ghost">Refresh Published List</button>
+            <span id="firmwareInfo" class="pill" style="background:var(--pill);border-color:var(--line)">Local file fallback available</span>
+          </div>
           <div class="row" style="align-items:center;gap:10px;flex-wrap:wrap">
             <input id="otaFile" type="file" accept=".bin" style="color:var(--muted)"/>
             <button id="btnOtaAuto" class="primary">Upload (reboot + OTA + reconnect)</button>
             <span id="otaStatusTxt" class="pill" style="background:var(--pill);border-color:var(--line)">Idle</span>
           </div>
-          <div style="font-size:12px;color:var(--muted)">Select a .bin and click upload. We will reboot into the loader, upload, and reconnect to the app.</div>
+          <div style="font-size:12px;color:var(--muted)">Choose published firmware or select a local .bin. Local files take priority.</div>
         </div>
       </div>
     </details>
@@ -248,7 +275,7 @@
 <script>
 (function(){
   'use strict';
-  var UI_VERSION = 'v0.6.6';
+  var UI_VERSION = 'v0.6.8';
 
   // ===== Defaults & Known Services =====
   var Defaults = {
@@ -264,15 +291,58 @@
     '00000a00-cc7a-482a-984a-7f2ed5b3e58f'  // RebootReqService (OTA reboot)
   ];
 
-  // ===== Command Encoding =====
-  var CommandMapEnum  = { LEFT:[3], RIGHT:[4], UP:[1], DOWN:[2], ENTER:[0], BACK:[255] };
-  var CommandMapASCII = { LEFT:[0x4C], RIGHT:[0x52], UP:[0x55], DOWN:[0x44], ENTER:[0x45], BACK:[0x42] };
-  function getCmdMap(){ var sel=document.querySelector('#cmdEncoding'); var mode=sel?sel.value:'ascii'; return mode==='enum'?CommandMapEnum:CommandMapASCII; }
-
+    // ===== Command Protocol V1 =====
+  var CMD_MAGIC = 0x47;
+  var CMD_VERSION = 0x01;
+  var CMD_ACK_REQUESTED = 0x01;
+  var CMD_FRAME_LEN = 20;
+  var cmdSeq = 0;
+  var CommandOpcode = {
+    BUTTON: 0x01,
+    SET_MODE: 0x02,
+    DIAG_PING: 0x20,
+    DIAG_RESET_STATS: 0x21,
+    DIAG_SQUARE: 0x22
+  };
+  var ButtonId = { ENTER:0, UP:1, DOWN:2, LEFT:3, RIGHT:4 };
+  var CommandStatus = {
+    0x00:'OK', 0x01:'BAD_FRAME', 0x02:'BAD_CRC', 0x03:'UNSUPPORTED_VERSION',
+    0x04:'UNKNOWN_OPCODE', 0x05:'BAD_LENGTH', 0x06:'BAD_VALUE', 0x07:'BUSY',
+    0x08:'DENIED', 0x09:'INTERNAL_ERROR'
+  };
+  function commandName(opcode){
+    for(var k in CommandOpcode){ if(CommandOpcode[k]===opcode) return k; }
+    return '0x'+opcode.toString(16);
+  }
+  function crc8(u8, len){
+    var crc=0;
+    for(var i=0;i<len;i++){
+      crc ^= u8[i];
+      for(var bit=0;bit<8;bit++) crc = (crc & 0x80) ? (((crc << 1) ^ 0x07) & 0xFF) : ((crc << 1) & 0xFF);
+    }
+    return crc;
+  }
+  function buildCommandFrame(opcode, payload, ack){
+    payload = payload || [];
+    if(payload.length > (CMD_FRAME_LEN - 7)) throw new Error('payload too large');
+    var frame = new Uint8Array(CMD_FRAME_LEN);
+    var seq = cmdSeq++ & 0xFF;
+    var frameLen = 6 + payload.length + 1;
+    frame[0] = CMD_MAGIC;
+    frame[1] = CMD_VERSION;
+    frame[2] = seq;
+    frame[3] = opcode;
+    frame[4] = ack === false ? 0 : CMD_ACK_REQUESTED;
+    frame[5] = payload.length;
+    for(var i=0;i<payload.length;i++) frame[6+i] = payload[i] & 0xFF;
+    frame[frameLen - 1] = crc8(frame, frameLen - 1);
+    return {frame:frame, seq:seq, frameLen:frameLen};
+  }
   // ===== OTA magic =====
   // OTA reboot payload: [reboot_flag, start_sector_idx, num_sectors] per CubeWB BLE_Ota app_conf
   // 0x01 = reboot into BLE OTA app, sector index defaults to 7, num_sectors left 0
   var OTA_MAGIC = [0x01, 0x07, 0x00];
+  var FIRMWARE_MANIFEST_URL = 'firmware/manifest.json';
   var OTA_UPLOAD_DEFAULTS = {
     // STM32WB OTA loader service/characteristics
     svc: '0000fe20-cc7a-482a-984a-7f2ed5b3e58f',
@@ -478,6 +548,18 @@
     var id1=dv.getUint16(0,true); var id2=dv.getUint16(2,true); if(id2===0xFFFF) id2=-1; var tick=dv.getUint32(4,true);
     var words=[]; for(var off=8; off+4<=payload.byteLength; off+=4){ words.push(dv.getUint32(off,true)); }
     var obj={id1:id1,id2:id2,tick:tick,wordsCount:words.length};
+    if(id1===0x434D && payload.byteLength>=11){
+      var detailLen=dv.getUint8(10);
+      var detailEnd=Math.min(payload.byteLength, 11+detailLen);
+      obj.packet='command_ack';
+      obj.seq=id2;
+      obj.status=dv.getUint8(8);
+      obj.status_name=CommandStatus[obj.status] || ('0x'+obj.status.toString(16));
+      obj.opcode=dv.getUint8(9);
+      obj.command=commandName(obj.opcode);
+      obj.detail_hex=hex(payload.slice(11, detailEnd));
+      return obj;
+    }
     if(id1===1 && id2===1){ decodeDashboardTlv(dv,obj); }
     else if(id1===0 && id2===0 && words.length>=6){ obj.packet='dashboard_legacy'; obj.loopCnt=words[0]; obj.loopPeriod_ms=words[1]; obj.worstLoop_ms=words[2]; obj.speed=words[4]; obj.rpm=words[5]; }
     else if(id1===1 && id2===-1 && words.length>=1){ obj.ecu_req=words[0]; }
@@ -566,16 +648,130 @@
     }
   }
 
+  function formatBytes(size){
+    if(typeof size!=='number' || !isFinite(size)) return '--';
+    if(size<1024) return size+' B';
+    if(size<1024*1024) return (size/1024).toFixed(1)+' KiB';
+    return (size/(1024*1024)).toFixed(2)+' MiB';
+  }
+
+  function firmwareRefKey(entry){ return entry.ref_type+':'+entry.ref_name; }
+
+  function firmwareEntries(){
+    var manifest=state.firmware && state.firmware.manifest;
+    return manifest && Array.isArray(manifest.firmware) ? manifest.firmware : [];
+  }
+
+  function selectedFirmwareEntry(){
+    var refEl=$('#firmwareRef'); var presetEl=$('#firmwarePreset');
+    if(!refEl || !presetEl || !refEl.value || !presetEl.value) return null;
+    var entries=firmwareEntries();
+    for(var i=0;i<entries.length;i++){
+      var entry=entries[i];
+      if(firmwareRefKey(entry)===refEl.value && entry.preset===presetEl.value) return entry;
+    }
+    return null;
+  }
+
+  function updateFirmwareInfo(){
+    var info=$('#firmwareInfo'); if(!info) return;
+    var entry=selectedFirmwareEntry();
+    if(!entry){ info.textContent='Local file fallback available'; return; }
+    var label=(entry.ref_type==='tag'?'tag ':'branch ')+entry.ref_name+' / '+entry.display;
+    info.textContent=label+' / '+(entry.commit_short_sha||'unknown')+' / '+formatBytes(entry.size);
+  }
+
+  function populateFirmwarePresets(){
+    var presetEl=$('#firmwarePreset'); if(!presetEl) return;
+    var refEl=$('#firmwareRef');
+    var selectedRef=refEl ? refEl.value : '';
+    var previous=presetEl.value;
+    presetEl.innerHTML='';
+    var entries=firmwareEntries().filter(function(entry){ return selectedRef && firmwareRefKey(entry)===selectedRef; });
+    if(!entries.length){
+      var opt=document.createElement('option'); opt.value=''; opt.textContent='Select a branch or tag'; presetEl.appendChild(opt); updateFirmwareInfo(); return;
+    }
+    entries.sort(function(a,b){ return String(a.display||a.preset).localeCompare(String(b.display||b.preset)); });
+    entries.forEach(function(entry){
+      var opt=document.createElement('option');
+      opt.value=entry.preset;
+      opt.textContent=(entry.display||entry.preset)+' ('+entry.preset+')';
+      presetEl.appendChild(opt);
+    });
+    if(previous){ presetEl.value=previous; }
+    if(!presetEl.value && presetEl.options.length){ presetEl.selectedIndex=0; }
+    updateFirmwareInfo();
+  }
+
+  function populateFirmwareRefs(){
+    var refEl=$('#firmwareRef'); if(!refEl) return;
+    var entries=firmwareEntries();
+    var previous=refEl.value;
+    refEl.innerHTML='';
+    if(!entries.length){
+      var empty=document.createElement('option'); empty.value=''; empty.textContent='No published firmware found'; refEl.appendChild(empty); populateFirmwarePresets(); return;
+    }
+    var seen={};
+    entries.forEach(function(entry){ seen[firmwareRefKey(entry)]=entry; });
+    Object.keys(seen).sort(function(a,b){
+      var ea=seen[a], eb=seen[b];
+      if(ea.ref_type!==eb.ref_type) return ea.ref_type==='branch' ? -1 : 1;
+      if(ea.ref_name==='main') return -1;
+      if(eb.ref_name==='main') return 1;
+      if(ea.ref_name==='master') return -1;
+      if(eb.ref_name==='master') return 1;
+      return ea.ref_name.localeCompare(eb.ref_name);
+    }).forEach(function(key){
+      var entry=seen[key];
+      var opt=document.createElement('option');
+      opt.value=key;
+      opt.textContent=(entry.ref_type==='tag'?'tag ':'branch ')+entry.ref_name;
+      refEl.appendChild(opt);
+    });
+    if(previous){ refEl.value=previous; }
+    if(!refEl.value && refEl.options.length){ refEl.selectedIndex=0; }
+    populateFirmwarePresets();
+  }
+
+  async function loadFirmwareManifest(){
+    var res=await fetch(FIRMWARE_MANIFEST_URL,{cache:'no-store'});
+    if(!res.ok) throw new Error('manifest HTTP '+res.status);
+    state.firmware.manifest=await res.json();
+    populateFirmwareRefs();
+    log('Published firmware loaded: '+firmwareEntries().length+' build(s)');
+  }
+
+  async function readFirmwareSource(){
+    if(state.otaUpload.source) return state.otaUpload.source;
+    var fileEl=$('#otaFile');
+    if(fileEl && fileEl.files && fileEl.files.length){
+      var file=fileEl.files[0];
+      setOtaStatus('Reading '+file.name+'...');
+      return {name:file.name, size:file.size||0, bytes:new Uint8Array(await file.arrayBuffer()), source:'local'};
+    }
+    var entry=selectedFirmwareEntry();
+    if(!entry || !entry.url) throw new Error('select a local .bin or published firmware build');
+    setOtaStatus('Fetching '+entry.ref_name+' / '+entry.preset+'...');
+    var res=await fetch(entry.url,{cache:'no-store'});
+    if(!res.ok) throw new Error('firmware HTTP '+res.status);
+    var bytes=new Uint8Array(await res.arrayBuffer());
+    return {name:entry.ref_name+' / '+entry.preset, size:bytes.length, bytes:bytes, source:'published', entry:entry};
+  }
+
+  function setFirmwareControlsDisabled(disabled){
+    ['#otaFile','#btnFirmwareRefresh','#firmwareRef','#firmwarePreset'].forEach(function(sel){ var el=$(sel); if(el) el.disabled=disabled; });
+  }
+
   async function otaUpload(){
     var cfg=getOtaCfg();
     if(!state.device || !state.server){ return log('Connect to device in OTA mode first'); }
     if(!state.ota.base || !state.ota.data || !state.ota.conf){ await discoverOta(); }
     if(!state.ota.base || !state.ota.data || !state.ota.conf) return log('OTA characteristics not found');
-    var fileEl=$('#otaFile'); if(!fileEl || !fileEl.files || !fileEl.files.length) return log('Select a firmware file first');
-    var file=fileEl.files[0];
-    setOtaStatus('Reading '+file.name+'...');
-    var buf=await file.arrayBuffer();
-    var bin=new Uint8Array(buf);
+    var firmware=await readFirmwareSource();
+    state.otaUpload.source=null;
+    var bin=firmware.bytes;
+    if(!bin || !bin.length) throw new Error('firmware is empty');
+    setOtaStatus('Using '+firmware.name+' ('+formatBytes(bin.length)+')');
     // Per ST AN5247: base write action+address, data in 20-byte WWR chunks
     var chunkSize=20;
     var baseAddr=parseInt(cfg.baseAddr,16); if(isNaN(baseAddr)) baseAddr=0x0007000;
@@ -587,9 +783,9 @@
     var endAddr = baseAddr + numSectors*pageSize;
     setOtaStatus('Computed sectors: '+numSectors+' (bin '+bin.length+' bytes), start sector '+startSector+', end 0x'+endAddr.toString(16));
     state.otaUpload.cancel=false;
-    var autoBtn=$('#btnOtaAuto'); var fileEl=$('#otaFile');
+    var autoBtn=$('#btnOtaAuto');
     if(autoBtn) autoBtn.disabled=true;
-    if(fileEl) fileEl.disabled=true;
+    setFirmwareControlsDisabled(true);
     try{
       // write base address command: [action, addr0, addr1, addr2] action 0x02 = START user application file upload
       var baseU8=new Uint8Array(4);
@@ -609,10 +805,14 @@
         if(cfg.chunkDelayMs>0) await new Promise(function(res){ setTimeout(res, cfg.chunkDelayMs); });
         if((off/chunkSize)%25===0) setOtaStatus('Sending... '+Math.min(bin.length, off+chunkSize)+' / '+bin.length);
       }
-      // upload finished command: [0x07, addr0, addr1, addr2] per AN5247
-      var fin=new Uint8Array([0x07, baseAddr & 0xFF, (baseAddr>>8)&0xFF, (baseAddr>>16)&0xFF]);
+      // Loader expects finish as [0x07, start_sector, num_sectors, 0x00].
+      // Send twice; older working UI did this and some loader builds miss the first write.
+      var fin=new Uint8Array([0x07, startSector & 0xFF, numSectors & 0xFF, 0x00]);
       await writeChar(state.ota.base, fin, true);
-      setOtaStatus('Finish command sent; waiting for conf/reboot');
+      setOtaStatus('Finish command sent (1)');
+      await new Promise(function(res){ setTimeout(res, 50); });
+      await writeChar(state.ota.base, fin, true);
+      setOtaStatus('Finish command sent (2); waiting for conf/reboot');
       // wait for conf indication or timeout
       var waited=false;
       var timeoutId=null;
@@ -635,7 +835,7 @@
       setOtaStatus('Error: '+err.message);
     }finally{
       if(autoBtn) autoBtn.disabled=false;
-      if(fileEl) fileEl.disabled=false;
+      setFirmwareControlsDisabled(false);
     }
   }
 
@@ -647,9 +847,10 @@
     reasm:new Reassembler(),
     chars:{cmd:null,buf:null,ota:null},
     ota:{svc:null,base:null,data:null,conf:null,evt:null},
+    firmware:{manifest:null},
     logging:false,
     logRows:[],
-    otaUpload:{file:null,cancel:false,confResolve:null}
+    otaUpload:{file:null,source:null,cancel:false,confResolve:null}
   };
 
   function findCharacteristic(server, charUuid, svcUuid){
@@ -743,18 +944,41 @@
     var tbody=$('#tblBody'); if(!tbody) return; tbody.prepend(tr); while(tbody.rows.length>300) tbody.deleteRow(-1);
   }
 
-  async function sendCommand(kind){
+    async function writeCommandFrame(opcode, payload, label, ack){
     if(!state.chars.cmd) return log('No command characteristic');
-    var map=getCmdMap(); var bytes=map[kind]; if(!bytes) return log('Unknown command '+kind);
-    var u8=new Uint8Array(bytes); var props=state.chars.cmd && state.chars.cmd.properties; var mode=(document.querySelector('#cmdEncoding')||{value:'ascii'}).value;
     try{
-      if(props && props.writeWithoutResponse){ await state.chars.cmd.writeValueWithoutResponse(u8); return log('Sent '+kind+' ('+mode+') via WWR: '+bytes.map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')); }
-      if(props && props.write){ await state.chars.cmd.writeValue(u8); return log('Sent '+kind+' ('+mode+') via WRITE: '+bytes.map(function(b){var s=b.toString(16);return (s.length<2?'0':'')+s;}).join(' ')); }
-      try{ await state.chars.cmd.writeValueWithoutResponse(u8); return log('Sent '+kind+' ('+mode+') via WWR (fallback)'); }
-      catch(_e2){ await state.chars.cmd.writeValue(u8); return log('Sent '+kind+' ('+mode+') via WRITE (fallback)'); }
-    }catch(err){ log('Send error ('+kind+'): '+err.message); }
+      var built=buildCommandFrame(opcode, payload || [], ack !== false);
+      await writeChar(state.chars.cmd, built.frame, false);
+      log('Sent '+label+' seq='+built.seq+' frame='+hex(built.frame));
+    }catch(err){
+      log('Send error ('+label+'): '+err.message);
+    }
   }
 
+  async function sendCommand(kind){
+    var button = ButtonId[kind];
+    if(button === undefined) return log('Unknown button command '+kind);
+    await writeCommandFrame(CommandOpcode.BUTTON, [button], 'BUTTON '+kind, true);
+  }
+
+  async function sendDisplayMode(){
+    var el=$('#displayMode');
+    var mode=el ? parseInt(el.value, 10) : NaN;
+    if(!isFinite(mode) || [2,3,4].indexOf(mode) < 0) return log('Invalid display mode');
+    await writeCommandFrame(CommandOpcode.SET_MODE, [mode & 0xFF], 'SET_MODE '+mode, true);
+  }
+
+  async function sendDiagSquare(enabled){
+    await writeCommandFrame(CommandOpcode.DIAG_SQUARE, [enabled ? 1 : 0], 'DIAG_SQUARE '+(enabled?'on':'off'), true);
+  }
+
+  async function sendDiagReset(){
+    await writeCommandFrame(CommandOpcode.DIAG_RESET_STATS, [], 'DIAG_RESET_STATS', true);
+  }
+
+  async function sendDiagPing(){
+    await writeCommandFrame(CommandOpcode.DIAG_PING, [0x70,0x69,0x6E,0x67], 'DIAG_PING', true);
+  }
   async function sendRaw(){
     if(!state.chars.cmd) return log('No command characteristic');
     var text=$('#rawHex') && $('#rawHex').value ? $('#rawHex').value.trim() : ''; if(!text) return;
@@ -806,20 +1030,21 @@
   }
 
   async function autoOtaFlow(){
-    var autoBtn=$('#btnOtaAuto'); var fileEl=$('#otaFile');
+    var autoBtn=$('#btnOtaAuto');
     try{
       if(!state.device || !state.server || !state.server.connected){ return log('Auto OTA: connect to the app device first'); }
-      if(!fileEl || !fileEl.files || !fileEl.files.length) return log('Auto OTA: select a firmware file first');
+      var firmware=await readFirmwareSource();
+      state.otaUpload.source=firmware;
       var appPrefix = ($('#namePrefix') && $('#namePrefix').value) ? $('#namePrefix').value.trim() : Defaults.namePrefix;
       var otaCfg = getOtaCfg();
       var loaderPrefix = otaCfg.loaderPrefix;
       if(autoBtn) autoBtn.disabled=true;
-      if(fileEl) fileEl.disabled=true;
+      setFirmwareControlsDisabled(true);
       showOtaModal('Rebooting into OTA loader...');
 
       log('Auto OTA: requesting reboot into loader');
-      // compute sectors from selected file for erase
-      var binSize = fileEl.files[0].size || 0;
+      // compute sectors from selected firmware for erase
+      var binSize = firmware.bytes.length || 0;
       var pageSize=4096;
       var numSectors = Math.ceil(binSize / pageSize);
       var startSector = Math.floor(0x0007000 / pageSize); // fixed base offset we use
@@ -862,8 +1087,9 @@
       setOtaStatus('Auto OTA error: '+err.message);
       hideOtaModal();
     }finally{
+      state.otaUpload.source=null;
       if(autoBtn) autoBtn.disabled=false;
-      if(fileEl) fileEl.disabled=false;
+      setFirmwareControlsDisabled(false);
     }
   }
 
@@ -881,11 +1107,19 @@
     ok = wire('#btnDisconnect',disconnect) && ok;
     var cmdBtns = document.querySelectorAll('[data-cmd]');
     for(var i=0;i<cmdBtns.length;i++){ (function(btn){ btn.addEventListener('click', function(){ sendCommand(btn.getAttribute('data-cmd')); }); })(cmdBtns[i]); }
+    ok = wire('#btnDiagOn', function(){ sendDiagSquare(true); }) && ok;
+    ok = wire('#btnDiagOff', function(){ sendDiagSquare(false); }) && ok;
+    ok = wire('#btnDiagReset', sendDiagReset) && ok;
+    ok = wire('#btnDiagPing', sendDiagPing) && ok;
+    ok = wire('#btnSetDisplayMode', sendDisplayMode) && ok;
     ok = wire('#btnSendRaw',sendRaw) && ok;
     ok = wire('#btnStartLog',startLog) && ok;
     ok = wire('#btnStopLog',stopLog) && ok;
     ok = wire('#btnDownload',download) && ok;
     ok = wire('#btnOtaAuto', function(){ autoOtaFlow(); }) && ok;
+    ok = wire('#btnFirmwareRefresh', function(){ loadFirmwareManifest().catch(function(err){ log('Published firmware unavailable: '+err.message); }); }) && ok;
+    var firmwareRef=$('#firmwareRef'); if(firmwareRef) firmwareRef.addEventListener('change', populateFirmwarePresets);
+    var firmwarePreset=$('#firmwarePreset'); if(firmwarePreset) firmwarePreset.addEventListener('change', updateFirmwareInfo);
     ok = wire('#btnSaveCfg',saveCfg) && ok;
     ok = wire('#btnLoadCfg',loadCfg) && ok;
     ok = wire('#btnClearCfg',clearCfg) && ok;
@@ -898,6 +1132,7 @@
     applyDefaults();
     wireHandlers();
     setupAccordion();
+    loadFirmwareManifest().catch(function(err){ log('Published firmware unavailable: '+err.message); });
     if(!('bluetooth' in navigator)) log('Web Bluetooth not detected. Try Chrome/Edge desktop or Chrome on Android.');
     log('UI loaded');
     log('Defaults in use: CMD='+(Defaults.CMD_CHAR_UUID||'-')+' BUF='+(Defaults.BTBUF_CHAR_UUID||'-')+' OTA='+(Defaults.OTA_CHAR_UUID||'-'));

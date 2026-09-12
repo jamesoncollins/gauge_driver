@@ -29,7 +29,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-extern void handleButton(uint8_t button_char);
+extern void handleBleCommand(const uint8_t *data, uint8_t len);
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -104,7 +104,7 @@ void Custom_STM_App_Notification(Custom_STM_App_Notification_evt_t *pNotificatio
     /* UserButtonService */
     case CUSTOM_STM_BUTTONPRESS_WRITE_EVT:
       /* USER CODE BEGIN CUSTOM_STM_BUTTONPRESS_WRITE_EVT */
-      handleButton(pNotification->DataTransfered.pPayload[0]);
+      handleBleCommand(pNotification->DataTransfered.pPayload, pNotification->DataTransfered.Length);
       /* USER CODE END CUSTOM_STM_BUTTONPRESS_WRITE_EVT */
       break;
 
@@ -130,8 +130,21 @@ void Custom_STM_App_Notification(Custom_STM_App_Notification_evt_t *pNotificatio
     /* RebootReqService */
     case CUSTOM_STM_BM_REQ_CHAR_WRITE_EVT:
       /* USER CODE BEGIN CUSTOM_STM_BM_REQ_CHAR_WRITE_EVT */
-      *(uint32_t*)SRAM1_BASE = *(uint32_t*)pNotification->DataTransfered.pPayload;
-      NVIC_SystemReset();
+      const uint8_t *payload = pNotification->DataTransfered.pPayload;
+      uint8_t length = pNotification->DataTransfered.Length;
+      uint32_t boot_request = 0;
+
+      if (length >= 3U)
+      {
+        boot_request = ((uint32_t)payload[0]) |
+                       ((uint32_t)payload[1] << 8) |
+                       ((uint32_t)payload[2] << 16);
+        *(volatile uint32_t*)SRAM1_BASE = boot_request;
+        __DSB();
+        __ISB();
+        NVIC_SystemReset();
+        while (1) {}
+      }
       /* USER CODE END CUSTOM_STM_BM_REQ_CHAR_WRITE_EVT */
       break;
 

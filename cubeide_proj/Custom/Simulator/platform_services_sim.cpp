@@ -35,13 +35,20 @@ struct PlatformSample
   int ecu_param_wb_index;
   int ecu_param_map_index;
   int ecu_param_knock_index;
+  int ecu_param_timing_index = 0;
+  int ecu_param_afr_target_index = 0;
+  int ecu_param_fuel_trim_front_low_index;
+  int ecu_param_fuel_trim_front_med_index;
+  int ecu_param_fuel_trim_front_high_index;
+  int ecu_param_fuel_trim_rear_low_index;
+  int ecu_param_fuel_trim_rear_med_index;
+  int ecu_param_fuel_trim_rear_high_index;
   flasher_t *ecu_flasher;
   button_e btn;
 };
 
 struct HostPlatformCtx
 {
-  color_t amber;
   font_t font20;
   font_t font10;
   font_t fontLCD;
@@ -49,14 +56,8 @@ struct HostPlatformCtx
   coord_t cx;
   coord_t cy;
   uint32_t t0_ms;
-  uint32_t timer_draw_ms;
   gImage batt_img;
   gImage beam_img;
-  Gimball_t gimball;
-  LinePlot_t line_plot_tps;
-  LinePlot_t line_plot_knock;
-  int tps_plot_data[20];
-  int knock_plot_data[20];
 };
 
 static HostPlatformCtx g_host_ctx;
@@ -174,7 +175,15 @@ static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
   out.wideband_afr = 14.7f;
   out.map_psi = -8.5f;
   out.knock_count = 0.0f;
+  out.timing_deg = 14.0f;
+  out.afr_target = 14.7f;
   out.battery_v = 13.8f + 0.15f * std::sinf(t * 0.37f);
+  out.fuel_trim_front_low_pct = 100.0f + 3.0f * std::sinf(t * 0.31f) - 0.8f;
+  out.fuel_trim_front_med_pct = 100.0f + 3.5f * std::sinf(t * 0.23f + 1.2f) + 0.8f;
+  out.fuel_trim_front_high_pct = 100.0f + 4.0f * std::sinf(t * 0.19f + 2.4f);
+  out.fuel_trim_rear_low_pct = 100.0f + 3.0f * std::sinf(t * 0.29f + 2.1f) + 0.5f;
+  out.fuel_trim_rear_med_pct = 100.0f + 3.5f * std::sinf(t * 0.21f + 0.4f) - 0.8f;
+  out.fuel_trim_rear_high_pct = 100.0f + 4.0f * std::sinf(t * 0.17f + 1.6f) + 0.6f;
   out.acceleration_mps2 = 0.0f;
   out.gear = 0;
 
@@ -209,6 +218,8 @@ static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
       const float spool = sim_smoothstep(3300.0f, 5200.0f, out.rpm) * sim_smoothstep(0.05f, 0.45f, pull);
       out.map_psi = sim_lerpf(-1.0f, boost_target_psi[gear], spool);
       out.wideband_afr = sim_lerpf(12.6f, 11.2f, spool);
+      out.afr_target = 11.2f;
+      out.timing_deg = sim_lerpf(18.0f, 8.0f, spool);
       out.knock_count = (out.rpm > 5850.0f) ? (0.8f + 1.5f * std::pow((out.rpm - 5850.0f) / 700.0f, 2.0f)) : 0.0f;
       out.knock_count += 0.35f * (0.5f + 0.5f * std::sinf(t * 18.0f + (float)gear));
       out.acceleration_mps2 = sim_lerpf(8.8f - (float)gear * 0.95f, 4.4f - (float)gear * 0.35f, pull);
@@ -225,6 +236,8 @@ static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
       out.throttle_pct = sim_lerpf(100.0f, 22.0f, sim_smoothstep(0.0f, 0.45f, shift));
       out.map_psi = sim_lerpf(boost_target_psi[gear], -2.5f, sim_smoothstep(0.0f, 0.7f, shift));
       out.wideband_afr = sim_lerpf(11.4f, 13.3f, shift);
+      out.afr_target = sim_lerpf(11.2f, 14.7f, shift);
+      out.timing_deg = sim_lerpf(8.0f, 16.0f, shift);
       out.knock_count = 1.0f + 0.8f * (0.5f + 0.5f * std::sinf(t * 28.0f));
       out.acceleration_mps2 = -2.0f;
       return out;
@@ -239,6 +252,8 @@ static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
   out.throttle_pct = sim_lerpf(18.0f, 4.0f, coast);
   out.map_psi = sim_lerpf(-2.0f, -9.0f, coast);
   out.wideband_afr = sim_lerpf(13.5f, 15.2f, coast);
+  out.afr_target = 14.7f;
+  out.timing_deg = sim_lerpf(16.0f, 28.0f, coast);
   out.knock_count = 0.0f;
   out.acceleration_mps2 = -3.0f;
   return out;
@@ -247,8 +262,6 @@ static void sim_bringup_hardware()
 {
   gfxInit();
   gdispClear(GFX_BLACK);
-
-  g_host_ctx.amber = HTML2COLOR(0xFFB000);
   g_host_ctx.font20 = gdispOpenFont("DejaVuSans20");
   g_host_ctx.font10 = gdispOpenFont("DejaVuSans10");
   g_host_ctx.fontLCD = gdispOpenFont("lcddot_tr80");
@@ -256,28 +269,20 @@ static void sim_bringup_hardware()
   g_host_ctx.cx = gdispGetWidth() / 2;
   g_host_ctx.cy = gdispGetHeight() / 2;
   g_host_ctx.t0_ms = HAL_GetTick();
-  g_host_ctx.timer_draw_ms = g_host_ctx.t0_ms;
   g_loop_last_tick_ms = g_host_ctx.t0_ms;
 
   gdispImageOpenMemory(&g_host_ctx.batt_img, batt);
   gdispImageOpenMemory(&g_host_ctx.beam_img, beam);
-  g_host_render_ctx = {
-    .amber_ptr = &g_host_ctx.amber,
-    .font10 = g_host_ctx.font10,
-    .font20 = g_host_ctx.font20,
-    .fontLCD = g_host_ctx.fontLCD,
-    .fontValue = g_host_ctx.fontValue,
-    .screen_width = (coord_t)gdispGetWidth(),
-    .screen_height = (coord_t)gdispGetHeight(),
-    .batt_img = &g_host_ctx.batt_img,
-    .beam_img = &g_host_ctx.beam_img,
-    .gimball = &g_host_ctx.gimball,
-    .line_plot_tps = &g_host_ctx.line_plot_tps,
-    .line_plot_tps_data = g_host_ctx.tps_plot_data,
-    .line_plot_knock = &g_host_ctx.line_plot_knock,
-    .line_plot_knock_data = g_host_ctx.knock_plot_data,
-    .render_cycle_complete = false,
-  };
+  g_host_render_ctx = {};
+  g_host_render_ctx.font10 = g_host_ctx.font10;
+  g_host_render_ctx.font20 = g_host_ctx.font20;
+  g_host_render_ctx.fontLCD = g_host_ctx.fontLCD;
+  g_host_render_ctx.fontValue = g_host_ctx.fontValue;
+  g_host_render_ctx.screen_width = (coord_t)gdispGetWidth();
+  g_host_render_ctx.screen_height = (coord_t)gdispGetHeight();
+  g_host_render_ctx.batt_img = &g_host_ctx.batt_img;
+  g_host_render_ctx.beam_img = &g_host_ctx.beam_img;
+  g_host_render_ctx.render_cycle_complete = false;
 }
 
 static PlatformSample sim_collect_platform_sample()
@@ -334,6 +339,14 @@ static PlatformSample sim_collect_platform_sample()
   sample.ecu_param_wb_index = SimECUK::PARAM_WB;
   sample.ecu_param_map_index = SimECUK::PARAM_MAP;
   sample.ecu_param_knock_index = SimECUK::PARAM_KNOCK;
+  sample.ecu_param_timing_index = SimECUK::PARAM_TIMING;
+  sample.ecu_param_afr_target_index = SimECUK::PARAM_AFR_TARGET;
+  sample.ecu_param_fuel_trim_front_low_index = SimECUK::PARAM_FFTL;
+  sample.ecu_param_fuel_trim_front_med_index = SimECUK::PARAM_FFTM;
+  sample.ecu_param_fuel_trim_front_high_index = SimECUK::PARAM_FFTH;
+  sample.ecu_param_fuel_trim_rear_low_index = SimECUK::PARAM_RFTL;
+  sample.ecu_param_fuel_trim_rear_med_index = SimECUK::PARAM_RFTM;
+  sample.ecu_param_fuel_trim_rear_high_index = SimECUK::PARAM_RFTH;
   sample.ecu_flasher = nullptr;
   sample.startup_init_error = false;
 
@@ -367,6 +380,7 @@ static void sim_publish_current_data()
   g_board_data->loop_count.publish(sample.loop_count, now);
   g_board_data->loop_period_ms.publish(sample.loop_period_ms, now);
   g_board_data->worst_loop_period_ms.publish(sample.worst_loop_period_ms, now);
+  g_board_data->startup_init_error_code.publish(sample.startup_init_error ? 1U : 0U, now);
   const SimVehicleSnapshot vehicle = sim_make_wot_pull(sample.elapsed_ms);
   BoardAccelerationVector accel = {};
   const float pitch_rad = get_build_config().vehicle.board_mount_pitch_deg * 3.14159265358979323846f / 180.0f;
@@ -387,6 +401,14 @@ static void sim_publish_current_data()
   g_board_data->ecu_param_wb_index = sample.ecu_param_wb_index;
   g_board_data->ecu_param_map_index = sample.ecu_param_map_index;
   g_board_data->ecu_param_knock_index = sample.ecu_param_knock_index;
+  g_board_data->ecu_param_timing_index = sample.ecu_param_timing_index;
+  g_board_data->ecu_param_afr_target_index = sample.ecu_param_afr_target_index;
+  g_board_data->ecu_param_fuel_trim_front_low_index = sample.ecu_param_fuel_trim_front_low_index;
+  g_board_data->ecu_param_fuel_trim_front_med_index = sample.ecu_param_fuel_trim_front_med_index;
+  g_board_data->ecu_param_fuel_trim_front_high_index = sample.ecu_param_fuel_trim_front_high_index;
+  g_board_data->ecu_param_fuel_trim_rear_low_index = sample.ecu_param_fuel_trim_rear_low_index;
+  g_board_data->ecu_param_fuel_trim_rear_med_index = sample.ecu_param_fuel_trim_rear_med_index;
+  g_board_data->ecu_param_fuel_trim_rear_high_index = sample.ecu_param_fuel_trim_rear_high_index;
   g_board_data->ecu_flasher = sample.ecu_flasher;
 
   if (g_warn_batt != nullptr)
@@ -398,7 +420,7 @@ static void sim_publish_current_data()
   g_board_data->high_beam.publish(sample.warn_high_beam, now);
 }
 
-void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uint32_t &timer_draw_ms)
+void board_init(BoardSharedData &data, SharedRenderCtx &ctx)
 {
   g_board_data = &data;
   sim_bringup_hardware();
@@ -407,8 +429,6 @@ void board_init(BoardSharedData &data, SharedRenderCtx &ctx, int &draw_step, uin
   g_warn_4ws = data.add_warning_light("4ws", "4WS", 175, 45, GFX_YELLOW);
   ctx = g_host_render_ctx;
   sim_publish_current_data();
-  draw_step = 0;
-  timer_draw_ms = g_host_ctx.timer_draw_ms;
 }
 
 void board_update()

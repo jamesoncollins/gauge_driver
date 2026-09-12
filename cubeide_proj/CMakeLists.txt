@@ -24,6 +24,7 @@ if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${CUSTOM_ROOT}")
 endif()
 
 set(BUILD_TARGET "" CACHE STRING "Composed target profile (sim_3000gt_soft, web_3000gt_soft, 3000gt_oled, 3000gt_lcd)")
+set(GAUGE_OPT_LEVEL "" CACHE STRING "Optional optimization override for GCC/Clang builds (O0, O1, O2)")
 
 # Build axes. BUILD_TARGET presets below fill these in for known-good builds,
 # while still making the underlying choices explicit and independently
@@ -251,13 +252,23 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   if(MSVC)
     add_compile_options(/Od /Zi)
   else()
-    add_compile_options(-O0 -g3)
+    if(GAUGE_OPT_LEVEL STREQUAL "O1")
+      add_compile_options(-O1 -g3)
+    elseif(GAUGE_OPT_LEVEL STREQUAL "O2")
+      add_compile_options(-O2 -g3)
+    else()
+      add_compile_options(-O0 -g3)
+    endif()
   endif()
 else()
   if(MSVC)
     add_compile_options(/O2)
   else()
-    add_compile_options(-O2)
+    if(GAUGE_OPT_LEVEL STREQUAL "O1")
+      add_compile_options(-O1)
+    else()
+      add_compile_options(-O2)
+    endif()
   endif()
 endif()
 
@@ -318,6 +329,7 @@ endif()
 file(GLOB_RECURSE CUSTOM_SOURCES
   ${CUSTOM_ROOT}/*.c ${CUSTOM_ROOT}/*.cpp
 )
+list(FILTER CUSTOM_SOURCES EXCLUDE REGEX ".*/${CUSTOM_ROOT}/Tests/.*")
 if(CUSTOM_PLATFORM STREQUAL "arm")
   list(FILTER CUSTOM_SOURCES EXCLUDE REGEX ".*/${CUSTOM_ROOT}/(ARM|Simulator|Host)/.*")
   list(APPEND PROJECT_SOURCES ${CUSTOM_SOURCES} ${CUSTOM_PLATFORM_SRC})
@@ -326,7 +338,10 @@ else()
   list(FILTER CUSTOM_SOURCES INCLUDE REGEX ".*/${CUSTOM_ROOT}/(Simulator|Host/${HOST_BACKEND})/.*")
   list(APPEND PROJECT_SOURCES ${CUSTOM_SOURCES})
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/main_shared.cpp)
+  list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/ble_command.cpp)
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/build_config.cpp)
+  list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/gui_layout.cpp)
+  list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/gauge_layouts.cpp)
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/ugfx_widgets.cpp)
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/Src/telemetry.cpp)
   list(APPEND PROJECT_SOURCES ${CUSTOM_ROOT}/BTBuffer-lib/BTBuffer.cpp)
@@ -353,7 +368,10 @@ add_executable(${PROJECT_NAME}
 )
 
 if(CUSTOM_PLATFORM STREQUAL "arm")
-  set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".elf")
+  set_target_properties(${PROJECT_NAME} PROPERTIES
+    SUFFIX ".elf"
+    LINK_DEPENDS ${LINKER_SCRIPT}
+  )
 endif()
 
 # ---------------------------------------------------------------------------
@@ -409,6 +427,23 @@ if(CUSTOM_PLATFORM STREQUAL "arm")
   target_link_libraries(${PROJECT_NAME} c m stdc++ supc++)
 elseif(HOST_BACKEND STREQUAL "win32")
   target_link_libraries(${PROJECT_NAME} gdi32)
+endif()
+
+if(CUSTOM_PLATFORM STREQUAL "x86" AND HOST_BACKEND STREQUAL "win32")
+  enable_testing()
+  add_executable(gui_layout_backend_test
+    ${CUSTOM_ROOT}/Tests/gui_layout_backend_test.cpp
+    ${CUSTOM_ROOT}/Src/gui_layout.cpp
+  )
+  target_include_directories(gui_layout_backend_test PRIVATE
+    ${CUSTOM_ROOT}/Host/${HOST_BACKEND}/Inc
+    ${CUSTOM_ROOT}/Host/${HOST_BACKEND}
+    ${CUSTOM_ROOT}/Simulator
+    ${CUSTOM_ROOT}/Inc
+    ugfx
+    ${UGFX_DRIVER_INCS}
+  )
+  add_test(NAME gui_layout_backend_test COMMAND gui_layout_backend_test)
 endif()
 
 if(HOST_BACKEND STREQUAL "emscripten")

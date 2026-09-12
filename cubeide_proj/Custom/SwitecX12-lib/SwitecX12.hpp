@@ -13,18 +13,18 @@ public:
   GPIO_TypeDef* portStep;
   GPIO_TypeDef* portDir;
   bool reverseDir;
-  uint32_t currentStep;      // step we are currently at
-  uint32_t targetStep;       // target we are moving to
-  uint32_t targetStepNext;   // queued target step, the update function will actually set it
+  volatile uint32_t currentStep;      // step we are currently at
+  volatile uint32_t targetStep;       // target we are moving to
+  volatile uint32_t targetStepNext;   // queued target step, the update function will actually set it
   uint32_t steps;            // total steps available
-  uint32_t time0;           // time when we entered this state
-  uint32_t microDelay;       // microsecs until next state
+  volatile uint32_t time0;           // time when we entered this state
+  volatile uint32_t microDelay;       // microsecs until next state
   volatile int32_t worstMiss;
   const uint32_t (*accelTable)[2]; // accel table can be modified.
   int maxVel;           // fastest vel allowed
-  int vel;              // steps travelled under acceleration
-  int dir;                      // direction -1,0,1
-  bool stopped;               // true if stopped
+  volatile int vel;              // steps travelled under acceleration
+  volatile int dir;                      // direction -1,0,1
+  volatile bool stopped;               // true if stopped
   SwitecX12 (uint32_t steps,
 	     GPIO_TypeDef*, int,
 	     GPIO_TypeDef*, int,
@@ -72,8 +72,8 @@ private:
   void advance ();
   void step (int dir); // perform a step, but dont UNstep
   void stepEnd ();      // call this often to check if a step should end
-  bool inStep = false;
-  uint32_t steppedAt;
+  volatile bool inStep = false;
+  volatile uint32_t steppedAt;
 };
 
 #endif

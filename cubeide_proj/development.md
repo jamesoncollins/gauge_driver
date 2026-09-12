@@ -23,7 +23,7 @@ Use the UCRT64 tool environment in the current shell:
 Build the recommended native simulator:
 
 ```sh
-./scripts/build-preset.sh x86-ucrt-debug
+./scripts/build-preset.sh x86-debug
 ```
 
 Build hardware display variants:
@@ -31,6 +31,57 @@ Build hardware display variants:
 ```sh
 ./scripts/build-preset.sh s6e63d6-debug
 ./scripts/build-preset.sh st7789vi-debug
+```
+
+Flash a hardware build over BLE OTA from VS Code:
+
+1. Install the Python BLE dependency into the Python configured by `gaugeDriver.pythonCommand`:
+
+   ```sh
+   ${userHome}/miniconda3/python.exe -m pip install -r scripts/requirements-ble-ota.txt
+   ```
+
+2. Open the VS Code command palette with `Ctrl+Shift+P`.
+3. Run `Tasks: Run Task`.
+4. Run `BLE OTA: scan` to confirm the board is visible.
+5. Run one of:
+   - `BLE OTA: flash st7789vi-debug`
+   - `BLE OTA: flash s6e63d6-debug`
+   - `BLE OTA: flash st7789vi-release`
+   - `BLE OTA: flash s6e63d6-release`
+
+The flash tasks build the selected CMake preset first, then upload
+`build/<preset>/gauge_driver.bin` with `scripts/ble_ota_loader.py`.
+
+The VS Code tasks use generic executable settings instead of assuming a specific
+platform shell. `cmake.cmakePath` is the CMake executable source of truth for
+both the CMake Tools extension and the repo tasks; the repo default is
+MSYS2/UCRT CMake, but other systems can override it. `gaugeDriver.buildToolPathPrefix`
+prepends any toolchain directory needed by the build, and `gaugeDriver.pythonCommand`
+selects the Python executable used for BLE OTA. On systems where CMake and the
+build tools are already on `PATH`, set `gaugeDriver.buildToolPathPrefix` to an
+empty string.
+
+The shared VS Code defaults are in `.vscode/settings.json`:
+
+```json
+{
+  "cmake.sourceDirectory": "${workspaceFolder}",
+  "cmake.cmakePath": "C:/msys64/ucrt64/bin/cmake.exe",
+  "gaugeDriver.buildToolPathPrefix": "C:/msys64/ucrt64/bin",
+  "gaugeDriver.pythonCommand": "${userHome}/miniconda3/python.exe",
+  "gaugeDriver.stm32CubeIdeRoot": "C:/ST/STM32CubeIDE_1.14.0/STM32CubeIDE",
+  "gaugeDriver.stm32CubeProgrammerRoot": "C:/Program Files/STMicroelectronics/STM32Cube/STM32CubeProgrammer"
+}
+```
+
+Override those settings locally if your build tools, Python, or ST install live
+somewhere else.
+
+For CLI use without VS Code:
+
+```sh
+${userHome}/miniconda3/python.exe scripts/ble_ota_loader.py --file build/st7789vi-debug/gauge_driver.bin
 ```
 
 Build the web simulator:

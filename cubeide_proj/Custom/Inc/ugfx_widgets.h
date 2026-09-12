@@ -55,6 +55,8 @@ typedef enum
 class UgfxTextBarMeter : public UgfxWidget
 {
 public:
+  void setBounds(coord_t x, coord_t y, coord_t width, coord_t height);
+  void setColors(color_t primary, color_t secondary, color_t background);
   void configure(const char *label, const char *units,
                  float min_value, float max_value,
                  uint8_t decimals,
@@ -76,6 +78,11 @@ private:
   void drawMarkerBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t marker_color);
   void drawBipolarBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t bar_color);
   void drawSegmentBar(coord_t bar_x, coord_t bar_y, coord_t bar_w, coord_t bar_h, color_t segment_color);
+  void markLayoutDirty();
+  void updateLayout();
+  void updateValueText();
+
+  static constexpr std::size_t kMaxCachedSegments = 24;
 
   const char *label_ = "";
   const char *units_ = "";
@@ -92,6 +99,90 @@ private:
   coord_t bar_height_ = 7;
   coord_t segment_size_ = 0;
   bool valid_ = false;
+  bool layout_dirty_ = true;
+  bool value_text_dirty_ = true;
+  float last_text_value_ = 0.0f;
+  bool last_text_valid_ = false;
+  char value_text_[16] = "";
+  coord_t value_text_x_ = 0;
+  coord_t bar_x_ = 0;
+  coord_t bar_y_ = 0;
+  coord_t bar_w_ = 0;
+  coord_t bar_h_ = 0;
+  coord_t bar_inner_w_ = 0;
+  coord_t bar_inner_h_ = 0;
+  coord_t label_y_ = 0;
+  coord_t units_y_ = 0;
+  coord_t segment_count_ = 0;
+  coord_t segment_w_ = 0;
+  coord_t segment_h_ = 0;
+  coord_t segment_y_ = 0;
+  coord_t segment_x_[kMaxCachedSegments] = {};
+};
+
+struct UgfxMeterMarker
+{
+  float value;
+  bool valid;
+  color_t color;
+  const char *label;
+};
+
+typedef enum
+{
+  UGFX_MULTI_MARKER_TEXT_BOTH = 0,
+  UGFX_MULTI_MARKER_TEXT_AVERAGE,
+  UGFX_MULTI_MARKER_TEXT_NONE
+} UgfxMultiMarkerTextMode;
+
+class UgfxMultiMarkerMeter : public UgfxWidget
+{
+public:
+  void setBounds(coord_t x, coord_t y, coord_t width, coord_t height);
+  void setColors(color_t primary, color_t secondary, color_t background);
+  void configure(const char *label, const char *units,
+                 float min_value, float max_value,
+                 uint8_t decimals,
+                 font_t label_font, font_t value_font);
+  void setBands(const UgfxMeterBand *bands, std::size_t band_count);
+  void setMarkers(const UgfxMeterMarker *markers, std::size_t marker_count);
+  void setTextMode(UgfxMultiMarkerTextMode text_mode);
+  void setBarHeight(coord_t bar_height);
+  void draw() override;
+
+private:
+  bool anyMarkerValid() const;
+  coord_t valueToBarX(float value, coord_t bar_x, coord_t inner_w) const;
+  void drawBandRail(bool enabled);
+  void drawMarkers();
+  void markLayoutDirty();
+  void updateLayout();
+  void updateValueText();
+
+  const char *label_ = "";
+  const char *units_ = "";
+  float min_value_ = 0.0f;
+  float max_value_ = 1.0f;
+  uint8_t decimals_ = 1;
+  font_t label_font_ = nullptr;
+  font_t value_font_ = nullptr;
+  const UgfxMeterBand *bands_ = nullptr;
+  std::size_t band_count_ = 0;
+  const UgfxMeterMarker *markers_ = nullptr;
+  std::size_t marker_count_ = 0;
+  UgfxMultiMarkerTextMode text_mode_ = UGFX_MULTI_MARKER_TEXT_BOTH;
+  coord_t bar_height_ = 10;
+  bool layout_dirty_ = true;
+  bool value_text_dirty_ = true;
+  char value_text_[32] = "";
+  coord_t bar_x_ = 0;
+  coord_t bar_y_ = 0;
+  coord_t bar_w_ = 0;
+  coord_t bar_h_ = 0;
+  coord_t bar_inner_w_ = 0;
+  coord_t bar_inner_h_ = 0;
+  coord_t label_y_ = 0;
+  coord_t value_text_y_ = 0;
 };
 #endif
 
@@ -126,7 +217,7 @@ void drawHorzBarGraph (
 bool dissolve(int x, int y, int width, int height, int iter);
 
 
-typedef struct
+typedef struct Gimball_t
 {
   int r2Max, xMax, yMax;
   uint32_t peakHold_ms = 2000;
@@ -151,7 +242,7 @@ bool flasher_fun(flasher_t*);
 #define flasher(flasher_struct, arg) if(flasher_fun(flasher_struct)) arg;
 
 
-typedef struct
+typedef struct LinePlot_t
 {
   int *data;
   int len = -1;
