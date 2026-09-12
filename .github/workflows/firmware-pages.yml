@@ -65,6 +65,14 @@ jobs:
 
           git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'
 
+          has_release_presets() {
+            (
+              cd "$1/cubeide_proj"
+              cmake --list-presets | grep -q '"st7789vi-release"'
+              cmake --list-presets | grep -q '"s6e63d6-release"'
+            )
+          }
+
           git for-each-ref --format='%(refname:short)' refs/remotes/origin | while IFS= read -r remote_ref; do
             case "$remote_ref" in
               origin/HEAD) continue ;;
@@ -73,6 +81,11 @@ jobs:
             safe="$(printf '%s' "$branch" | sed -e 's#[^A-Za-z0-9._-]#_#g')"
             wt="$worktrees/branch-$safe"
             git worktree add --detach "$wt" "$remote_ref"
+            if ! has_release_presets "$wt"; then
+              echo "::warning title=Skipping $branch::Release presets are not present on this branch"
+              git worktree remove --force "$wt"
+              continue
+            fi
             (
               cd "$wt/cubeide_proj"
               cmake --preset st7789vi-release
@@ -89,6 +102,10 @@ jobs:
             safe="$(printf '%s' "$GITHUB_REF_NAME" | sed -e 's#[^A-Za-z0-9._-]#_#g')"
             wt="$worktrees/tag-$safe"
             git worktree add --detach "$wt" "$GITHUB_SHA"
+            if ! has_release_presets "$wt"; then
+              echo "::warning title=Skipping tag $GITHUB_REF_NAME::Release presets are not present on this tag"
+              git worktree remove --force "$wt"
+            else
             (
               cd "$wt/cubeide_proj"
               cmake --preset st7789vi-release
@@ -99,6 +116,7 @@ jobs:
             python "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type tag --ref-name "$GITHUB_REF_NAME" --preset st7789vi-release
             python "$root/cubeide_proj/scripts/package_firmware_pages.py" add --root "$root" --site "$site" --worktree "$wt" --ref-type tag --ref-name "$GITHUB_REF_NAME" --preset s6e63d6-release
             git worktree remove --force "$wt"
+            fi
           fi
 
       - name: Upload Pages artifact
