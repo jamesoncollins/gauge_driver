@@ -231,12 +231,26 @@
       <summary><span class="chev">&gt;</span><span class="summary-title">OTA</span><span class="spacer"></span><span class="pill">Reboot + Upload</span></summary>
       <div class="panel">
         <div class="card" style="padding:12px;display:grid;gap:10px">
+          <div class="grid">
+            <div>
+              <label for="firmwareRef">Published firmware</label>
+              <select id="firmwareRef"><option value="">No published firmware loaded</option></select>
+            </div>
+            <div>
+              <label for="firmwarePreset">Release variant</label>
+              <select id="firmwarePreset"><option value="">Select a branch or tag</option></select>
+            </div>
+          </div>
+          <div class="row" style="align-items:center;gap:10px;flex-wrap:wrap">
+            <button id="btnFirmwareRefresh" class="ghost">Refresh Published List</button>
+            <span id="firmwareInfo" class="pill" style="background:var(--pill);border-color:var(--line)">Local file fallback available</span>
+          </div>
           <div class="row" style="align-items:center;gap:10px;flex-wrap:wrap">
             <input id="otaFile" type="file" accept=".bin" style="color:var(--muted)"/>
             <button id="btnOtaAuto" class="primary">Upload (reboot + OTA + reconnect)</button>
             <span id="otaStatusTxt" class="pill" style="background:var(--pill);border-color:var(--line)">Idle</span>
           </div>
-          <div style="font-size:12px;color:var(--muted)">Select a .bin and click upload. We will reboot into the loader, upload, and reconnect to the app.</div>
+          <div style="font-size:12px;color:var(--muted)">Choose published firmware or select a local .bin. Local files take priority.</div>
         </div>
       </div>
     </details>
@@ -328,6 +342,7 @@
   // OTA reboot payload: [reboot_flag, start_sector_idx, num_sectors] per CubeWB BLE_Ota app_conf
   // 0x01 = reboot into BLE OTA app, sector index defaults to 7, num_sectors left 0
   var OTA_MAGIC = [0x01, 0x07, 0x00];
+  var FIRMWARE_MANIFEST_URL = 'firmware/manifest.json';
   var OTA_UPLOAD_DEFAULTS = {
     // STM32WB OTA loader service/characteristics
     svc: '0000fe20-cc7a-482a-984a-7f2ed5b3e58f',
@@ -633,16 +648,130 @@
     }
   }
 
+  function formatBytes(size){
+    if(typeof size!=='number' || !isFinite(size)) return '--';
+    if(size<1024) return size+' B';
+    if(size<1024*1024) return (size/1024).toFixed(1)+' KiB';
+    return (size/(1024*1024)).toFixed(2)+' MiB';
+  }
+
+  function firmwareRefKey(entry){ return entry.ref_type+':'+entry.ref_name; }
+
+  function firmwareEntries(){
+    var manifest=state.firmware && state.firmware.manifest;
+    return manifest && Array.isArray(manifest.firmware) ? manifest.firmware : [];
+  }
+
+  function selectedFirmwareEntry(){
+    var refEl=$('#firmwareRef'); var presetEl=$('#firmwarePreset');
+    if(!refEl || !presetEl || !refEl.value || !presetEl.value) return null;
+    var entries=firmwareEntries();
+    for(var i=0;i<entries.length;i++){
+      var entry=entries[i];
+      if(firmwareRefKey(entry)===refEl.value && entry.preset===presetEl.value) return entry;
+    }
+    return null;
+  }
+
+  function updateFirmwareInfo(){
+    var info=$('#firmwareInfo'); if(!info) return;
+    var entry=selectedFirmwareEntry();
+    if(!entry){ info.textContent='Local file fallback available'; return; }
+    var label=(entry.ref_type==='tag'?'tag ':'branch ')+entry.ref_name+' / '+entry.display;
+    info.textContent=label+' / '+(entry.commit_short_sha||'unknown')+' / '+formatBytes(entry.size);
+  }
+
+  function populateFirmwarePresets(){
+    var presetEl=$('#firmwarePreset'); if(!presetEl) return;
+    var refEl=$('#firmwareRef');
+    var selectedRef=refEl ? refEl.value : '';
+    var previous=presetEl.value;
+    presetEl.innerHTML='';
+    var entries=firmwareEntries().filter(function(entry){ return selectedRef && firmwareRefKey(entry)===selectedRef; });
+    if(!entries.length){
+      var opt=document.createElement('option'); opt.value=''; opt.textContent='Select a branch or tag'; presetEl.appendChild(opt); updateFirmwareInfo(); return;
+    }
+    entries.sort(function(a,b){ return String(a.display||a.preset).localeCompare(String(b.display||b.preset)); });
+    entries.forEach(function(entry){
+      var opt=document.createElement('option');
+      opt.value=entry.preset;
+      opt.textContent=(entry.display||entry.preset)+' ('+entry.preset+')';
+      presetEl.appendChild(opt);
+    });
+    if(previous){ presetEl.value=previous; }
+    if(!presetEl.value && presetEl.options.length){ presetEl.selectedIndex=0; }
+    updateFirmwareInfo();
+  }
+
+  function populateFirmwareRefs(){
+    var refEl=$('#firmwareRef'); if(!refEl) return;
+    var entries=firmwareEntries();
+    var previous=refEl.value;
+    refEl.innerHTML='';
+    if(!entries.length){
+      var empty=document.createElement('option'); empty.value=''; empty.textContent='No published firmware found'; refEl.appendChild(empty); populateFirmwarePresets(); return;
+    }
+    var seen={};
+    entries.forEach(function(entry){ seen[firmwareRefKey(entry)]=entry; });
+    Object.keys(seen).sort(function(a,b){
+      var ea=seen[a], eb=seen[b];
+      if(ea.ref_type!==eb.ref_type) return ea.ref_type==='branch' ? -1 : 1;
+      if(ea.ref_name==='main') return -1;
+      if(eb.ref_name==='main') return 1;
+      if(ea.ref_name==='master') return -1;
+      if(eb.ref_name==='master') return 1;
+      return ea.ref_name.localeCompare(eb.ref_name);
+    }).forEach(function(key){
+      var entry=seen[key];
+      var opt=document.createElement('option');
+      opt.value=key;
+      opt.textContent=(entry.ref_type==='tag'?'tag ':'branch ')+entry.ref_name;
+      refEl.appendChild(opt);
+    });
+    if(previous){ refEl.value=previous; }
+    if(!refEl.value && refEl.options.length){ refEl.selectedIndex=0; }
+    populateFirmwarePresets();
+  }
+
+  async function loadFirmwareManifest(){
+    var res=await fetch(FIRMWARE_MANIFEST_URL,{cache:'no-store'});
+    if(!res.ok) throw new Error('manifest HTTP '+res.status);
+    state.firmware.manifest=await res.json();
+    populateFirmwareRefs();
+    log('Published firmware loaded: '+firmwareEntries().length+' build(s)');
+  }
+
+  async function readFirmwareSource(){
+    if(state.otaUpload.source) return state.otaUpload.source;
+    var fileEl=$('#otaFile');
+    if(fileEl && fileEl.files && fileEl.files.length){
+      var file=fileEl.files[0];
+      setOtaStatus('Reading '+file.name+'...');
+      return {name:file.name, size:file.size||0, bytes:new Uint8Array(await file.arrayBuffer()), source:'local'};
+    }
+    var entry=selectedFirmwareEntry();
+    if(!entry || !entry.url) throw new Error('select a local .bin or published firmware build');
+    setOtaStatus('Fetching '+entry.ref_name+' / '+entry.preset+'...');
+    var res=await fetch(entry.url,{cache:'no-store'});
+    if(!res.ok) throw new Error('firmware HTTP '+res.status);
+    var bytes=new Uint8Array(await res.arrayBuffer());
+    return {name:entry.ref_name+' / '+entry.preset, size:bytes.length, bytes:bytes, source:'published', entry:entry};
+  }
+
+  function setFirmwareControlsDisabled(disabled){
+    ['#otaFile','#btnFirmwareRefresh','#firmwareRef','#firmwarePreset'].forEach(function(sel){ var el=$(sel); if(el) el.disabled=disabled; });
+  }
+
   async function otaUpload(){
     var cfg=getOtaCfg();
     if(!state.device || !state.server){ return log('Connect to device in OTA mode first'); }
     if(!state.ota.base || !state.ota.data || !state.ota.conf){ await discoverOta(); }
     if(!state.ota.base || !state.ota.data || !state.ota.conf) return log('OTA characteristics not found');
-    var fileEl=$('#otaFile'); if(!fileEl || !fileEl.files || !fileEl.files.length) return log('Select a firmware file first');
-    var file=fileEl.files[0];
-    setOtaStatus('Reading '+file.name+'...');
-    var buf=await file.arrayBuffer();
-    var bin=new Uint8Array(buf);
+    var firmware=await readFirmwareSource();
+    state.otaUpload.source=null;
+    var bin=firmware.bytes;
+    if(!bin || !bin.length) throw new Error('firmware is empty');
+    setOtaStatus('Using '+firmware.name+' ('+formatBytes(bin.length)+')');
     // Per ST AN5247: base write action+address, data in 20-byte WWR chunks
     var chunkSize=20;
     var baseAddr=parseInt(cfg.baseAddr,16); if(isNaN(baseAddr)) baseAddr=0x0007000;
@@ -654,9 +783,9 @@
     var endAddr = baseAddr + numSectors*pageSize;
     setOtaStatus('Computed sectors: '+numSectors+' (bin '+bin.length+' bytes), start sector '+startSector+', end 0x'+endAddr.toString(16));
     state.otaUpload.cancel=false;
-    var autoBtn=$('#btnOtaAuto'); var fileEl=$('#otaFile');
+    var autoBtn=$('#btnOtaAuto');
     if(autoBtn) autoBtn.disabled=true;
-    if(fileEl) fileEl.disabled=true;
+    setFirmwareControlsDisabled(true);
     try{
       // write base address command: [action, addr0, addr1, addr2] action 0x02 = START user application file upload
       var baseU8=new Uint8Array(4);
@@ -706,7 +835,7 @@
       setOtaStatus('Error: '+err.message);
     }finally{
       if(autoBtn) autoBtn.disabled=false;
-      if(fileEl) fileEl.disabled=false;
+      setFirmwareControlsDisabled(false);
     }
   }
 
@@ -718,9 +847,10 @@
     reasm:new Reassembler(),
     chars:{cmd:null,buf:null,ota:null},
     ota:{svc:null,base:null,data:null,conf:null,evt:null},
+    firmware:{manifest:null},
     logging:false,
     logRows:[],
-    otaUpload:{file:null,cancel:false,confResolve:null}
+    otaUpload:{file:null,source:null,cancel:false,confResolve:null}
   };
 
   function findCharacteristic(server, charUuid, svcUuid){
@@ -900,20 +1030,21 @@
   }
 
   async function autoOtaFlow(){
-    var autoBtn=$('#btnOtaAuto'); var fileEl=$('#otaFile');
+    var autoBtn=$('#btnOtaAuto');
     try{
       if(!state.device || !state.server || !state.server.connected){ return log('Auto OTA: connect to the app device first'); }
-      if(!fileEl || !fileEl.files || !fileEl.files.length) return log('Auto OTA: select a firmware file first');
+      var firmware=await readFirmwareSource();
+      state.otaUpload.source=firmware;
       var appPrefix = ($('#namePrefix') && $('#namePrefix').value) ? $('#namePrefix').value.trim() : Defaults.namePrefix;
       var otaCfg = getOtaCfg();
       var loaderPrefix = otaCfg.loaderPrefix;
       if(autoBtn) autoBtn.disabled=true;
-      if(fileEl) fileEl.disabled=true;
+      setFirmwareControlsDisabled(true);
       showOtaModal('Rebooting into OTA loader...');
 
       log('Auto OTA: requesting reboot into loader');
-      // compute sectors from selected file for erase
-      var binSize = fileEl.files[0].size || 0;
+      // compute sectors from selected firmware for erase
+      var binSize = firmware.bytes.length || 0;
       var pageSize=4096;
       var numSectors = Math.ceil(binSize / pageSize);
       var startSector = Math.floor(0x0007000 / pageSize); // fixed base offset we use
@@ -956,8 +1087,9 @@
       setOtaStatus('Auto OTA error: '+err.message);
       hideOtaModal();
     }finally{
+      state.otaUpload.source=null;
       if(autoBtn) autoBtn.disabled=false;
-      if(fileEl) fileEl.disabled=false;
+      setFirmwareControlsDisabled(false);
     }
   }
 
@@ -985,6 +1117,9 @@
     ok = wire('#btnStopLog',stopLog) && ok;
     ok = wire('#btnDownload',download) && ok;
     ok = wire('#btnOtaAuto', function(){ autoOtaFlow(); }) && ok;
+    ok = wire('#btnFirmwareRefresh', function(){ loadFirmwareManifest().catch(function(err){ log('Published firmware unavailable: '+err.message); }); }) && ok;
+    var firmwareRef=$('#firmwareRef'); if(firmwareRef) firmwareRef.addEventListener('change', populateFirmwarePresets);
+    var firmwarePreset=$('#firmwarePreset'); if(firmwarePreset) firmwarePreset.addEventListener('change', updateFirmwareInfo);
     ok = wire('#btnSaveCfg',saveCfg) && ok;
     ok = wire('#btnLoadCfg',loadCfg) && ok;
     ok = wire('#btnClearCfg',clearCfg) && ok;
@@ -997,6 +1132,7 @@
     applyDefaults();
     wireHandlers();
     setupAccordion();
+    loadFirmwareManifest().catch(function(err){ log('Published firmware unavailable: '+err.message); });
     if(!('bluetooth' in navigator)) log('Web Bluetooth not detected. Try Chrome/Edge desktop or Chrome on Android.');
     log('UI loaded');
     log('Defaults in use: CMD='+(Defaults.CMD_CHAR_UUID||'-')+' BUF='+(Defaults.BTBUF_CHAR_UUID||'-')+' OTA='+(Defaults.OTA_CHAR_UUID||'-'));
