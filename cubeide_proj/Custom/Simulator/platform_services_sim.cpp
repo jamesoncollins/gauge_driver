@@ -163,19 +163,19 @@ static void sim_draw_plastic_overlay(const SharedRenderCtx &ctx)
 static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
 {
   const float t = elapsed_ms / 1000.0f;
-  const float cycle_s = 28.0f;
+  const float cycle_s = 18.0f;
   float cycle_t = std::fmod(t, cycle_s);
   if (cycle_t < 0.0f)
     cycle_t += cycle_s;
 
   SimVehicleSnapshot out = {};
-  out.rpm = 900.0f;
-  out.speed_mph = 0.0f;
-  out.throttle_pct = 2.0f;
-  out.wideband_afr = 14.7f;
-  out.map_psi = -8.5f;
+  out.rpm = 2400.0f + 120.0f * std::sinf(t * 1.7f);
+  out.speed_mph = 42.0f + 2.0f * std::sinf(t * 0.43f);
+  out.throttle_pct = 18.0f + 4.0f * std::sinf(t * 0.71f);
+  out.wideband_afr = 14.5f + 0.15f * std::sinf(t * 1.3f);
+  out.map_psi = -7.0f + 1.2f * std::sinf(t * 0.61f);
   out.knock_count = 0.0f;
-  out.timing_deg = 14.0f;
+  out.timing_deg = 28.0f + 2.0f * std::sinf(t * 0.52f);
   out.afr_target = 14.7f;
   out.battery_v = 13.8f + 0.15f * std::sinf(t * 0.37f);
   out.fuel_trim_front_low_pct = 100.0f + 3.0f * std::sinf(t * 0.31f) - 0.8f;
@@ -184,78 +184,75 @@ static SimVehicleSnapshot sim_make_wot_pull(uint32_t elapsed_ms)
   out.fuel_trim_rear_low_pct = 100.0f + 3.0f * std::sinf(t * 0.29f + 2.1f) + 0.5f;
   out.fuel_trim_rear_med_pct = 100.0f + 3.5f * std::sinf(t * 0.21f + 0.4f) - 0.8f;
   out.fuel_trim_rear_high_pct = 100.0f + 4.0f * std::sinf(t * 0.17f + 1.6f) + 0.6f;
-  out.acceleration_mps2 = 0.0f;
-  out.gear = 0;
+  out.acceleration_mps2 = 0.2f * std::sinf(t * 0.8f);
+  out.gear = 3;
 
-  if (cycle_t < 1.2f)
-  {
-    out.rpm = 900.0f + 80.0f * std::sinf(cycle_t * 5.0f);
+  if (cycle_t < 3.8f)
     return out;
-  }
 
-  cycle_t -= 1.2f;
+  cycle_t -= 3.8f;
 
-  static const float gear_time_s[] = {1.85f, 2.10f, 2.65f, 3.35f, 4.45f, 5.65f};
-  static const float gear_start_rpm[] = {3200.0f, 4050.0f, 4250.0f, 4450.0f, 4650.0f, 4850.0f};
-  static const float mph_per_1000_rpm[] = {5.55f, 8.55f, 12.15f, 16.65f, 21.55f, 27.25f};
-  static const float boost_target_psi[] = {11.0f, 14.0f, 15.5f, 16.2f, 16.5f, 16.5f};
-  const float shift_s = 0.28f;
-  static const float shift_rpm_drop[] = {4050.0f, 4250.0f, 4450.0f, 4650.0f, 4850.0f};
+  static const float gear_time_s[] = {2.15f, 2.35f, 2.75f};
+  static const float gear_start_rpm[] = {3300.0f, 4050.0f, 4300.0f};
+  static const float mph_per_1000_rpm[] = {8.55f, 12.15f, 16.65f};
+  static const float boost_target_psi[] = {12.5f, 15.0f, 16.2f};
+  static const float shift_rpm_drop[] = {4050.0f, 4300.0f};
+  const float shift_s = 0.42f;
 
-  for (int gear = 0; gear < 6; ++gear)
+  for (int gear = 0; gear < 3; ++gear)
   {
     const float pull_s = gear_time_s[gear];
     if (cycle_t <= pull_s)
     {
       const float pull = sim_clampf(cycle_t / pull_s, 0.0f, 1.0f);
       const float rpm_curve = sim_smoothstep(0.0f, 1.0f, pull);
-      const float shift_rpm = 6520.0f;
-      out.gear = gear + 1;
+      const float shift_rpm = 6500.0f;
+      out.gear = gear + 2;
       out.rpm = sim_lerpf(gear_start_rpm[gear], shift_rpm, rpm_curve);
       out.speed_mph = out.rpm * mph_per_1000_rpm[gear] / 1000.0f;
       out.throttle_pct = 100.0f;
 
-      const float spool = sim_smoothstep(3300.0f, 5200.0f, out.rpm) * sim_smoothstep(0.05f, 0.45f, pull);
-      out.map_psi = sim_lerpf(-1.0f, boost_target_psi[gear], spool);
-      out.wideband_afr = sim_lerpf(12.6f, 11.2f, spool);
+      const float spool = sim_smoothstep(3300.0f, 5100.0f, out.rpm) * sim_smoothstep(0.05f, 0.42f, pull);
+      out.map_psi = sim_lerpf(-1.5f, boost_target_psi[gear], spool);
+      out.wideband_afr = sim_lerpf(12.4f, 11.2f, spool);
       out.afr_target = 11.2f;
       out.timing_deg = sim_lerpf(18.0f, 8.0f, spool);
-      out.knock_count = (out.rpm > 5850.0f) ? (0.8f + 1.5f * std::pow((out.rpm - 5850.0f) / 700.0f, 2.0f)) : 0.0f;
-      out.knock_count += 0.35f * (0.5f + 0.5f * std::sinf(t * 18.0f + (float)gear));
-      out.acceleration_mps2 = sim_lerpf(8.8f - (float)gear * 0.95f, 4.4f - (float)gear * 0.35f, pull);
+      out.knock_count = (out.rpm > 5700.0f) ? (0.6f + 1.8f * std::pow((out.rpm - 5700.0f) / 800.0f, 2.0f)) : 0.0f;
+      out.knock_count += 0.25f * (0.5f + 0.5f * std::sinf(t * 19.0f + (float)gear));
+      out.acceleration_mps2 = sim_lerpf(8.6f - (float)gear * 1.0f, 4.7f - (float)gear * 0.45f, pull);
       return out;
     }
 
     cycle_t -= pull_s;
-    if (gear < 5 && cycle_t <= shift_s)
+    if (gear < 2 && cycle_t <= shift_s)
     {
       const float shift = sim_clampf(cycle_t / shift_s, 0.0f, 1.0f);
-      out.gear = gear + 1;
-      out.rpm = sim_lerpf(6520.0f, shift_rpm_drop[gear], shift);
+      out.gear = gear + 2;
+      out.rpm = sim_lerpf(6500.0f, shift_rpm_drop[gear], shift);
       out.speed_mph = out.rpm * mph_per_1000_rpm[gear] / 1000.0f;
-      out.throttle_pct = sim_lerpf(100.0f, 22.0f, sim_smoothstep(0.0f, 0.45f, shift));
-      out.map_psi = sim_lerpf(boost_target_psi[gear], -2.5f, sim_smoothstep(0.0f, 0.7f, shift));
-      out.wideband_afr = sim_lerpf(11.4f, 13.3f, shift);
+      out.throttle_pct = sim_lerpf(100.0f, 18.0f, sim_smoothstep(0.0f, 0.45f, shift));
+      out.map_psi = sim_lerpf(boost_target_psi[gear], -4.0f, sim_smoothstep(0.0f, 0.7f, shift));
+      out.wideband_afr = sim_lerpf(11.4f, 13.4f, shift);
       out.afr_target = sim_lerpf(11.2f, 14.7f, shift);
-      out.timing_deg = sim_lerpf(8.0f, 16.0f, shift);
-      out.knock_count = 1.0f + 0.8f * (0.5f + 0.5f * std::sinf(t * 28.0f));
-      out.acceleration_mps2 = -2.0f;
+      out.timing_deg = sim_lerpf(8.0f, 18.0f, shift);
+      out.knock_count = 0.8f + 0.6f * (0.5f + 0.5f * std::sinf(t * 28.0f));
+      out.acceleration_mps2 = -1.8f;
       return out;
     }
     cycle_t -= shift_s;
   }
 
-  const float coast = sim_clampf(cycle_t / 3.0f, 0.0f, 1.0f);
-  out.gear = 6;
-  out.rpm = sim_lerpf(4850.0f, 2500.0f, coast);
-  out.speed_mph = sim_lerpf(132.0f, 70.0f, coast);
-  out.throttle_pct = sim_lerpf(18.0f, 4.0f, coast);
-  out.map_psi = sim_lerpf(-2.0f, -9.0f, coast);
-  out.wideband_afr = sim_lerpf(13.5f, 15.2f, coast);
+  const float coast = sim_clampf(cycle_t / 4.0f, 0.0f, 1.0f);
+  out.gear = 4;
+  out.rpm = sim_lerpf(4800.0f, 2600.0f, coast);
+  out.speed_mph = sim_lerpf(80.0f, 52.0f, coast);
+  out.throttle_pct = sim_lerpf(22.0f, 8.0f, coast);
+  out.map_psi = sim_lerpf(-2.5f, -9.0f, coast);
+  out.wideband_afr = sim_lerpf(13.4f, 15.1f, coast);
   out.afr_target = 14.7f;
-  out.timing_deg = sim_lerpf(16.0f, 28.0f, coast);
+  out.timing_deg = sim_lerpf(18.0f, 30.0f, coast);
   out.knock_count = 0.0f;
-  out.acceleration_mps2 = -3.0f;
+  out.acceleration_mps2 = -2.8f;
   return out;
 }
 static void sim_bringup_hardware()
@@ -311,7 +308,7 @@ static PlatformSample sim_collect_platform_sample()
   sample.loop_period_ms = g_loop_period_ms;
   sample.worst_loop_period_ms = g_worst_loop_period_ms;
   const float t = sample.elapsed_ms / 1000.0f;
-  if (sample.elapsed_ms >= 5000U && !g_sim_ecu.isConnected())
+  if (sample.elapsed_ms >= 1000U && !g_sim_ecu.isConnected())
     g_sim_ecu.connect();
   const SimVehicleSnapshot vehicle = sim_make_wot_pull(sample.elapsed_ms);
 

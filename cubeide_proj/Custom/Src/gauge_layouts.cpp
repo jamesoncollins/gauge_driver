@@ -69,7 +69,25 @@ struct PostWotSummary
   uint32_t timestamp_ms = 0;
 };
 
+enum AutoLayoutState : uint8_t
+{
+  AUTO_LAYOUT_BASE = 0,
+  AUTO_LAYOUT_WOT,
+  AUTO_LAYOUT_POST_WOT
+};
+
+static constexpr float kWotEnterTps = 80.0f;
+static constexpr float kWotExitTps = 65.0f;
+static constexpr uint32_t kWotEnterDebounceMs = 250U;
+static constexpr uint32_t kWotExitGraceMs = 750U;
+static constexpr uint32_t kPostWotHoldMs = 8000U;
+
 static PostWotSummary g_post_wot_summary;
+static GaugeLayouts::AppLayoutId g_base_layout = GaugeLayouts::APP_LAYOUT_DEFAULT;
+static AutoLayoutState g_auto_layout_state = AUTO_LAYOUT_BASE;
+static uint32_t g_wot_candidate_since_ms = 0;
+static uint32_t g_wot_exit_candidate_since_ms = 0;
+static uint32_t g_post_wot_since_ms = 0;
 
 static const UgfxMeterBand kAfrBands[] = {
     {10.0f, 12.0f, GFX_GREEN},
@@ -132,6 +150,31 @@ static ECUK::ecuParam_t *param_for_source(const RuntimeState &state, GaugeDataSo
       return state.ecu->getParam(state.ecu_param_fuel_trim_rear_high_index);
     default:
       return nullptr;
+  }
+}
+
+static void clear_post_wot_summary()
+{
+  g_post_wot_summary = PostWotSummary();
+}
+
+static bool set_active_layout(GaugeLayouts::AppLayoutId mode)
+{
+  return gui_layout_set_active((GuiLayoutId)mode);
+}
+
+static bool layout_mode_is_valid(uint8_t mode)
+{
+  switch (mode)
+  {
+    case GaugeLayouts::APP_LAYOUT_DEFAULT:
+    case GaugeLayouts::APP_LAYOUT_WOT:
+    case GaugeLayouts::APP_LAYOUT_CRUISE:
+    case GaugeLayouts::APP_LAYOUT_POST_WOT_ANALYSIS:
+    case GaugeLayouts::APP_LAYOUT_FUEL_TRIMS:
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -357,22 +400,27 @@ void gauge_layouts_register()
   (void)gui_layout_register(kCruiseLayout);
   (void)gui_layout_register(kPostWotLayout);
   (void)gui_layout_register(kFuelTrimLayout);
-  (void)gui_layout_set_active(GaugeLayouts::APP_LAYOUT_DEFAULT);
+  g_base_layout = GaugeLayouts::APP_LAYOUT_DEFAULT;
+  g_auto_layout_state = AUTO_LAYOUT_BASE;
+  g_wot_candidate_since_ms = 0;
+  g_wot_exit_candidate_since_ms = 0;
+  g_post_wot_since_ms = 0;
+  clear_post_wot_summary();
+  (void)set_active_layout(g_base_layout);
 }
 
 GaugeLayouts::SetModeStatus gauge_layouts_set_mode(uint8_t mode)
 {
-  switch (mode)
-  {
-    case GaugeLayouts::APP_LAYOUT_DEFAULT:
-    case GaugeLayouts::APP_LAYOUT_WOT:
-    case GaugeLayouts::APP_LAYOUT_CRUISE:
-    case GaugeLayouts::APP_LAYOUT_POST_WOT_ANALYSIS:
-    case GaugeLayouts::APP_LAYOUT_FUEL_TRIMS:
-      return gui_layout_set_active((GuiLayoutId)mode) ? GaugeLayouts::SET_MODE_OK : GaugeLayouts::SET_MODE_BAD_VALUE;
-    default:
-      return GaugeLayouts::SET_MODE_BAD_VALUE;
-  }
+  if (!layout_mode_is_valid(mode))
+    return GaugeLayouts::SET_MODE_BAD_VALUE;
+
+  g_base_layout = (GaugeLayouts::AppLayoutId)mode;
+  g_auto_layout_state = AUTO_LAYOUT_BASE;
+  g_wot_candidate_since_ms = 0;
+  g_wot_exit_candidate_since_ms = 0;
+  g_post_wot_since_ms = 0;
+
+  return set_active_layout(g_base_layout) ? GaugeLayouts::SET_MODE_OK : GaugeLayouts::SET_MODE_BAD_VALUE;
 }
 
 void gauge_layouts_update(const RuntimeState &state)
@@ -387,8 +435,68 @@ void gauge_layouts_update(const RuntimeState &state)
   const float afr = source_value(state, GAUGE_SOURCE_WB_AFR, afr_valid);
   const float timing = source_value(state, GAUGE_SOURCE_TIMING, timing_valid);
   const float map = source_value(state, GAUGE_SOURCE_MAP_PSI, map_valid);
+  const uint32_t now_ms = HAL_GetTick();
 
-  if (!tps_valid || !knock_valid || tps < 80.0f)
+  if (g_auto_layout_state == AUTO_LAYOUT_BASE)
+  {
+    if (tps_valid && tps >= kWotEnterTps)
+    {
+      if (g_wot_candidate_since_ms == 0U)
+        g_wot_candidate_since_ms = now_ms;
+
+      if ((now_ms - g_wot_candidate_since_ms) >= kWotEnterDebounceMs)
+      {
+        clear_post_wot_summary();
+        g_auto_layout_state = AUTO_LAYOUT_WOT;
+        g_wot_candidate_since_ms = 0;
+        g_wot_exit_candidate_since_ms = 0;
+        (void)set_active_layout(GaugeLayouts::APP_LAYOUT_WOT);
+      }
+    }
+    else
+    {
+      g_wot_candidate_since_ms = 0;
+    }
+  }
+  else if (g_auto_layout_state == AUTO_LAYOUT_WOT)
+  {
+    if (!tps_valid || tps <= kWotExitTps)
+    {
+      if (g_wot_exit_candidate_since_ms == 0U)
+        g_wot_exit_candidate_since_ms = now_ms;
+
+      if ((now_ms - g_wot_exit_candidate_since_ms) >= kWotExitGraceMs)
+      {
+        g_auto_layout_state = AUTO_LAYOUT_POST_WOT;
+        g_wot_exit_candidate_since_ms = 0;
+        g_post_wot_since_ms = now_ms;
+        (void)set_active_layout(GaugeLayouts::APP_LAYOUT_POST_WOT_ANALYSIS);
+      }
+    }
+    else
+    {
+      g_wot_exit_candidate_since_ms = 0;
+    }
+  }
+  else if (g_auto_layout_state == AUTO_LAYOUT_POST_WOT)
+  {
+    if (tps_valid && tps >= kWotEnterTps)
+    {
+      clear_post_wot_summary();
+      g_auto_layout_state = AUTO_LAYOUT_WOT;
+      g_wot_exit_candidate_since_ms = 0;
+      g_post_wot_since_ms = 0;
+      (void)set_active_layout(GaugeLayouts::APP_LAYOUT_WOT);
+    }
+    else if ((now_ms - g_post_wot_since_ms) >= kPostWotHoldMs)
+    {
+      g_auto_layout_state = AUTO_LAYOUT_BASE;
+      g_post_wot_since_ms = 0;
+      (void)set_active_layout(g_base_layout);
+    }
+  }
+
+  if (!tps_valid || !knock_valid || tps < kWotEnterTps)
     return;
 
   if (!g_post_wot_summary.valid || knock > g_post_wot_summary.max_knock)
