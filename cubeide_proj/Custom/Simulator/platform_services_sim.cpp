@@ -1,6 +1,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <cmath>
+#include <mutex>
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#else
+#define EMSCRIPTEN_KEEPALIVE
+#endif
 #include "../../res/batt.c"
 #include "../../res/beam.c"
 #include "../../res/mask_mono.c"
@@ -12,6 +18,8 @@
 #include "ugfx_widgets.h"
 #include "app_model.hpp"
 #include "sim_ecuk.hpp"
+#include "sim_sensors.hpp"
+#include "sim_control.hpp"
 
 struct PlatformSample
 {
@@ -19,6 +27,7 @@ struct PlatformSample
   float rpm;
   float speed_mph;
   uint32_t elapsed_ms;
+  uint32_t sensor_elapsed_ms;
   uint32_t loop_count;
   uint32_t loop_period_ms;
   uint32_t worst_loop_period_ms;
@@ -67,6 +76,10 @@ static uint32_t g_loop_period_ms = 0;
 static uint32_t g_worst_loop_period_ms = 0;
 static uint32_t g_loop_last_tick_ms = 0;
 static CoreSignals g_signals;
+static GaugeSensors::SensorSimulator g_sensor_sim;
+static std::mutex g_sensor_mutex;
+static uint32_t g_sensor_epoch_ms=0;
+static bool g_sensor_initialized=false;
 static SimECUK g_sim_ecu;
 static ECUK *g_ecu = &g_sim_ecu;
 static BoardSharedData *g_board_data = nullptr;
@@ -282,8 +295,33 @@ static void sim_bringup_hardware()
   g_host_render_ctx.render_cycle_complete = false;
 }
 
+static GaugeSensors::Truth sim_sensor_truth(uint64_t elapsed_us)
+{
+  const auto v=sim_make_wot_pull(uint32_t(elapsed_us/1000));
+  return {v.speed_mph,v.rpm};
+}
+extern "C" EMSCRIPTEN_KEEPALIVE int sim_control_sensor_scenario(unsigned scenario, unsigned mask)
+{
+  std::lock_guard<std::mutex> lock(g_sensor_mutex);
+  if (scenario>5 || mask<1 || mask>3) return 0;
+  g_sensor_sim.scenario(GaugeSensors::Scenario(scenario),mask);
+  g_sensor_epoch_ms=HAL_GetTick();
+  return 1;
+}
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_control_sensor_reset(void)
+{
+  std::lock_guard<std::mutex> lock(g_sensor_mutex);
+  g_sensor_sim.reset(); g_sensor_epoch_ms=HAL_GetTick();
+}
+extern "C" EMSCRIPTEN_KEEPALIVE void sim_control_sensor_trace(int mode)
+{
+  std::lock_guard<std::mutex> lock(g_sensor_mutex);
+  if (mode<0) g_sensor_sim.dump(); else g_sensor_sim.stream(mode!=0);
+}
+
 static PlatformSample sim_collect_platform_sample()
 {
+  std::lock_guard<std::mutex> lock(g_sensor_mutex);
   PlatformSample sample = {};
   sample.data_mask =
       PLATFORM_DATA_RPM |
@@ -310,14 +348,22 @@ static PlatformSample sim_collect_platform_sample()
   const float t = sample.elapsed_ms / 1000.0f;
   if (sample.elapsed_ms >= 1000U && !g_sim_ecu.isConnected())
     g_sim_ecu.connect();
-  const SimVehicleSnapshot vehicle = sim_make_wot_pull(sample.elapsed_ms);
+  if (!g_sensor_initialized) {
+    g_sensor_sim.init(get_build_config().vehicle,now*1000U);
+    g_sensor_epoch_ms=now; g_sensor_initialized=true;
+  }
+  const uint32_t sensor_elapsed_ms=now-g_sensor_epoch_ms;
+  sample.sensor_elapsed_ms=sensor_elapsed_ms;
+  const SimVehicleSnapshot vehicle = sim_make_wot_pull(sensor_elapsed_ms);
+  g_sensor_sim.advance(uint64_t(sensor_elapsed_ms)*1000,sim_sensor_truth);
+  const auto &sensor_frame=g_sensor_sim.pipeline.frame();
 
-  g_signals.rpm.value = vehicle.rpm;
+  g_signals.rpm.value = sensor_frame.channel[GaugeSensors::Tach].measured;
   g_signals.rpm.fresh = true;
   g_signals.rpm.valid = true;
   g_signals.rpm.timestamp_ms = now;
 
-  g_signals.speed_mph.value = vehicle.speed_mph;
+  g_signals.speed_mph.value = sensor_frame.channel[GaugeSensors::Speed].measured;
   g_signals.speed_mph.fresh = true;
   g_signals.speed_mph.valid = true;
   g_signals.speed_mph.timestamp_ms = now;
@@ -378,7 +424,7 @@ static void sim_publish_current_data()
   g_board_data->loop_period_ms.publish(sample.loop_period_ms, now);
   g_board_data->worst_loop_period_ms.publish(sample.worst_loop_period_ms, now);
   g_board_data->startup_init_error_code.publish(sample.startup_init_error ? 1U : 0U, now);
-  const SimVehicleSnapshot vehicle = sim_make_wot_pull(sample.elapsed_ms);
+  const SimVehicleSnapshot vehicle = sim_make_wot_pull(sample.sensor_elapsed_ms);
   BoardAccelerationVector accel = {};
   const float pitch_rad = get_build_config().vehicle.board_mount_pitch_deg * 3.14159265358979323846f / 180.0f;
   float pitch_cos = std::cos(pitch_rad);

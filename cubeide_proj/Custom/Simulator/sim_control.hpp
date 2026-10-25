@@ -7,6 +7,10 @@
 extern "C" {
 #endif
 
+int sim_control_sensor_scenario(unsigned scenario, unsigned channel_mask);
+void sim_control_sensor_reset(void);
+void sim_control_sensor_trace(int mode);
+
 int sim_control_set_layout_mode(uint8_t mode);
 const char *sim_control_help_text(void);
 int sim_control_line_is_help(const char *line);

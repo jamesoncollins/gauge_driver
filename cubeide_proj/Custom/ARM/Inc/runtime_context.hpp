@@ -8,7 +8,7 @@
 #include "cpp_main.h"
 #include "../ECUK-lib/MUTII.hpp"
 #include "../SwitecX12-lib/SwitecX12.hpp"
-#include "HzSensorKalmanFilter.hpp"
+#include "sensor_pipeline.hpp"
 
 extern MUTII ecu;
 extern volatile bool ecuTxDone;
@@ -23,8 +23,7 @@ extern volatile bool i2cPendingIrq[4];
 extern volatile bool bulbReadWaiting;
 extern volatile button_e btnCmd;
 
-extern HzSensorKalmanFilter<16> g_speed;
-extern HzSensorKalmanFilter<16> g_tach;
+extern GaugeSensors::Pipeline g_sensor_pipeline;
 extern volatile float rpm, speed;
 extern uint16_t screenWidth;
 extern uint16_t screenHeight;

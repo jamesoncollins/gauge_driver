@@ -8,6 +8,45 @@ constexpr float kBoardMountPitchDeg = 75.0f;
 constexpr uint8_t kSpeedTicksPerOdoTick = 3U;
 constexpr uint8_t kOdoStepsPerTick = 6U;
 
+// These are instrument output ceilings, independent of engine warning RPMs.
+constexpr GaugeChannelConfig make_speed_gauge_config()
+{
+  GaugeChannelConfig gauge{};
+  gauge.max_units = 180.0f;
+  gauge.max_input_hz = 500.0f; // 2 ms minimum edge spacing; about 428 MPH.
+  gauge.median_periods = true;
+  gauge.q_jerk = 5.0f;
+  gauge.meas_var = 1.0f;
+  gauge.gate_sigma = 5.0f;
+  gauge.zero_speed_thresh_units = 5.0f;
+  gauge.zero_periods_without_tick = 3.0f;
+  gauge.max_accel_units_per_s = 60.0f;
+  gauge.needle_min_units = 10.0f;
+  gauge.needle_zero_angle_deg = 3.0f;
+  gauge.needle_degrees_per_unit = 1.35f;
+  gauge.needle_microsteps_per_degree = 12.0f;
+  return gauge;
+}
+
+constexpr GaugeChannelConfig make_tach_gauge_config()
+{
+  GaugeChannelConfig gauge{};
+  gauge.max_units = 10000.0f;
+  gauge.max_input_hz = 1000.0f; // 1 ms minimum edge spacing; 20,000 RPM.
+  gauge.median_periods = true;
+  gauge.q_jerk = 10000.0f; // Separate process-noise tuning, not an RPM limit.
+  gauge.meas_var = 9.0f;
+  gauge.gate_sigma = 5.0f;
+  gauge.zero_speed_thresh_units = 400.0f;
+  gauge.zero_periods_without_tick = 3.0f;
+  gauge.max_accel_units_per_s = 4000.0f;
+  gauge.needle_min_units = 500.0f;
+  gauge.needle_zero_angle_deg = 5.0f;
+  gauge.needle_degrees_per_unit = 0.0221f;
+  gauge.needle_microsteps_per_degree = 12.0f;
+  return gauge;
+}
+
 PlatformConfig make_platform_config()
 {
 #if defined(GAUGE_PLATFORM_SIMULATOR)
@@ -48,7 +87,7 @@ DisplayConfig make_display_config()
 VehicleConfig make_vehicle_config()
 {
 #if defined(GAUGE_SIM_PROFILE_3000GT_SOFT) || defined(GAUGE_SIM_PROFILE_NONE)
-  return {VehicleKind::vehicle_3000gt, "3000gt", 5500, 5700, 6500, kMphPerHz, kRpmPerHz, kBoardMountPitchDeg, kSpeedTicksPerOdoTick, kOdoStepsPerTick};
+  return {VehicleKind::vehicle_3000gt, "3000gt", 5500, 5700, 6500, kMphPerHz, kRpmPerHz, kBoardMountPitchDeg, kSpeedTicksPerOdoTick, kOdoStepsPerTick, make_speed_gauge_config(), make_tach_gauge_config()};
 #else
 #error "No GAUGE_SIM_PROFILE_* macro defined"
 #endif

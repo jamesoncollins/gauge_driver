@@ -56,8 +56,7 @@ volatile bool ecuTxDone = false;
 volatile bool ecuRxDone = false;
 MUTII ecu(&huart1, &ecuTxDone, &ecuRxDone);
 
-HzSensorKalmanFilter<16> g_speed;
-HzSensorKalmanFilter<16> g_tach;
+GaugeSensors::Pipeline g_sensor_pipeline;
 volatile float rpm, speed;
 
 /*
@@ -125,66 +124,5 @@ void set_tone( float f, float amp )
 }
 
 
-int get_x12_ticks_speed(float speed)
-{
-    constexpr float MIN_MPH = 10.0f;
-    constexpr float ZERO_ANGLE = 3.0f;    // degrees beyond the stopper to get to 0
-    constexpr float MIN_MPH_ANGLE = 0.0f; // degrees from zero to MIN_MPH
-    constexpr float DEGREES_PER_MPH = 1.35f;
-    constexpr float MICROSTEPS_PER_DEGREE = 12.0f;
-
-    float angle;
-
-    if (speed <= 1.0f)
-    {
-        // Below 1 MPH, clamp to zero position
-        angle = ZERO_ANGLE;
-    }
-    else if (speed <= MIN_MPH)
-    {
-        // Between 1 and MIN_MPH, hold at the minimum angle
-        angle = ZERO_ANGLE + MIN_MPH_ANGLE;
-    }
-    else
-    {
-        // Map speed to angle linearly beyond MIN_MPH
-        angle = ZERO_ANGLE + MIN_MPH_ANGLE + (speed - MIN_MPH) * DEGREES_PER_MPH;
-    }
-
-    // Convert angle to microsteps and round
-    return static_cast<int>(angle * MICROSTEPS_PER_DEGREE + 0.5f);
-}
-
-
-
-int get_x12_ticks_rpm(float rpm)
-{
-    constexpr float MIN_RPM = 500.0f;
-    constexpr float ZERO_ANGLE = 5.0f;    // degrees beyond the stopper to get to 0
-    constexpr float MIN_RPM_ANGLE = 0.0f; // degrees from zero to MIN_RPM
-    constexpr float DEGREES_PER_RPM = 22.1f / 1000.0f;
-    constexpr float MICROSTEPS_PER_DEGREE = 12.0f;
-
-    float angle;
-
-    if (rpm <= 1.0f)
-    {
-        // Below 1 RPM, clamp to zero position
-        angle = ZERO_ANGLE;
-    }
-    else if (rpm <= MIN_RPM)
-    {
-        // Between 1 and MIN_RPM, hold at the minimum angle
-        angle = ZERO_ANGLE + MIN_RPM_ANGLE;
-    }
-    else
-    {
-        // Map rpm to angle linearly beyond MIN_RPM
-        angle = ZERO_ANGLE + MIN_RPM_ANGLE + (rpm - MIN_RPM) * DEGREES_PER_RPM;
-    }
-
-    // Convert angle to microsteps and round
-    return static_cast<int>(angle * MICROSTEPS_PER_DEGREE + 0.5f);
-}
-
-
+int get_x12_ticks_speed(float value) { return GaugeSensors::needle_ticks(get_build_config().vehicle.speed_gauge,value); }
+int get_x12_ticks_rpm(float value) { return GaugeSensors::needle_ticks(get_build_config().vehicle.tach_gauge,value); }

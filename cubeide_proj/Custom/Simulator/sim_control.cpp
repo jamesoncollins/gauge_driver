@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdio.h>
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
@@ -84,6 +85,9 @@ extern "C" const char *sim_control_help_text(void)
   return "Simulator console commands:\n"
          "  help, ?                         Show this menu\n"
          "  layout <mode>, mode <mode>      Select display layout\n"
+         "  sensor <scenario> [speed|tach|both]  clean/missing/dropout/extra/jitter/stall\n"
+         "  sensor reset                   Restart current sensor scenario\n"
+         "  sensor trace [on|off]          Dump retained CSV or toggle streaming\n"
          "\n"
          "Layout modes:\n"
          "  1 cruise        WB/MAP with fuel trims\n"
@@ -122,6 +126,33 @@ extern "C" int sim_control_handle_line(const char *line)
   {
     verb[verb_len] = command[verb_len];
     ++verb_len;
+  }
+
+  if (equals_ignore_case(verb,"sensor")) {
+    char action[24]={}, channel[16]={}, trailing[2]={};
+    const int count=sscanf(command+verb_len,"%23s %15s %1s",action,channel,trailing);
+    if (count<1 || count>2) return 0;
+    if (equals_ignore_case(action,"reset")) {
+      if(count!=1) return 0;
+      sim_control_sensor_reset(); return 1;
+    }
+    if (equals_ignore_case(action,"trace")) {
+      if(count==1) sim_control_sensor_trace(-1);
+      else if(equals_ignore_case(channel,"on")) sim_control_sensor_trace(1);
+      else if(equals_ignore_case(channel,"off")) sim_control_sensor_trace(0);
+      else return 0;
+      return 1;
+    }
+    unsigned mask=3;
+    if(count==2) {
+      if(equals_ignore_case(channel,"speed")) mask=1;
+      else if(equals_ignore_case(channel,"tach")) mask=2;
+      else if(!equals_ignore_case(channel,"both")) return 0;
+    }
+    const char *names[]={"clean","missing","dropout","extra","jitter","stall"};
+    for(unsigned i=0;i<6;++i)
+      if(equals_ignore_case(action,names[i])) return sim_control_sensor_scenario(i,mask);
+    return 0;
   }
 
   if (!equals_ignore_case(verb, "layout") && !equals_ignore_case(verb, "mode"))
