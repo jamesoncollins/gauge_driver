@@ -18,7 +18,7 @@
             "runToEntryPoint": "main",
             "showDevDebugOutput": "none",
             "serverArgs": [
-                "--swd",
+                //"--swd",
                 "--initialize-reset",
                 "--verify",
                 "--apid",
@@ -42,7 +42,7 @@
             "runToEntryPoint": "main",
             "showDevDebugOutput": "none",
             "serverArgs": [
-                "--swd",
+                //"--swd",
                 "--initialize-reset",
                 "--verify",
                 "--apid",

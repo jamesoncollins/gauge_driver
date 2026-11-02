@@ -4,5 +4,5 @@
     "gaugeDriver.buildToolPathPrefix": "C:/msys64/ucrt64/bin",
     "gaugeDriver.pythonCommand": "${userHome}/miniconda3/python.exe",
     "gaugeDriver.stm32CubeIdeRoot": "C:/ST/STM32CubeIDE_1.14.0/STM32CubeIDE",
-    "gaugeDriver.stm32CubeProgrammerRoot": "C:/Program Files/STMicroelectronics/STM32Cube/STM32CubeProgrammer"
+    "gaugeDriver.stm32CubeProgrammerRoot": "C:/Program Files/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin"
 }

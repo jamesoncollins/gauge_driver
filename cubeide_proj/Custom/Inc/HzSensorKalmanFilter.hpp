@@ -3,14 +3,25 @@
 #include <cmath>
 #include <limits>
 
+// Protect queue operations only; never run Kalman matrix work with IRQs masked.
 #if defined(__GNUC__) && defined(__arm__)
-#define KF_LOCK()
+#include "stm32wbxx.h"
+class HzQueueGuard {
+    uint32_t primask_;
+public:
+    HzQueueGuard() : primask_(__get_PRIMASK()) { __disable_irq(); __DMB(); }
+    ~HzQueueGuard() { __DMB(); __set_PRIMASK(primask_); }
+};
 #else
 #include <mutex>
-static std::mutex g_kf_mutex;
-#define KF_LOCK() std::lock_guard<std::mutex> kf_lock_guard(g_kf_mutex)
-
+inline std::mutex &hz_queue_mutex() { static std::mutex m; return m; }
+class HzQueueGuard {
+    std::lock_guard<std::mutex> lock_;
+public:
+    HzQueueGuard() : lock_(hz_queue_mutex()) {}
+};
 #endif
+#define KF_LOCK() HzQueueGuard kf_lock_guard
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -49,6 +60,11 @@ public:
         // ===================== Timer / tick source =====================
 
         uint32_t clock_hz  = 1'000'000;
+        // Optional sensor input ceiling, independent of the reported-unit cap.
+        // Finite positive values qualify edges before they enter the queue.
+        float max_input_hz = std::numeric_limits<float>::infinity();
+        uint32_t timestamp_resolution_us = 1;
+        bool median_periods = false; // Three qualified periods; reject isolated missed-edge intervals.
         // Capture timer frequency in ticks/second.
         // Used only in:
         //   Hz = clock_hz / dt_ticks
@@ -116,6 +132,14 @@ public:
         bool     have_state;         // true once initialized
         bool     updated;            // true if any real measurements processed this call
         bool     stale;              // true if we consider the measurement stream "stale"
+        uint32_t measurement_age_us; // age incorporated in estimate
+        uint32_t tick_age_us;        // age of received edge
+        uint32_t dropped_measurements;
+        uint32_t rejected_ticks;     // short edges and cancelled candidates
+        uint32_t raw_tick_age_us;    // includes noise, unlike qualified tick age
+        uint32_t last_raw_tick_us;
+        uint32_t last_raw_period_ticks;
+        uint32_t last_period_ticks;
         uint32_t last_tick_us;       // timestamp of last ISR tick (micros)
     };
 
@@ -143,12 +167,29 @@ public:
         last_meas_us_   = 0;
         last_tick_us_   = 0;
 
+        count_ = 0; dropped_ = 0; have_tick_ = false;
+        rejected_ticks_=0; have_raw_tick_=false;
+        last_raw_tick_us_=last_raw_period_ticks_=0;
+        pending_valid_=false; pending_={}; pending_span_ticks_=span_ticks_=0;
+        min_period_ticks_=settle_us_=0;
+        period_count_=period_index_=0;
+        if (cfg_.clock_hz && std::isfinite(cfg_.max_input_hz) && cfg_.max_input_hz>0) {
+            const double minimum=std::ceil(double(cfg_.clock_hz)/cfg_.max_input_hz);
+            if (minimum<=UINT32_MAX) {
+                min_period_ticks_=uint32_t(minimum);
+                // Conservative margin: quantized timestamps must not certify
+                // a candidate before a complete minimum period has elapsed.
+                const uint64_t duration=(uint64_t(min_period_ticks_)*1000000+cfg_.clock_hz-1)/cfg_.clock_hz;
+                const uint64_t settle=duration+cfg_.timestamp_resolution_us;
+                settle_us_=uint32_t(settle>UINT32_MAX?UINT32_MAX:settle);
+            }
+        }
+        tick_sequence_ = consumed_sequence_ = 0; stale_latched_ = true;
         head_           = 0;
         tail_           = 0;
         last_dt_ticks_  = 0;
 
         for (int i = 0; i < MAX_MEAS_Q; ++i) {
-            meas_[i].ready   = false;
             meas_[i].t_us    = 0;
             meas_[i].dt_ticks = 0;
         }
@@ -169,158 +210,130 @@ public:
                 zero_timeout_s_ = cfg_.zero_periods_without_tick * period_s;
             }
         }
+        zero_timeout_us_=UINT32_MAX;
+        const double timeout_us=std::ceil(double(zero_timeout_s_)*1000000.0);
+        if(std::isfinite(timeout_us) && timeout_us<UINT32_MAX)
+            zero_timeout_us_=uint32_t(timeout_us);
     }
 
-    // ISR: dt_ticks is timer delta between edges
-    inline void tick(uint32_t dt_ticks) {
+    // Single producer (capture ISR), single consumer (main loop).
+    // init is called before captures are enabled. Explicit-time APIs also work
+    // without a clock callback, for deterministic simulation. dt_ticks must
+    // include every adjacent raw capture interval, even across rejected noise;
+    // the qualifier reconstructs elapsed ticks from its last confirmed edge.
+    void tick(uint32_t dt_ticks) {
+        if (micros_) tickAt(dt_ticks, micros_());
+    }
+
+    void tickAt(uint32_t dt_ticks, uint32_t t_us) {
+        if (!dt_ticks) return;
         KF_LOCK();
-
-        //if (!micros_) return;
-        if (dt_ticks == 0) return;
-
-        uint32_t t_us = micros_();
-        last_tick_us_ = t_us;
-        last_dt_ticks_ = dt_ticks;
-
-        uint8_t head = head_;
-        Meas &slot = meas_[head];
-
-        // If this slot is still ready, main hasn't consumed it yet: buffer full.
-        // Drop this new measurement rather than overwriting.
-        if (slot.ready) {
+        last_raw_tick_us_=t_us; last_raw_period_ticks_=dt_ticks; have_raw_tick_=true;
+        if (!min_period_ticks_) {
+            enqueue_(dt_ticks,t_us);
             return;
         }
-
-        // Write data first...
-        slot.t_us     = t_us;
-        slot.dt_ticks = dt_ticks;
-
-        // ...then publish it.
-        slot.ready    = true;
-
-        head_ = static_cast<uint8_t>((head + 1u) % MAX_MEAS_Q);
+        span_ticks_+=dt_ticks;
+        if (dt_ticks<min_period_ticks_) {
+            // The preceding candidate is part of the same impossible cluster.
+            // Keep the elapsed capture ticks so the next clean edge is timed
+            // from the last qualified edge, not from the last noise edge.
+            rejected_ticks_+=pending_valid_?2u:1u;
+            pending_valid_=false;
+            return;
+        }
+        if (pending_valid_) confirm_pending_();
+        pending_.dt_ticks=uint32_t(span_ticks_>UINT32_MAX?UINT32_MAX:span_ticks_);
+        pending_.t_us=t_us;
+        pending_span_ticks_=span_ticks_;
+        pending_valid_=true;
     }
 
-    // Helper: last dt_ticks captured (for plotting/debugging)
     uint32_t last_dt_ticks() const {
+        KF_LOCK();
         return last_dt_ticks_;
     }
 
-    Snapshot retrieveValue() {
-        KF_LOCK();
+    Snapshot retrieveValue() { return retrieveValueImpl_(0, true); }
+    Snapshot retrieveValueAt(uint32_t now_us) { return retrieveValueImpl_(now_us, false); }
 
+private:
+    Snapshot retrieveValueImpl_(uint32_t now_us, bool use_clock) {
+        // Copy a bounded batch before releasing the queue. ISR can continue
+        // publishing while we process matrices; no shared slot references escape.
+        Meas batch[MAX_MEAS_Q];
+        unsigned n = 0;
         Snapshot out{};
-
-        const uint32_t now_us = micros_();
-        bool any_update       = false;
-
-        uint8_t tail = tail_;
-        Meas &oldest = meas_[tail];
-        bool have_meas = oldest.ready;
-
-        // No state and no pending measurements
-        if (!initialized_ && !have_meas) {
-            out.units          = 0.0f;
-            out.accel_units_s2 = 0.0f;
-            out.have_state     = false;
-            out.updated        = false;
-            out.stale          = true;
-            out.last_tick_us   = last_tick_us_;
-            return out;
-        }
-
-        // Initialize on first measurement (peek, don't consume yet)
-        if (!initialized_ && have_meas) {
-            const Meas &m0 = oldest;
-            float hz0 = 0.0f;
-            if (m0.dt_ticks > 0) {
-                hz0 = static_cast<float>(cfg_.clock_hz) /
-                      static_cast<float>(m0.dt_ticks);
+        bool have_tick;
+        uint32_t sequence;
+        {
+            KF_LOCK();
+            if (use_clock) now_us = micros_ ? micros_() : last_raw_tick_us_;
+            if (pending_valid_ && int32_t(now_us-pending_.t_us)>=0 && now_us-pending_.t_us>=settle_us_)
+                confirm_pending_();
+            have_tick = have_tick_;
+            sequence = tick_sequence_;
+            out.last_tick_us = last_tick_us_;
+            out.rejected_ticks=rejected_ticks_;
+            out.last_raw_tick_us=last_raw_tick_us_;
+            out.last_raw_period_ticks=last_raw_period_ticks_;
+            out.raw_tick_age_us=have_raw_tick_?now_us-last_raw_tick_us_:UINT32_MAX;
+            if(have_raw_tick_ && int32_t(now_us-last_raw_tick_us_)<0) out.raw_tick_age_us=0;
+            out.last_period_ticks = last_dt_ticks_;
+            out.dropped_measurements = dropped_;
+            while (count_ && int32_t(meas_[tail_].t_us - now_us) <= 0) {
+                batch[n++] = meas_[tail_];
+                tail_ = (tail_ + 1u) % MAX_MEAS_Q;
+                --count_;
             }
-            const float units0 = cfg_.units_per_hz * hz0 + cfg_.units_bias;
-
-            x_[0] = 0.0f;
-            x_[1] = units0;
-            x_[2] = 0.0f;
-
-            last_pred_us_ = m0.t_us;
-            last_meas_us_ = m0.t_us;
-            initialized_  = true;
         }
-
+        // Signed ordering assumes no scheduling gap exceeds half the clock range.
+        out.tick_age_us = have_tick ? uint32_t(now_us - out.last_tick_us) : UINT32_MAX;
+        const bool new_edge = sequence != consumed_sequence_;
+        // An ISR may publish just after the caller samples now. Only a newly
+        // received edge can be in that future; a long-stopped input stays stale.
+        if (new_edge && int32_t(now_us-out.last_tick_us)<0) out.tick_age_us=0;
+        if (new_edge) stale_latched_=false;
+        if (!have_tick || out.tick_age_us*1e-6f > zero_timeout_s_) stale_latched_=true;
+        consumed_sequence_=sequence;
+        out.stale=stale_latched_;
+        if (!initialized_ && !n) return out;
+        if (!initialized_) {
+            x_[1] = cfg_.units_per_hz * float(cfg_.clock_hz) / batch[0].dt_ticks + cfg_.units_bias;
+            last_pred_us_ = last_meas_us_ = batch[0].t_us;
+            initialized_ = true;
+        }
         uint32_t t_prev = last_pred_us_;
-
-        // Consume all ready slots in order: tail -> head-1 (contiguous ready region)
-        while (true) {
-            Meas &slot = meas_[tail];
-            if (!slot.ready) {
-                break; // no more unread data
-            }
-
-            const uint32_t t_meas_us = slot.t_us;
-            if (t_meas_us > now_us) {
-                // Measurement from the future relative to 'now_us':
-                // leave it for the next call.
-                break;
-            }
-
-            float dt_s = (t_meas_us - t_prev) * 1e-6f;
-            if (dt_s > 0.0f) {
-                predict_(dt_s);
-                applyVirtualZero_(t_meas_us);
-            }
-
-            float hz = 0.0f;
-            if (slot.dt_ticks > 0) {
-                hz = static_cast<float>(cfg_.clock_hz) /
-                     static_cast<float>(slot.dt_ticks);
-            }
-
-            const float z_units = cfg_.units_per_hz * hz + cfg_.units_bias;
-            update_(z_units, cfg_.meas_var);
-            any_update    = true;
-            last_meas_us_ = t_meas_us;
-            t_prev        = t_meas_us;
-
-            // Mark consumed and advance tail
-            slot.ready = false;
-            tail = static_cast<uint8_t>((tail + 1u) % MAX_MEAS_Q);
+        for (unsigned i = 0; i < n; ++i) {
+            const auto &m = batch[i];
+            const int32_t elapsed = int32_t(m.t_us - t_prev);
+            if (elapsed > 0) predict_(elapsed * 1e-6f);
+            // Incoming real data supersedes virtual-zero observations.
+            update_(cfg_.units_per_hz * float(cfg_.clock_hz) / m.dt_ticks + cfg_.units_bias,
+                    cfg_.meas_var);
+            last_meas_us_ = m.t_us;
+            if (elapsed >= 0) t_prev = m.t_us;
         }
-
-        // Store updated tail index
-        tail_ = tail;
-
-        // Predict up to now
-        float dt_s_end = (now_us - t_prev) * 1e-6f;
-        if (dt_s_end > 0.0f) {
-            predict_(dt_s_end);
-            applyVirtualZero_(now_us);
-        }
-
+        const int32_t elapsed = int32_t(now_us - t_prev);
+        if (elapsed > 0) predict_(elapsed * 1e-6f);
+        applyVirtualZero_(now_us);
         last_pred_us_ = now_us;
-
-        out.units          = x_[1];
+        out.units = x_[1];
         out.accel_units_s2 = x_[2];
-        out.have_state     = true;
-        out.updated        = any_update;
-
-        // Staleness based on derived timeout
-        if (last_meas_us_ == 0) {
-            out.stale = true;
-        } else if (!std::isfinite(zero_timeout_s_)) {
-            out.stale = false;
-        } else {
-            float age_s = (now_us - last_meas_us_) * 1e-6f;
-            out.stale = (age_s > zero_timeout_s_);
+        out.have_state = true;
+        out.updated = n != 0;
+        out.measurement_age_us = now_us - last_meas_us_;
+        if (!std::isfinite(out.units) || !std::isfinite(out.accel_units_s2)) {
+            // Reinitialize on the next usable measurement rather than propagating NaNs.
+            initialized_ = false;
+            for (unsigned i=0;i<3;++i) {
+                x_[i]=0;
+                for (unsigned j=0;j<3;++j) P_[i][j]=i==j ? (i==0 ? 1.0f : 50.0f) : 0.0f;
+            }
+            out.units = out.accel_units_s2 = 0; out.have_state = false;
         }
-
-        // Enforce non-negative speed and max_units
-        if (out.units < 0.0f) out.units = 0.0f;
-        if (std::isfinite(cfg_.max_units) && out.units > cfg_.max_units) {
-            out.units = cfg_.max_units;
-        }
-
-        out.last_tick_us = last_tick_us_;
+        if (out.units < 0) out.units = 0;
+        if (out.units > cfg_.max_units) out.units = cfg_.max_units;
         return out;
     }
 
@@ -328,8 +341,45 @@ private:
     struct Meas {
         uint32_t t_us;
         uint32_t dt_ticks;
-        volatile bool ready;
+
     };
+
+    // Caller holds the queue guard. No matrix work or floating-point conversion
+    // occurs on this capture-side path.
+    void enqueue_(uint32_t dt_ticks,uint32_t t_us) {
+        if (cfg_.median_periods) {
+            // A real edge can be lost inside a rejected cluster. Median-of-three
+            // prevents a single doubled period from becoming a false slowdown.
+            // Retain the actual edge timestamp for freshness and model timing.
+            if(have_tick_ && zero_timeout_us_!=UINT32_MAX &&
+               uint32_t(t_us-last_tick_us_)>zero_timeout_us_) period_count_=period_index_=0;
+            periods_[period_index_]=dt_ticks;
+            period_index_=(period_index_+1)%3;
+            if(period_count_<3) ++period_count_;
+            if(period_count_==3) {
+                uint32_t a=periods_[0],b=periods_[1],c=periods_[2];
+                if(a>b){const auto t=a;a=b;b=t;}
+                if(b>c){const auto t=b;b=c;c=t;}
+                if(a>b)b=a;
+                dt_ticks=b;
+            }
+        }
+        ++tick_sequence_;
+        last_tick_us_=t_us; last_dt_ticks_=dt_ticks; have_tick_=true;
+        if (count_ == MAX_MEAS_Q) {
+            tail_ = (tail_ + 1u) % MAX_MEAS_Q;
+            --count_;
+            ++dropped_; // discard oldest, retain the most recent periods
+        }
+        meas_[head_].t_us=t_us; meas_[head_].dt_ticks=dt_ticks;
+        head_=(head_+1u)%MAX_MEAS_Q;
+        ++count_;
+    }
+    void confirm_pending_() {
+        enqueue_(pending_.dt_ticks,pending_.t_us);
+        span_ticks_-=pending_span_ticks_;
+        pending_valid_=false;
+    }
 
     void clampAccel_() {
         if (!std::isfinite(cfg_.max_accel_units_per_s)) return;
@@ -457,7 +507,7 @@ private:
     }
 
     void applyVirtualZero_(uint32_t t_us_now) {
-        if (last_meas_us_ == 0) return;
+        if (!initialized_) return;
         if (!std::isfinite(zero_timeout_s_)) return;
 
         float dt_since_meas = (t_us_now - last_meas_us_) * 1e-6f;
@@ -484,6 +534,20 @@ private:
 
     float    zero_timeout_s_ = std::numeric_limits<float>::infinity();
 
+    static_assert(MAX_MEAS_Q > 0 && MAX_MEAS_Q <= 255, "queue capacity must fit indices");
+    uint32_t zero_timeout_us_=UINT32_MAX;
+    uint32_t periods_[3]{};
+    unsigned period_count_=0,period_index_=0;
+    uint32_t min_period_ticks_=0,settle_us_=0,rejected_ticks_=0;
+    uint32_t last_raw_tick_us_=0,last_raw_period_ticks_=0;
+    bool have_raw_tick_=false,pending_valid_=false;
+    uint64_t span_ticks_=0,pending_span_ticks_=0;
+    Meas pending_{};
+    unsigned count_ = 0;
+    uint32_t dropped_ = 0;
+    bool have_tick_ = false;
+    uint32_t tick_sequence_=0, consumed_sequence_=0;
+    bool stale_latched_=true;
     Meas            meas_[MAX_MEAS_Q]{};
     volatile uint8_t head_ = 0;        // ISR write index
     volatile uint8_t tail_ = 0;        // main read index

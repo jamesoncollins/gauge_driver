@@ -244,10 +244,8 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
 
   if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3)
   {
-	static uint32_t last = 0, diff = 0;
-	diff = TIM2->CCR3 - last;
-	last = TIM2->CCR3;
-	g_speed.tick(diff);
+    const uint32_t captured = TIM2->CCR3;
+    g_sensor_pipeline.capture(GaugeSensors::Speed, captured, HAL_GetTick()*1000U);
 
     // Odometer ticks with speed
     speed_tick_count++;
@@ -260,10 +258,8 @@ void HAL_TIM_IC_CaptureCallback (TIM_HandleTypeDef *htim)
   }
   else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_4)
   {
-	static uint32_t last, diff = 0;
-	diff = TIM2->CCR4 - last;
-	last = TIM2->CCR4;
-	g_tach.tick(diff);
+    const uint32_t captured = TIM2->CCR4;
+    g_sensor_pipeline.capture(GaugeSensors::Tach, captured, HAL_GetTick()*1000U);
   }
 }
 

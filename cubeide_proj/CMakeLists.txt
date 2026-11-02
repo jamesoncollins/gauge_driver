@@ -431,6 +431,22 @@ endif()
 
 if(CUSTOM_PLATFORM STREQUAL "x86" AND HOST_BACKEND STREQUAL "win32")
   enable_testing()
+  add_executable(sensor_pipeline_test
+    ${CUSTOM_ROOT}/Tests/sensor_pipeline_test.cpp
+    ${CUSTOM_ROOT}/Src/build_config.cpp
+    ${CUSTOM_ROOT}/Simulator/sim_sensors.cpp
+  )
+  target_include_directories(sensor_pipeline_test PRIVATE ${CUSTOM_ROOT}/Inc ${CUSTOM_ROOT}/Simulator)
+  add_test(NAME sensor_pipeline_test COMMAND sensor_pipeline_test)
+  add_executable(sensor_burst_test
+    ${CUSTOM_ROOT}/Tests/sensor_burst_test.cpp
+    ${CUSTOM_ROOT}/Src/build_config.cpp
+  )
+  target_include_directories(sensor_burst_test PRIVATE ${CUSTOM_ROOT}/Inc)
+  add_test(NAME sensor_burst_test COMMAND sensor_burst_test)
+
+  add_executable(sensor_legacy_repro ${CUSTOM_ROOT}/Tests/sensor_legacy_repro.cpp)
+  target_include_directories(sensor_legacy_repro PRIVATE ${CUSTOM_ROOT}/Inc)
   add_executable(gui_layout_backend_test
     ${CUSTOM_ROOT}/Tests/gui_layout_backend_test.cpp
     ${CUSTOM_ROOT}/Src/gui_layout.cpp
